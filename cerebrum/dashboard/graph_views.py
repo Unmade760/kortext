@@ -486,7 +486,7 @@ def build_symbol_impact_view(
                     "smooth": {"type": "continuous", "roundness": 0.25},
                     "width": 1.8,
                     "font": {"size": 9, "align": "middle", "color": "#f87171", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
-                    "color": {"color": "#ef4444", "highlight": "#ffffff"},
+                    "color": {"color": "#ef4444", "highlight": "#fda4af"},
                 })
                 tree_items.append({
                     "file_path": dep_path,
@@ -558,7 +558,7 @@ def build_symbol_impact_view(
                     "smooth": {"type": "continuous", "roundness": 0.25},
                     "width": 1.8,
                     "font": {"size": 9, "align": "middle", "color": "#f87171" if direction.lower() == "upstream" else "#38bdf8", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
-                    "color": {"color": "#ef4444" if direction.lower() == "upstream" else "#38bdf8", "highlight": "#ffffff"},
+                    "color": {"color": "#ef4444" if direction.lower() == "upstream" else "#38bdf8", "highlight": "#fda4af" if direction.lower() == "upstream" else "#7dd3fc"},
                 })
 
                 tree_items.append({
@@ -587,7 +587,7 @@ def build_symbol_impact_view(
                         "margin": 8,
                         "borderWidth": 1.8,
                         "shadow": SHADOW_HOP2,
-                        "font": {"color": "#fed7aa", "face": "ui-monospace, monospace", "size": 11, "bold": True},
+                        "font": {"color": "#fed7aa", "face": "ui-monospace, monospace", "size": 11, "bold": {"color": "#fed7aa"}},
                         "title": f"<b>Type Relation: {t_sym}</b><br/>{t_rel} in {Path(t_file).name}",
                         "level": 2,
                     }
@@ -629,6 +629,7 @@ def build_symbol_impact_view(
                                 f2_name = Path(f2_path).name
                                 s2_name = str(r_row[1])
                                 if f2_path not in nodes_map and f2_path != sf:
+                                    hop2_or_3_font = "#fed7aa" if depth == 2 else "#e0f2fe"
                                     nodes_map[f2_path] = {
                                         "id": f2_path,
                                         "label": f"🌐  {f2_name}",
@@ -640,7 +641,7 @@ def build_symbol_impact_view(
                                         "margin": 8,
                                         "borderWidth": 1.5,
                                         "shadow": SHADOW_HOP2 if depth == 2 else SHADOW_HOP3,
-                                        "font": {"color": "#e0f2fe", "face": "ui-monospace, monospace", "size": 11},
+                                        "font": {"color": hop2_or_3_font, "face": "ui-monospace, monospace", "size": 11, "bold": {"color": hop2_or_3_font}},
                                         "title": f"<b>Transitive Consumer: {f2_name}</b><br/>Imports {s2_name}",
                                         "level": 2,
                                     }
@@ -652,7 +653,7 @@ def build_symbol_impact_view(
                                         "smooth": {"type": "continuous", "roundness": 0.25},
                                         "width": 1.4,
                                         "font": {"size": 8, "align": "middle", "color": "#94a3b8", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
-                                        "color": {"color": "#64748b", "highlight": "#ffffff"},
+                                        "color": {"color": "#64748b", "highlight": "#94a3b8"},
                                     })
                                     tree_items.append({
                                         "source": f2_path,

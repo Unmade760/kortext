@@ -245,6 +245,7 @@ class TaskDAGTracker:
                 },
                 "font": {
                     "color": style.get("fontColor", "#f8fafc"),
+                    "bold": {"color": style.get("fontColor", "#f8fafc")},
                     "face": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                     "size": 11,
                     "multi": "html",

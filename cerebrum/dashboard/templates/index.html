@@ -236,87 +236,115 @@
         </div>
       </div>
 
-      <!-- Graph Container & Drawer -->
-      <!-- Graph Container & Drawer -->
-      <div class="relative cyber-canvas">
-        <!-- HUD Panel (System Telemetry Section 36) -->
-        <div class="absolute top-4 left-4 z-10 w-72 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-3 shadow-xl space-y-2 pointer-events-auto">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
-            <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-              <i data-lucide="cpu" class="w-3.5 h-3.5"></i> System Telemetry
-            </span>
-            <span id="hud-badge-status" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ONLINE</span>
-          </div>
-          <div class="space-y-1 text-xs font-mono">
-            <div class="flex justify-between text-slate-300">
-              <span class="text-slate-500">Token Savings:</span>
-              <span class="text-emerald-400 font-semibold" id="hud-savings">-95.7% (Anti-Ripgrep)</span>
-            </div>
-            <div class="flex justify-between text-slate-300">
-              <span class="text-slate-500">Substrate RAM:</span>
-              <span class="text-slate-200" id="hud-rss">66.1 MB RSS</span>
-            </div>
-            <div class="flex justify-between text-slate-300">
-              <span class="text-slate-500">FalkorDB Latency:</span>
-              <span class="text-slate-200" id="hud-lat">1.4 ms</span>
-            </div>
-            <div class="flex justify-between text-slate-300">
-              <span class="text-slate-500">Active Invariants:</span>
-              <span class="text-indigo-400">14 Verified</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Floating Canvas Action HUD -->
-        <div class="canvas-hud-toolbar bottom-4 right-4 !top-auto !left-auto">
-          <button onclick="zoomGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
-          <button onclick="zoomGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
-          <button onclick="fitGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
-          <button onclick="toggleGraphFreeze()" id="btn-hud-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
-        </div>
-
-        <div id="network-graph"></div>
+      <!-- Main Knowledge Graph Layout: Canvas (8-9 cols) + Companion Sidebar (4-3 cols) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         
-        <!-- Entity Details Drawer -->
-        <div id="node-details-drawer" class="hidden absolute top-4 right-4 w-96 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-2xl space-y-3 text-sm z-20 max-h-[580px] overflow-y-auto">
-          <div class="flex justify-between items-start border-b border-slate-800 pb-3">
-            <div>
-              <span id="drawer-tag" class="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold"></span>
-              <h3 id="drawer-title" class="font-bold text-white text-base mt-1"></h3>
+        <!-- Left: Graph Canvas Container -->
+        <div class="lg:col-span-8 xl:col-span-9 space-y-3">
+          <div class="relative cyber-canvas">
+            <!-- Floating Canvas Action HUD -->
+            <div class="canvas-hud-toolbar bottom-4 right-4 !top-auto !left-auto">
+              <button onclick="zoomGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
+              <button onclick="zoomGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
+              <button onclick="fitGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
+              <button onclick="toggleGraphFreeze()" id="btn-hud-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
             </div>
-            <button onclick="closeDrawer()" class="text-slate-400 hover:text-white p-1">✕</button>
+
+            <!-- Network Canvas Element -->
+            <div id="network-graph" style="height: 680px;"></div>
           </div>
-          <div id="drawer-body" class="space-y-3 text-xs text-slate-300"></div>
-        </div>
-      </div>
 
-      <!-- Legend & Stats -->
-      <div class="flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
-        <div id="legend-episodic" class="flex items-center gap-6">
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Semantic Entity</div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span> 💡 Episodic Decision</div>
+          <!-- Bottom Node Type Legend & Stats Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <div id="legend-episodic" class="flex items-center gap-6">
+              <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Semantic Entity</div>
+              <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span> 💡 Episodic Decision</div>
+            </div>
+            <div id="legend-symbols" class="hidden flex items-center gap-4">
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 📁 File</div>
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> ⚡ Symbol</div>
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Document</div>
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]"></span> 💎 Concept</div>
+            </div>
+            <div id="graph-stats" class="text-slate-400">Loading graph statistics...</div>
+          </div>
         </div>
-        <div id="legend-symbols" class="hidden flex items-center gap-4">
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 📁 File</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> ⚡ Symbol</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Document</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]"></span> 💎 Concept</div>
-        </div>
-        <div id="graph-stats" class="text-slate-400">Loading graph statistics...</div>
-      </div>
 
-      <!-- Edge Legend Bar for Symbols, SCIP, & Episodic Relationships -->
-      <div id="graph-legend-bar" class="flex flex-wrap items-center gap-4 text-[11px] font-mono bg-slate-900/60 border border-slate-800 px-3.5 py-2.5 rounded-xl text-slate-300">
-        <span class="text-slate-400 font-semibold uppercase text-[10px]">Connecting Lines:</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-[#06b6d4] shadow-[0_0_6px_#06b6d4]"></span> DEFINED_IN</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-[#10b981] shadow-[0_0_6px_#10b981]"></span> REFERENCES</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-[#8b5cf6] shadow-[0_0_6px_#8b5cf6]"></span> IMPORTS</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 border-b-2 border-dashed border-[#ec4899] shadow-[0_0_6px_#ec4899]"></span> IMPLEMENTS</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 border-b-2 border-dotted border-[#f97316] shadow-[0_0_6px_#f97316]"></span> TYPE_OF</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-[#0ea5e9] shadow-[0_0_6px_#0ea5e9]"></span> RELATES_TO</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 border-b-2 border-dashed border-[#ef4444] shadow-[0_0_6px_#ef4444]"></span> SUPERSEDES</span>
-        <span class="flex items-center gap-1.5"><span class="w-3.5 h-0.5 border-b-2 border-dashed border-[#475569]"></span> MENTIONS</span>
-        <span class="flex items-center gap-1.5 text-slate-400 ml-auto" id="graph-stats">Loading...</span>
+        <!-- Right: Companion Panel (Telemetry + Relationship Palette & Exact Inspector) -->
+        <div class="lg:col-span-4 xl:col-span-3 space-y-4">
+          
+          <!-- 1. System Telemetry Card (Moved OUTSIDE canvas) -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-2.5">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <i data-lucide="cpu" class="w-3.5 h-3.5"></i> System Telemetry
+              </span>
+              <span id="hud-badge-status" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ONLINE</span>
+            </div>
+            <div class="space-y-1.5 text-xs font-mono">
+              <div class="flex justify-between text-slate-300">
+                <span class="text-slate-500">Token Savings:</span>
+                <span class="text-emerald-400 font-semibold" id="hud-savings">-95.7% (Anti-Ripgrep)</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span class="text-slate-500">Substrate RAM:</span>
+                <span class="text-slate-200" id="hud-rss">66.1 MB RSS</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span class="text-slate-500">FalkorDB Latency:</span>
+                <span class="text-slate-200" id="hud-lat">1.4 ms</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span class="text-slate-500">Active Invariants:</span>
+                <span class="text-indigo-400">14 Verified</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Relationship Filter & Color Legend (Placed outside canvas, convenient to inspect) -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <i data-lucide="git-commit" class="w-3.5 h-3.5 text-cyan-400"></i> Relationship Palette
+              </span>
+              <div class="flex items-center gap-1.5 text-[10px] font-mono">
+                <button onclick="setAllRelFilters(true)" class="text-indigo-400 hover:text-indigo-300">All</button>
+                <span class="text-slate-600">•</span>
+                <button onclick="setAllRelFilters(false)" class="text-slate-500 hover:text-slate-400">None</button>
+              </div>
+            </div>
+
+            <!-- Quick Relationship Presets -->
+            <div class="flex flex-wrap gap-1 text-[10px] font-mono">
+              <button onclick="applyRelPreset('all')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition">All</button>
+              <button onclick="applyRelPreset('calls')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 transition">Calls</button>
+              <button onclick="applyRelPreset('structure')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 transition">Structure</button>
+              <button onclick="applyRelPreset('types')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-pink-400 transition">Types</button>
+            </div>
+
+            <!-- Interactive Relationship Types Checklist -->
+            <div id="rel-filter-list" class="space-y-1.5 max-h-56 overflow-y-auto pr-1 text-[11px] font-mono">
+              <!-- Dynamically populated with color lines, labels, and toggles -->
+            </div>
+          </div>
+
+          <!-- 3. Exact Node & Relationship Details Inspector -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-2.5">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-400"></i> Relationship Inspector
+              </span>
+              <span id="inspector-badge" class="hidden text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-semibold"></span>
+            </div>
+
+            <div id="inspector-content" class="space-y-2 text-xs">
+              <div class="text-slate-500 text-xs py-4 text-center font-mono">
+                Click any node in the canvas to inspect its exact incoming and outgoing relationships.
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
@@ -384,9 +412,9 @@
         <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
           <div>
             <span class="text-[10px] text-slate-400 uppercase font-mono block">Transitive / Types (Hop 2+)</span>
-            <span id="blast-stat-transitive" class="text-sm font-bold text-amber-400 font-mono">0</span>
+            <span id="blast-stat-transitive" class="text-sm font-bold text-amber-300 font-mono">0</span>
           </div>
-          <span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">MEDIUM RISK</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/60 font-semibold">MEDIUM RISK</span>
         </div>
         <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
           <div>
@@ -592,7 +620,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
                 <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
                 <h4 class="font-semibold text-white text-sm">Chunk Embedding Cache</h4>
               </div>
-              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">ACTIVE</span>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-600/60 font-semibold">ACTIVE</span>
             </div>
             <p class="text-xs text-slate-400">Content-addressable SHA-256 SQLite store mapping chunk text to packed float32 dense vectors.</p>
             <div class="space-y-1.5 text-xs font-mono pt-1 text-slate-300">
@@ -993,7 +1021,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
         if (s.risk_level === 'HIGH') {
           riskEl.className = 'text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold';
         } else if (s.risk_level === 'MEDIUM') {
-          riskEl.className = 'text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold';
+          riskEl.className = 'text-xs font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/60 font-bold';
         } else {
           riskEl.className = 'text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold';
         }
@@ -1223,7 +1251,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
             color: fontColor, 
             face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
             size: n.level === 0 ? 12 : 11, 
-            bold: true 
+            bold: { color: fontColor, face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: n.level === 0 ? 12 : 11 }
           },
           margin: n.level === 0 ? 10 : 8,
           borderWidth: n.level === 0 ? 2.5 : 1.8,
@@ -1352,7 +1380,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
         const badgeColor = isHigh 
           ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' 
           : isMed 
-          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' 
+          ? 'bg-amber-950/80 text-amber-300 border-amber-600/60' 
           : 'bg-sky-500/10 text-sky-400 border-sky-500/30';
 
         const rowId = `blast-row-${btoa(item.source || item.file_path || item.name).replace(/=/g, '')}`;
@@ -1440,11 +1468,95 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
 
         allNodes = data.nodes || [];
         allEdges = data.edges || [];
-        statsEl.textContent = `${allNodes.length} Nodes • ${allEdges.length} Relationships (${selectedDb})`;
+        initRelationshipPalette(allEdges);
         applyGraphFilters();
       } catch (e) {
         statsEl.textContent = 'Failed to load graph';
       }
+    }
+
+    let activeRelFilters = new Set();
+    let relCounts = {};
+
+    function initRelationshipPalette(edges) {
+      const container = document.getElementById('rel-filter-list');
+      if (!container) return;
+
+      relCounts = {};
+      edges.forEach(e => {
+        const lbl = (e.label || 'UNKNOWN').toUpperCase().trim();
+        relCounts[lbl] = (relCounts[lbl] || 0) + 1;
+      });
+
+      const uniqueRels = Object.keys(relCounts).sort();
+      activeRelFilters = new Set(uniqueRels);
+
+      if (uniqueRels.length === 0) {
+        container.innerHTML = '<div class="text-slate-500 py-3 text-center">No relationships in view</div>';
+        return;
+      }
+
+      container.innerHTML = uniqueRels.map(rel => {
+        const style = getEdgeStyle(rel, false);
+        const count = relCounts[rel] || 0;
+        const isChecked = activeRelFilters.has(rel) ? 'checked' : '';
+        const dashStyle = style.dashes ? 'border-b-2 border-dashed' : 'h-0.5';
+        return `
+          <label class="flex items-center justify-between p-1.5 rounded hover:bg-slate-800/60 cursor-pointer select-none transition group">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="filter-rel-${rel}" ${isChecked} onchange="toggleRelFilter('${rel}', this.checked)" class="rounded border-slate-700 text-indigo-500 focus:ring-0 w-3 h-3">
+              <span class="w-3.5 ${dashStyle}" style="background-color: ${style.dashes ? 'transparent' : style.color}; border-color: ${style.color}; box-shadow: 0 0 6px ${style.color}66;"></span>
+              <span class="text-slate-300 group-hover:text-white font-mono text-[10px]">${rel}</span>
+            </div>
+            <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-semibold">${count}</span>
+          </label>
+        `;
+      }).join('');
+    }
+
+    function toggleRelFilter(rel, isChecked) {
+      if (isChecked) {
+        activeRelFilters.add(rel);
+      } else {
+        activeRelFilters.delete(rel);
+      }
+      applyGraphFilters();
+    }
+
+    function setAllRelFilters(enable) {
+      const container = document.getElementById('rel-filter-list');
+      if (!container) return;
+      const inputs = container.querySelectorAll('input[type="checkbox"]');
+      inputs.forEach(input => {
+        input.checked = enable;
+        const rel = input.id.replace('filter-rel-', '');
+        if (enable) activeRelFilters.add(rel);
+        else activeRelFilters.delete(rel);
+      });
+      applyGraphFilters();
+    }
+
+    function applyRelPreset(preset) {
+      const container = document.getElementById('rel-filter-list');
+      if (!container) return;
+      const inputs = container.querySelectorAll('input[type="checkbox"]');
+      inputs.forEach(input => {
+        const rel = input.id.replace('filter-rel-', '').toUpperCase();
+        let shouldCheck = false;
+        if (preset === 'all') {
+          shouldCheck = true;
+        } else if (preset === 'calls') {
+          shouldCheck = rel.includes('REFERENCES') || rel.includes('CALLS');
+        } else if (preset === 'structure') {
+          shouldCheck = rel.includes('DEFINED_IN') || rel.includes('IMPORTS') || rel.includes('LINKS');
+        } else if (preset === 'types') {
+          shouldCheck = rel.includes('IMPLEMENTS') || rel.includes('TYPE');
+        }
+        input.checked = shouldCheck;
+        if (shouldCheck) activeRelFilters.add(rel);
+        else activeRelFilters.delete(rel);
+      });
+      applyGraphFilters();
     }
 
     function handleToggleClean() {
@@ -1457,33 +1569,34 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
     }
 
     function applyGraphFilters() {
-      const graphType = document.getElementById('select-graph-type') ? document.getElementById('select-graph-type').value : 'episodic';
-      const hideMentions = document.getElementById('toggle-hide-mentions').checked;
-      
-      if (graphType === 'symbols') {
-        // Render symbol graph as retrieved (already filtered by backend based on clean flag)
-        document.getElementById('graph-stats').textContent = `${allNodes.length} Visible Nodes • ${allEdges.length} Visible Edges`;
-        renderGraph(allNodes, allEdges);
-        return;
-      }
+      const hideMentions = document.getElementById('toggle-hide-mentions') ? document.getElementById('toggle-hide-mentions').checked : false;
       
       let filteredEdges = allEdges;
       if (hideMentions) {
-        filteredEdges = allEdges.filter(e => !e.is_mention);
+        filteredEdges = filteredEdges.filter(e => !e.is_mention);
       }
 
-      // If hiding mentions, also filter out standalone episodic nodes that only had mentions
+      if (activeRelFilters && activeRelFilters.size >= 0) {
+        filteredEdges = filteredEdges.filter(e => {
+          const lbl = (e.label || '').toUpperCase().trim();
+          return activeRelFilters.has(lbl);
+        });
+      }
+
       let filteredNodes = allNodes;
-      if (hideMentions) {
+      if (hideMentions || (activeRelFilters && activeRelFilters.size < Object.keys(relCounts).length)) {
         const connectedNodeIds = new Set();
         filteredEdges.forEach(e => {
           connectedNodeIds.add(e.from);
           connectedNodeIds.add(e.to);
         });
-        filteredNodes = allNodes.filter(n => n.group !== 'episodic' || connectedNodeIds.has(n.id));
+        filteredNodes = allNodes.filter(n => connectedNodeIds.has(n.id) || n.group === 'file');
       }
 
-      document.getElementById('graph-stats').textContent = `${filteredNodes.length} Visible Nodes • ${filteredEdges.length} Visible Edges`;
+      const statsEl = document.getElementById('graph-stats');
+      if (statsEl) {
+        statsEl.textContent = `${filteredNodes.length} Visible Nodes • ${filteredEdges.length} Visible Relationships`;
+      }
       renderGraph(filteredNodes, filteredEdges);
     }
 
@@ -1553,7 +1666,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
             color: fontColor, 
             face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
             size: (isEpisodic || isFile) ? 11 : 12,
-            bold: true
+            bold: { color: fontColor, face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: (isEpisodic || isFile) ? 11 : 12 }
           },
           shape: shape,
           shapeProperties: { borderRadius: 6 },
@@ -1755,14 +1868,10 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
     }
 
     function openDrawer(node) {
-      const drawer = document.getElementById('node-details-drawer');
-      const tag = document.getElementById('drawer-tag');
-      const title = document.getElementById('drawer-title');
-      const body = document.getElementById('drawer-body');
-      
-      drawer.classList.remove('hidden');
-      title.textContent = node.full_name || node.id;
-      
+      const inspectorContent = document.getElementById('inspector-content');
+      const inspectorBadge = document.getElementById('inspector-badge');
+      if (!inspectorContent || !node) return;
+
       const isEpisodic = node.group === 'episodic';
       const isFile = node.group === 'file';
       const isSymbol = node.group === 'symbol';
@@ -1770,63 +1879,125 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
       const isTag = node.group === 'tag';
       const isConcept = node.group === 'concept';
 
+      let tagText = 'Entity';
+      let tagClass = 'bg-cyan-950/80 text-cyan-300 border-cyan-600/50';
+
       if (isEpisodic) {
-        tag.textContent = 'Episodic Decision';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        tagText = 'Episodic Decision';
+        tagClass = 'bg-amber-950/90 text-amber-300 border-amber-600/60 font-bold';
       } else if (isDocument) {
-        tag.textContent = 'Markdown Note';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30';
+        tagText = 'Markdown Note';
+        tagClass = 'bg-cyan-950/80 text-cyan-300 border-cyan-600/50';
       } else if (isTag) {
-        tag.textContent = 'Topic Tag';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        tagText = 'Topic Tag';
+        tagClass = 'bg-amber-950/90 text-amber-300 border-amber-600/60 font-bold';
       } else if (isConcept) {
-        tag.textContent = 'Vault Concept';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-pink-500/20 text-pink-400 border border-pink-500/30';
+        tagText = 'Vault Concept';
+        tagClass = 'bg-pink-950/80 text-pink-300 border-pink-600/50';
       } else if (isFile) {
-        tag.textContent = 'Source File';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30';
+        tagText = 'Source File';
+        tagClass = 'bg-indigo-950/80 text-indigo-300 border-indigo-600/50';
       } else if (isSymbol) {
-        tag.textContent = 'Code Symbol';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-      } else {
-        tag.textContent = 'Entity';
-        tag.className = 'text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30';
+        tagText = 'Code Symbol';
+        tagClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50';
       }
 
-      const connectedEdges = edgesDataSet.get({
-        filter: e => e.from === node.id || e.to === node.id
-      });
+      if (inspectorBadge) {
+        inspectorBadge.textContent = tagText;
+        inspectorBadge.className = `text-[9px] font-mono px-2 py-0.5 rounded uppercase font-semibold border ${tagClass}`;
+        inspectorBadge.classList.remove('hidden');
+      }
 
-      let relsHtml = connectedEdges.map(e => {
-        const otherId = e.from === node.id ? e.to : e.from;
-        const arrow = e.from === node.id ? '→' : '←';
+      const connectedEdges = edgesDataSet ? edgesDataSet.get({
+        filter: e => e.from === node.id || e.to === node.id
+      }) : [];
+
+      const outgoing = connectedEdges.filter(e => e.from === node.id);
+      const incoming = connectedEdges.filter(e => e.to === node.id);
+
+      const renderRelItem = (e, isOut) => {
+        const otherId = isOut ? e.to : e.from;
+        const arrow = isOut ? '→' : '←';
+        const style = getEdgeStyle(e.label, false);
+        const displayName = otherId.split('/').slice(-2).join('/');
         return `
-          <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/60 border border-slate-800">
-            <span class="text-indigo-400 font-mono text-[10px]">${e.label}</span>
-            <span class="text-slate-300 font-mono text-[11px] truncate max-w-[200px]" title="${otherId}">${arrow} ${otherId.split('/').slice(-2).join('/')}</span>
+          <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition gap-1.5">
+            <div class="flex items-center gap-1.5 overflow-hidden">
+              <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0" style="color: ${style.fontColor}; background: ${style.badgeBg}; border: 1px solid ${style.color}55;">
+                ${arrow} ${e.label}
+              </span>
+              <span class="text-slate-300 font-mono text-[11px] truncate max-w-[130px]" title="${otherId}">${displayName}</span>
+            </div>
+            <button onclick="flyToNode('${otherId}')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 border border-slate-700 shrink-0 transition" title="Focus ${otherId}">
+              Focus
+            </button>
           </div>
         `;
-      }).join('');
+      };
 
-      const graphType = document.getElementById('select-graph-type') ? document.getElementById('select-graph-type').value : 'episodic';
-      const dbName = graphType === 'symbols' ? 'cerebrum_symbols' : 'cerebrum';
+      const select = document.getElementById('select-graph-type');
+      const selectedDb = select ? select.value : 'cerebrum';
+      const dbName = selectedDb.includes('symbol') ? 'cerebrum_symbols' : 'cerebrum';
 
-      body.innerHTML = `
-        <div>
-          <span class="text-slate-400 text-[11px]">Database:</span>
-          <span class="font-mono text-slate-200">FalkorDB (${dbName})</span>
-        </div>
-        <div class="pt-2 border-t border-slate-800">
-          <span class="text-slate-400 text-[11px] block mb-1.5">Direct Relationships (${connectedEdges.length}):</span>
-          <div class="space-y-1 max-h-56 overflow-y-auto">
-            ${relsHtml || '<span class="text-slate-500">No active relationships.</span>'}
+      inspectorContent.innerHTML = `
+        <div class="space-y-2.5">
+          <div class="p-2 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
+            <div class="font-bold text-white text-xs truncate" title="${node.full_name || node.id}">
+              ${node.label || node.id}
+            </div>
+            <div class="text-[10px] font-mono text-slate-400 truncate" title="${node.id}">
+              ID: ${node.id}
+            </div>
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-800/80">
+              <span>Database:</span>
+              <span class="text-indigo-400 font-semibold">${dbName}</span>
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] font-mono">
+              <span class="text-slate-400 font-semibold">Outgoing (${outgoing.length}):</span>
+              <span class="text-[10px] text-slate-500">Dependencies</span>
+            </div>
+            <div class="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+              ${outgoing.length > 0 ? outgoing.map(e => renderRelItem(e, true)).join('') : '<span class="text-[10px] text-slate-600 block py-1">No outgoing connections</span>'}
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1.5 border-t border-slate-800">
+            <div class="flex items-center justify-between text-[11px] font-mono">
+              <span class="text-slate-400 font-semibold">Incoming (${incoming.length}):</span>
+              <span class="text-[10px] text-slate-500">Callers & Dependents</span>
+            </div>
+            <div class="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+              ${incoming.length > 0 ? incoming.map(e => renderRelItem(e, false)).join('') : '<span class="text-[10px] text-slate-600 block py-1">No incoming connections</span>'}
+            </div>
           </div>
         </div>
       `;
     }
 
     function closeDrawer() {
-      document.getElementById('node-details-drawer').classList.add('hidden');
+      const inspectorContent = document.getElementById('inspector-content');
+      const inspectorBadge = document.getElementById('inspector-badge');
+      if (inspectorBadge) inspectorBadge.classList.add('hidden');
+      if (inspectorContent) {
+        inspectorContent.innerHTML = `
+          <div class="text-slate-500 text-xs py-4 text-center font-mono">
+            Click any node in the canvas to inspect its exact incoming and outgoing relationships.
+          </div>
+        `;
+      }
+    }
+
+    function flyToNode(nodeId) {
+      if (!network || !nodesDataSet) return;
+      const targetNode = nodesDataSet.get(nodeId);
+      if (targetNode) {
+        network.focus(nodeId, { scale: 1.15, animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+        focusNode(nodeId);
+        openDrawer(targetNode);
+      }
     }
 
     async function loadJournal() {
@@ -2295,7 +2466,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
 
       const statusBadge = {
         'ready': 'bg-sky-500/10 text-sky-400 border-sky-500/30',
-        'in_progress': 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+        'in_progress': 'bg-amber-950/80 text-amber-300 border-amber-600/60 font-semibold',
         'completed': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
         'pending': 'bg-slate-700/20 text-slate-400 border-slate-700/40',
         'failed': 'bg-rose-500/10 text-rose-400 border-rose-500/30',
@@ -2320,7 +2491,7 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
             </div>
             <div class="flex items-center gap-2 self-end md:self-center">
               ${t.status !== 'in_progress' && t.status !== 'completed' ? `
-                <button onclick="updateTaskStatus('${t.id}', 'in_progress')" class="px-2.5 py-1 text-xs rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono transition">Start</button>
+                <button onclick="updateTaskStatus('${t.id}', 'in_progress')" class="px-2.5 py-1 text-xs rounded bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 border border-amber-600/60 font-mono font-semibold transition">Start</button>
               ` : ''}
               ${t.status !== 'completed' ? `
                 <button onclick="updateTaskStatus('${t.id}', 'completed')" class="px-2.5 py-1 text-xs rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono transition">Done</button>
