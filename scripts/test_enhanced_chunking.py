@@ -13,15 +13,15 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from llama_index.core.schema import Document
-from cortex.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP, SmartCodeNodeParser
+from cerebrum.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP, SmartCodeNodeParser
 
 
 def test_dependency_and_docstring_and_temporal():
     code = '''"""Module docstring explaining the module."""
 import os
 import sys
-from cortex.graph.store import FalkorDBStore
-from cortex.embeddings import get_embedder
+from cerebrum.graph.store import FalkorDBStore
+from cerebrum.embeddings import get_embedder
 
 class StorageManager:
     """Manages system persistent storage."""
@@ -74,8 +74,8 @@ class StorageManager:
 
 def test_test_to_implementation_linkage():
     test_code = '''import pytest
-from cortex.storage import StorageManager
-from cortex.graph.store import FalkorDBStore
+from cerebrum.storage import StorageManager
+from cerebrum.graph.store import FalkorDBStore
 
 def test_storage_manager_sync():
     manager = StorageManager("localhost")
@@ -140,7 +140,7 @@ pub fn cluster_communities(graph: &FalkorClient) -> HashMap<String, usize> {
 def test_smart_code_node_parser_metadata_propagation():
     doc = Document(
         text='''import os
-from cortex.graph.store import FalkorDBStore
+from cerebrum.graph.store import FalkorDBStore
 
 class QueryEngine:
     """Core semantic query engine."""

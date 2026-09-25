@@ -16,18 +16,18 @@ from pathlib import Path
 CORTEX_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CORTEX_ROOT))
 
-from cortex.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP
-from cortex.symbols.graph import SymbolGraphManager
-from cortex.retrieval.engine import RetrievalEngine
-from cortex.graph import CortexState, make_graph, _extract_symbol_candidates
+from cerebrum.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP
+from cerebrum.symbols.graph import SymbolGraphManager
+from cerebrum.retrieval.engine import RetrievalEngine
+from cerebrum.graph import CortexState, make_graph, _extract_symbol_candidates
 
 
 def test_symbol_extraction():
     print("\n--- 1. Testing AST Symbol & Reference Extraction ---")
     code = """
 import os
-from cortex.cache import IngestCache
-from cortex.chunking import SmartCodeNodeParser
+from cerebrum.cache import IngestCache
+from cerebrum.chunking import SmartCodeNodeParser
 
 class WorkerEngine:
     '''Coordinates processing.'''
@@ -142,8 +142,8 @@ async def test_federated_retrieval():
 
 async def test_unified_pipeline():
     print("\n--- 4. Testing Unified 4-Tier State Machine (LangGraph) ---")
-    from cortex.viking import VikingChunker
-    from cortex.episodic import EpisodicMemory
+    from cerebrum.viking import VikingChunker
+    from cerebrum.episodic import EpisodicMemory
 
     engine = RetrievalEngine()
     await engine.initialize()

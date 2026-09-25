@@ -15,8 +15,8 @@ CORTEX_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CORTEX_ROOT))
 
 from llama_index.core.schema import Document
-from cortex.chunking import SmartCodeNodeParser
-from cortex.symbols import MarkdownSymbolExtractor, SymbolGraphManager
+from cerebrum.chunking import SmartCodeNodeParser
+from cerebrum.symbols import MarkdownSymbolExtractor, SymbolGraphManager
 
 
 def test_markdown_extractor():

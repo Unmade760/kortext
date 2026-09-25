@@ -1,0 +1,14 @@
+[
+  {
+    "domain": "GRAPH_IMPACT",
+    "rule": "trace_symbol_impact must bound response tokens using progressive degradation",
+    "rationale": "Prevents context window explosion for deep call trees",
+    "symbol_name": "trace_symbol_impact",
+    "file_path": "/Users/rb/cortex/cortex/symbols/graph.py",
+    "ast_hash": "eef3a9881e3a476b743366972d863a5a22788e404d273d4ce7728cd62fb7158e",
+    "status": "orphaned_file",
+    "trust_level": "tool_confirmed",
+    "grounded_at": "2026-09-20T07:06:36.237359+00:00",
+    "last_verified": "2026-09-20T07:06:36.269825+00:00"
+  }
+]

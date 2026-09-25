@@ -13,12 +13,12 @@ import json
 import os
 from pathlib import Path
 
-from cortex.episodic.driver import AgentNativeEpisodicDriver
-from cortex.chunking.ast_splitter import LANG_MAP, ASTCodeSplitter
-from cortex.symbols.graph import SymbolGraphManager
-from cortex.symbols.clustering import SubsystemClusterer
-from cortex.dream import DreamEngine
-import cortex.server as server
+from cerebrum.episodic.driver import AgentNativeEpisodicDriver
+from cerebrum.chunking.ast_splitter import LANG_MAP, ASTCodeSplitter
+from cerebrum.symbols.graph import SymbolGraphManager
+from cerebrum.symbols.clustering import SubsystemClusterer
+from cerebrum.dream import DreamEngine
+import cerebrum.server as server
 
 
 async def test_agent_native_episodic_memory():

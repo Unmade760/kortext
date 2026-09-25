@@ -15,10 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from cortex.cache import ChunkEmbeddingCache, IngestCache
-from cortex.symbols.graph import SymbolGraphManager
-from cortex.symbols.scip import detect_project_scip_indexer, auto_index_and_ingest
-from cortex.watcher import CortexIncrementalSync, DebouncedChangeHandler
+from cerebrum.cache import ChunkEmbeddingCache, IngestCache
+from cerebrum.symbols.graph import SymbolGraphManager
+from cerebrum.symbols.scip import detect_project_scip_indexer, auto_index_and_ingest
+from cerebrum.watcher import CortexIncrementalSync, DebouncedChangeHandler
 
 
 def test_chunk_embedding_cache():
@@ -133,7 +133,7 @@ def test_scip_auto_detection():
 
         # 4. Test auto_index_and_ingest when index.scip already exists
         dummy_scip = root / "index.scip"
-        from cortex.symbols import scip_pb2
+        from cerebrum.symbols import scip_pb2
         idx = scip_pb2.Index()
         dummy_scip.write_bytes(idx.SerializeToString())
 

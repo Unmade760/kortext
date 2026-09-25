@@ -33,3 +33,4 @@ htmlcov/
 # OS artifacts
 .DS_Store
 Thumbs.db
+*.tar.gz

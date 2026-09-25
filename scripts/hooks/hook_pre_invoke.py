@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
-PreInvocation hook: invariant injection and service health gate.
+Cerebrum PreInvocation Hook: Injects ambient symbol priming and enforces Task DAG delegation.
 """
+from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
 
-# Add hook directory to path for common imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (
-    CORTEX_ROOT,
+    CEREBRUM_ROOT,
     check_tcp_port,
     emit_hook_response,
     get_hook_payload,
 )
 
-INVARIANTS_FILE = CORTEX_ROOT / "journal" / "invariants.md"
+INVARIANTS_FILE = CEREBRUM_ROOT / "journal" / "invariants.md"
+
 
 def get_active_invariants(max_count: int = 3) -> list:
     if not INVARIANTS_FILE.is_file():
@@ -37,18 +39,14 @@ def get_active_invariants(max_count: int = 3) -> list:
     except Exception:
         return []
 
+
 def main():
     payload = get_hook_payload()
     invocation_num = payload.get("invocationNum", 0)
 
-    # Only fire on turn 0 or every 10th turn
-    if invocation_num != 0 and invocation_num % 10 != 0:
-        emit_hook_response({})
-
-    # Non-blocking socket pings (FalkorDB: 6379, Qdrant: 6333, oMLX: 8000)
+    # Ambient Service Health Check (FalkorDB: 6379, oMLX: 8000)
     services_up = {
         "FalkorDB": check_tcp_port("localhost", 6379),
-        "Qdrant": check_tcp_port("localhost", 6333),
         "oMLX": check_tcp_port("localhost", 8000),
     }
 
@@ -56,29 +54,29 @@ def main():
 
     if down_services:
         message = (
-            f"⚠️ [Cortex Health Alert] Offline services detected: {', '.join(down_services)}.\n"
-            "Run `make start` from your Cortex directory to bring memory and inference online."
+            f"⚠️ [Cerebrum Health Alert] Offline services detected: {', '.join(down_services)}.\n"
+            "Run `cerebrum start` to bring memory and inference substrates online."
         )
-    elif invocation_num == 0:
+        emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
+        return
+
+    # Turn 0: Ambient Grounding & Architectural Directives
+    if invocation_num == 0:
         invariants = get_active_invariants(max_count=3)
         inv_str = "\n".join(invariants) if invariants else "• Invariants synchronized."
         message = (
-            "🧠 [Cortex Active Memory]\n"
-            "Active Architectural Invariants:\n"
-            f"{inv_str}\n\n"
-            "Protocols:\n"
-            "1. Call `search_knowledge_and_memory` BEFORE writing/modifying code or deciding architecture.\n"
-            "2. Call `trace_symbol_impact` BEFORE refactoring functions, classes, or interfaces.\n"
-            "3. Call `record_system_outcome` AFTER completing non-trivial work or configuration changes."
+            "🧠 [Cerebrum Cognitive OS Initialized]\n"
+            "Active Protocols:\n"
+            "1. ANTI-RIPGREP MANDATE: Do NOT run `rg` or `grep_search` to find symbols. Use `seek_symbol`.\n"
+            "2. DELEGATION MANDATE: For multi-file changes (Complexity >= 4), initialize DAG via `manage_tasks`.\n"
+            "3. PERSISTENCE MANDATE: Record outcomes via `record_system_outcome` before session stop.\n\n"
+            f"Active Invariants:\n{inv_str}"
         )
-    else:
-        message = (
-            f"🧠 [Cortex Reminder - Turn {invocation_num}]\n"
-            "Remember to record significant decisions and outcomes via `record_system_outcome` "
-            "before completing the session."
-        )
+        emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
+        return
 
-    emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
+    emit_hook_response({})
+
 
 if __name__ == "__main__":
     main()

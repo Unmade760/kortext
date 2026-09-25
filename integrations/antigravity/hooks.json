@@ -1,46 +1,46 @@
 {
-  "cortex-pre-invoke": {
+  "cerebrum-ambient-grounding": {
     "PreInvocation": [
       {
         "type": "command",
-        "command": "python3 <cortex_root>/scripts/hooks/hook_pre_invoke.py",
-        "timeout": 5
+        "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_pre_invoke.py",
+        "timeout": 15
       }
     ]
   },
-  "cortex-safety-gate": {
+  "cerebrum-safety-gate": {
     "PreToolUse": [
       {
         "matcher": "run_command|replace_file_content|write_to_file",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 <cortex_root>/scripts/hooks/hook_pre_tool.py",
+            "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_pre_tool.py",
             "timeout": 5
           }
         ]
       }
     ]
   },
-  "cortex-hot-sync": {
+  "cerebrum-cache-invalidation": {
     "PostToolUse": [
       {
         "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 <cortex_root>/scripts/hooks/hook_post_tool.py",
-            "timeout": 15
+            "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_post_tool.py",
+            "timeout": 10
           }
         ]
       }
     ]
   },
-  "cortex-stop-guard": {
+  "cerebrum-dag-stop-guard": {
     "Stop": [
       {
         "type": "command",
-        "command": "python3 <cortex_root>/scripts/hooks/hook_stop.py",
+        "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_stop.py",
         "timeout": 10
       }
     ]

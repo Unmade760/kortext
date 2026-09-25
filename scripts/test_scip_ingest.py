@@ -12,9 +12,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from cortex.symbols import scip_pb2
-from cortex.symbols.scip import SCIPImporter, parse_scip_symbol_name, extract_parent_name
-from cortex.symbols.graph import SymbolGraphManager
+from cerebrum.symbols import scip_pb2
+from cerebrum.symbols.scip import SCIPImporter, parse_scip_symbol_name, extract_parent_name
+from cerebrum.symbols.graph import SymbolGraphManager
 
 
 def create_sample_scip_index() -> scip_pb2.Index:

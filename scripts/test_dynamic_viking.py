@@ -5,7 +5,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from cortex.viking.chunker import VikingChunker
+from cerebrum.viking.chunker import VikingChunker
 
 
 def test_viking_dynamic_watching():

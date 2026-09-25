@@ -1,0 +1,19 @@
+{
+  "baton_id": "baton_20260920_085650_26a51b",
+  "created_at": "2026-09-20T03:26:50.875126+00:00",
+  "source_agent": "antigravity",
+  "target_agent": "claude-code",
+  "current_scope": "cortex/symbols/graph.py refactoring",
+  "open_hypotheses": [
+    "SCIP graph can cache cross-file type references in SQLite"
+  ],
+  "unresolved_questions": [
+    "Should we deprecate Tree-sitter fallback or maintain dual-mode?"
+  ],
+  "active_blast_radius": [
+    "cortex/symbols/graph.py",
+    "cortex/server.py"
+  ],
+  "status": "completed",
+  "completed_at": "2026-09-20T03:26:50.876126+00:00"
+}

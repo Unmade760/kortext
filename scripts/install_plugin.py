@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Cortex Antigravity Plugin Dynamic Installer.
-Generates machine-specific hooks.json and sidecar.json manifests referencing the
-actual repository path on the host machine, then installs symlinks to Antigravity.
+Cerebrum Antigravity Plugin Dynamic Installer.
+Generates machine-specific hooks.json and installs symlinks to Antigravity plugins.
 """
 import json
 import os
@@ -10,55 +9,57 @@ import shutil
 import stat
 from pathlib import Path
 
-CORTEX_ROOT = Path(__file__).resolve().parent.parent
-INTEGRATIONS_DIR = CORTEX_ROOT / "integrations" / "antigravity"
-SCRIPTS_DIR = CORTEX_ROOT / "scripts" / "hooks"
+CEREBRUM_ROOT = Path(__file__).resolve().parent.parent
+INTEGRATIONS_DIR = CEREBRUM_ROOT / "integrations" / "antigravity"
+SCRIPTS_DIR = CEREBRUM_ROOT / "scripts" / "hooks"
 
 
 def build_hooks_dict() -> dict:
+    venv_py = CEREBRUM_ROOT / ".venv" / "bin" / "python3"
+    py_exec = str(venv_py) if venv_py.is_file() else "python3"
     return {
-        "cortex-pre-invoke": {
+        "cerebrum-ambient-grounding": {
             "PreInvocation": [
                 {
                     "type": "command",
-                    "command": f"python3 {SCRIPTS_DIR / 'hook_pre_invoke.py'}",
-                    "timeout": 5,
+                    "command": f"{py_exec} {SCRIPTS_DIR / 'hook_pre_invoke.py'}",
+                    "timeout": 15,
                 }
             ]
         },
-        "cortex-safety-gate": {
+        "cerebrum-safety-gate": {
             "PreToolUse": [
                 {
                     "matcher": "run_command|replace_file_content|write_to_file",
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"python3 {SCRIPTS_DIR / 'hook_pre_tool.py'}",
+                            "command": f"{py_exec} {SCRIPTS_DIR / 'hook_pre_tool.py'}",
                             "timeout": 5,
                         }
                     ],
                 }
             ]
         },
-        "cortex-hot-sync": {
+        "cerebrum-cache-invalidation": {
             "PostToolUse": [
                 {
                     "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"python3 {SCRIPTS_DIR / 'hook_post_tool.py'}",
-                            "timeout": 15,
+                            "command": f"{py_exec} {SCRIPTS_DIR / 'hook_post_tool.py'}",
+                            "timeout": 10,
                         }
                     ],
                 }
             ]
         },
-        "cortex-stop-guard": {
+        "cerebrum-dag-stop-guard": {
             "Stop": [
                 {
                     "type": "command",
-                    "command": f"python3 {SCRIPTS_DIR / 'hook_stop.py'}",
+                    "command": f"{py_exec} {SCRIPTS_DIR / 'hook_stop.py'}",
                     "timeout": 10,
                 }
             ]
@@ -66,78 +67,36 @@ def build_hooks_dict() -> dict:
     }
 
 
-def build_sidecar_dict() -> dict:
-    venv_py = CORTEX_ROOT / ".venv" / "bin" / "python3"
-    py_exec = str(venv_py) if venv_py.is_file() else "python3"
-    return {
-        "name": "cortex-watcher",
-        "command": py_exec,
-        "args": [
-            "-m", "cortex.watcher",
-            "--watch", str(CORTEX_ROOT),
-        ],
-        "restart_policy": "always",
-    }
-
-
 def install_plugin():
     home = Path.home()
-    dest_dirs = [
-        home / ".gemini" / "antigravity-cli" / "plugins" / "cortex",
-        home / ".gemini" / "config" / "plugins" / "cortex",
-    ]
+    dest_dir = home / ".gemini" / "config" / "plugins" / "cerebrum"
+    dest_dir.parent.mkdir(parents=True, exist_ok=True)
 
+    if dest_dir.is_symlink() or dest_dir.is_file():
+        dest_dir.unlink()
+    elif dest_dir.is_dir():
+        shutil.rmtree(dest_dir)
+
+    os.symlink(INTEGRATIONS_DIR, dest_dir)
+    print(f"📦 Linked Cerebrum plugin to: {dest_dir}")
+
+    # Generate hooks.json into integrations/antigravity/
     hooks_payload = build_hooks_dict()
-    sidecar_payload = build_sidecar_dict()
+    with open(INTEGRATIONS_DIR / "hooks.json", "w", encoding="utf-8") as f:
+        json.dump(hooks_payload, f, indent=2)
 
-    for dest in dest_dirs:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.is_symlink():
-            dest.unlink()
-        elif dest.exists():
-            shutil.rmtree(dest)
-        dest.mkdir(parents=True, exist_ok=True)
-
-        # Copy plugin manifest and directories
-        if (INTEGRATIONS_DIR / "plugin.json").is_file():
-            shutil.copy2(INTEGRATIONS_DIR / "plugin.json", dest / "plugin.json")
-
-        for subdir in ["agents", "skills"]:
-            src_sub = INTEGRATIONS_DIR / subdir
-            if src_sub.is_dir():
-                shutil.copytree(src_sub, dest / subdir, dirs_exist_ok=True)
-
-        # Write dynamically rendered hooks.json into plugin destination
-        with open(dest / "hooks.json", "w", encoding="utf-8") as f:
-            json.dump(hooks_payload, f, indent=2)
-
-        # Write dynamically rendered sidecar.json into plugin destination
-        sidecar_target_dir = dest / "sidecars" / "cortex-watcher"
-        sidecar_target_dir.mkdir(parents=True, exist_ok=True)
-        with open(sidecar_target_dir / "sidecar.json", "w", encoding="utf-8") as f:
-            json.dump(sidecar_payload, f, indent=2)
-
-        print(f"📦 Installed dynamic Cortex plugin to: {dest}")
-
-    # Also install skills and agents to global config
+    # Link skills to global config
     skills_src = INTEGRATIONS_DIR / "skills"
-    agents_src = INTEGRATIONS_DIR / "agents"
-
     if skills_src.is_dir():
         for skill_dir in skills_src.iterdir():
             if skill_dir.is_dir():
                 target_skill = home / ".gemini" / "config" / "skills" / skill_dir.name
-                target_skill.mkdir(parents=True, exist_ok=True)
-                for item in skill_dir.glob("*"):
-                    shutil.copy2(item, target_skill / item.name)
-                print(f"📦 Installed skill: {skill_dir.name}")
-
-    if agents_src.is_dir():
-        target_agents = home / ".gemini" / "config" / "agents"
-        target_agents.mkdir(parents=True, exist_ok=True)
-        for agent_file in agents_src.glob("*.md"):
-            shutil.copy2(agent_file, target_agents / agent_file.name)
-            print(f"🤖 Installed agent: {agent_file.name}")
+                if target_skill.is_symlink():
+                    target_skill.unlink()
+                elif target_skill.is_dir():
+                    shutil.rmtree(target_skill)
+                os.symlink(skill_dir, target_skill)
+                print(f"📦 Linked skill: {skill_dir.name}")
 
     # Make hook scripts executable
     for script in SCRIPTS_DIR.glob("*.py"):
@@ -145,10 +104,49 @@ def install_plugin():
         os.chmod(script, st.st_mode | stat.S_IEXEC)
 
 
-def main():
-    print(f"🧠 Installing Cortex Antigravity Plugin from {CORTEX_ROOT}...")
+def install_all():
+    home = Path.home()
+    cerebrum_home = home / ".cerebrum"
+    for d in ["bin", "run", "logs", "config", "data/falkordb", "qdrant"]:
+        (cerebrum_home / d).mkdir(parents=True, exist_ok=True)
+    print(f"📦 Provisioned Cerebrum storage directories in {cerebrum_home}")
+
+    # Verify native binary
+    bin_so = cerebrum_home / "bin" / "falkordb.so"
+    if not bin_so.is_file():
+        import subprocess
+        build_script = CEREBRUM_ROOT / "scripts" / "build_falkordb_native.sh"
+        subprocess.run(["bash", str(build_script)], check=True)
+
+    # Copy config
+    conf_src = cerebrum_home / "config" / "falkordb.conf"
+    if not conf_src.exists():
+        template_conf = CEREBRUM_ROOT / "config" / "falkordb.conf"
+        if template_conf.exists():
+            shutil.copy(template_conf, conf_src)
+
+    # LaunchAgents on Darwin
+    if os.uname().sysname == "Darwin":
+        launch_dir = home / "Library" / "LaunchAgents"
+        launch_dir.mkdir(parents=True, exist_ok=True)
+        daemons_dir = INTEGRATIONS_DIR / "daemons"
+        if daemons_dir.is_dir():
+            for plist in daemons_dir.glob("*.plist"):
+                target_plist = launch_dir / plist.name
+                shutil.copy(plist, target_plist)
+                print(f"📦 Installed LaunchAgent: {plist.name}")
+
     install_plugin()
-    print("🎉 Cortex Antigravity Plugin installed and synchronized dynamically!")
+
+
+def main():
+    import sys
+    print(f"🧠 Installing Cerebrum Antigravity Plugin from {CEREBRUM_ROOT}...")
+    if "--all" in sys.argv:
+        install_all()
+    else:
+        install_plugin()
+    print("🎉 Cerebrum Antigravity Plugin installed and synchronized dynamically!")
 
 
 if __name__ == "__main__":

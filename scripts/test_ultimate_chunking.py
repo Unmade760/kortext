@@ -7,14 +7,14 @@ import sys
 from pathlib import Path
 from llama_index.core.schema import Document
 
-from cortex.chunking import (
+from cerebrum.chunking import (
     ASTCodeSplitter,
     ConfigSectionSplitter,
     MarkdownSectionSplitter,
     SmartCodeNodeParser,
     count_tokens,
 )
-from cortex.chunking.ast_splitter import PY_LANG, TS_LANG
+from cerebrum.chunking.ast_splitter import PY_LANG, TS_LANG
 
 
 def test_token_counting():

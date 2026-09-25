@@ -3,7 +3,7 @@ Automated Multi-Language AST Test Suite for Cortex.
 Verifies syntax declaration extraction, call site resolution, and file skeletons
 across Python, TypeScript/JavaScript, Rust, Go, C, C++, Java, Kotlin, Swift, and C#.
 """
-from cortex.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP, print_language_status
+from cerebrum.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP, print_language_status
 
 
 def test_language_status():

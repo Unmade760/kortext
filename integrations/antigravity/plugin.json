@@ -1,6 +1,55 @@
 {
-  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
-  "name": "cortex",
-  "version": "1.0.0",
-  "description": "Cortex dual-memory and RAG memory base: four-tier retrieval, temporal episodic facts, AST symbol graphs, hot-sync lifecycle hooks, and progressive disclosure skills."
+  "name": "cerebrum",
+  "version": "2.0.0",
+  "displayName": "Cerebrum Cognitive OS & Anti-Ripgrep Memory Substrate",
+  "description": "5-Tier Dual-Memory, AST Code Intelligence, Task DAG Orchestration & Anti-Ripgrep Engine",
+  "author": {
+    "name": "Supreme Knight",
+    "email": "realrajdeep09@gmail.com"
+  },
+  "mcpServers": {
+    "cerebrum": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "<plugin_dir>/../..",
+        "python",
+        "-m",
+        "cerebrum.server"
+      ],
+      "env": {
+        "FALKORDB_HOST": "localhost",
+        "FALKORDB_PORT": "6379",
+        "QDRANT_PATH": "~/.cerebrum/qdrant",
+        "EMBED_BASE_URL": "http://localhost:8000/v1"
+      }
+    }
+  },
+  "rules": [
+    "rules/anti_ripgrep_invariants.md",
+    "rules/subagent_delegation_invariants.md",
+    "rules/substrate_health_invariants.md"
+  ],
+  "skills": [
+    "skills/cerebrum-architect",
+    "skills/cerebrum-rag",
+    "skills/anti-ripgrep-seek",
+    "skills/task-orchestrator",
+    "skills/verification-loop",
+    "skills/tdd-workflow",
+    "skills/code-review",
+    "skills/architecture-decision-records",
+    "skills/agent-architecture-audit",
+    "skills/agentic-engineering",
+    "skills/security-review",
+    "skills/token-budget-advisor",
+    "skills/autonomous-loops"
+  ],
+  "agents": [
+    "agents/cerebrum-architect.md",
+    "agents/cerebrum-researcher.md",
+    "agents/cerebrum-code-reviewer.md",
+    "agents/cerebrum-task-runner.md"
+  ]
 }

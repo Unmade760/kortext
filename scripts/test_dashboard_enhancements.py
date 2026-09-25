@@ -5,7 +5,7 @@ chunk cache telemetry, and watcher status.
 """
 from pathlib import Path
 from starlette.testclient import TestClient
-from cortex.dashboard.app import app
+from cerebrum.dashboard.app import app
 
 client = TestClient(app)
 
