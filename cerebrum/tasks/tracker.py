@@ -183,28 +183,32 @@ class TaskDAGTracker:
                 "icon": "▶",
             },
             "in_progress": {
-                "background": "#451a03",
-                "border": "#f59e0b",
-                "highlight": {"background": "#78350f", "border": "#fbbf24"},
+                "background": "#2a1406",
+                "border": "#f97316",
+                "highlight": {"background": "#3d1d09", "border": "#fb923c"},
                 "icon": "⚡",
+                "fontColor": "#fed7aa",
             },
             "pending": {
                 "background": "#0f172a",
                 "border": "#64748b",
                 "highlight": {"background": "#1e293b", "border": "#94a3b8"},
                 "icon": "⏳",
+                "fontColor": "#cbd5e1",
             },
             "failed": {
                 "background": "#450a0a",
                 "border": "#f87171",
                 "highlight": {"background": "#7f1d1d", "border": "#fca5a5"},
                 "icon": "❌",
+                "fontColor": "#fecaca",
             },
             "blocked": {
                 "background": "#3b0764",
                 "border": "#e11d48",
                 "highlight": {"background": "#581c87", "border": "#fb7185"},
                 "icon": "🔒",
+                "fontColor": "#fecdd3",
             },
         }
         for t in tasks:
@@ -214,6 +218,7 @@ class TaskDAGTracker:
                 "border": "#6366f1",
                 "highlight": {"background": "#312e81", "border": "#818cf8"},
                 "icon": "•",
+                "fontColor": "#e0e7ff",
             })
             icon = style["icon"]
             title_display = t["title"][:28] + ("..." if len(t["title"]) > 28 else "")
@@ -239,7 +244,7 @@ class TaskDAGTracker:
                     "y": 4,
                 },
                 "font": {
-                    "color": "#f8fafc",
+                    "color": style.get("fontColor", "#f8fafc"),
                     "face": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                     "size": 11,
                     "multi": "html",
@@ -261,22 +266,24 @@ class TaskDAGTracker:
                     "label": "depends on",
                     "font": {
                         "size": 9,
-                        "color": "#94a3b8",
+                        "color": "#fb7185",
                         "face": "ui-monospace, monospace",
-                        "align": "horizontal",
+                        "align": "middle",
+                        "background": "rgba(36, 8, 14, 0.94)",
                     },
                     "color": {
-                        "color": "#6366f1",
-                        "highlight": "#a5b4fc",
-                        "opacity": 0.8,
+                        "color": "#f43f5e",
+                        "highlight": "#fb7185",
+                        "hover": "#fda4af",
+                        "opacity": 0.9,
                     },
-                    "width": 1.75,
-                    "smooth": {"type": "cubicBezier", "roundness": 0.25},
+                    "width": 2.0,
+                    "smooth": {"type": "continuous", "roundness": 0.28},
                     "shadow": {
                         "enabled": True,
-                        "color": "rgba(0, 0, 0, 0.4)",
-                        "size": 5,
-                        "x": 1,
+                        "color": "rgba(244, 63, 94, 0.25)",
+                        "size": 6,
+                        "x": 0,
                         "y": 2,
                     },
                 })

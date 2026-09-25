@@ -72,9 +72,11 @@ def build_graph_view(
                                 "from": sym_name,
                                 "to": file_path,
                                 "label": "DEFINED_IN",
-                                "arrows": "to",
-                                "font": {"size": 9, "align": "middle", "color": "#38bdf8"},
-                                "color": {"color": "#38bdf8", "highlight": "#ffffff"},
+                                "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                "smooth": {"type": "continuous", "roundness": 0.28},
+                                "width": 1.8,
+                                "font": {"size": 9, "align": "middle", "color": "#38bdf8", "face": "ui-monospace, monospace", "background": "rgba(8, 20, 36, 0.94)"},
+                                "color": {"color": "#06b6d4", "highlight": "#22d3ee", "hover": "#38bdf8"},
                             })
 
                 # Internal references between project files and project symbols
@@ -92,9 +94,11 @@ def build_graph_view(
                                     "from": caller_path,
                                     "to": sym_name,
                                     "label": "REFERENCES",
-                                    "arrows": "to",
-                                    "font": {"size": 9, "align": "middle", "color": "#34d399"},
-                                    "color": {"color": "#34d399", "highlight": "#ffffff"},
+                                    "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                    "smooth": {"type": "continuous", "roundness": 0.28},
+                                    "width": 2.0,
+                                    "font": {"size": 9, "align": "middle", "color": "#34d399", "face": "ui-monospace, monospace", "background": "rgba(6, 28, 20, 0.94)"},
+                                    "color": {"color": "#10b981", "highlight": "#34d399", "hover": "#6ee7b7"},
                                 })
 
                 # Project imports
@@ -112,9 +116,11 @@ def build_graph_view(
                                     "from": f_path,
                                     "to": sym_name,
                                     "label": "IMPORTS",
-                                    "arrows": "to",
-                                    "font": {"size": 9, "align": "middle", "color": "#a78bfa"},
-                                    "color": {"color": "#a78bfa", "highlight": "#ffffff"},
+                                    "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                    "smooth": {"type": "continuous", "roundness": 0.28},
+                                    "width": 1.8,
+                                    "font": {"size": 9, "align": "middle", "color": "#a78bfa", "face": "ui-monospace, monospace", "background": "rgba(22, 14, 46, 0.94)"},
+                                    "color": {"color": "#8b5cf6", "highlight": "#a78bfa", "hover": "#c4b5fd"},
                                 })
 
                 # SCIP IMPLEMENTS relations
@@ -135,10 +141,12 @@ def build_graph_view(
                                 "from": s1,
                                 "to": s2,
                                 "label": "IMPLEMENTS",
-                                "arrows": "to",
-                                "dashes": True,
-                                "font": {"size": 9, "align": "middle", "color": "#ec4899"},
-                                "color": {"color": "#ec4899", "highlight": "#f472b6"},
+                                "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                "smooth": {"type": "continuous", "roundness": 0.28},
+                                "width": 2.0,
+                                "dashes": [6, 4],
+                                "font": {"size": 9, "align": "middle", "color": "#f472b6", "face": "ui-monospace, monospace", "background": "rgba(38, 10, 24, 0.94)"},
+                                "color": {"color": "#ec4899", "highlight": "#f472b6", "hover": "#fbcfe8"},
                             })
 
                 # SCIP TYPE_OF relations
@@ -159,8 +167,12 @@ def build_graph_view(
                                 "from": s1,
                                 "to": s2,
                                 "label": "TYPE_OF",
-                                "font": {"size": 9, "align": "middle", "color": "#f59e0b"},
-                                "color": {"color": "#f59e0b", "highlight": "#fbbf24"},
+                                "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                "smooth": {"type": "continuous", "roundness": 0.28},
+                                "width": 1.8,
+                                "dashes": [3, 4],
+                                "font": {"size": 9, "align": "middle", "color": "#fb923c", "face": "ui-monospace, monospace", "background": "rgba(36, 16, 6, 0.94)"},
+                                "color": {"color": "#f97316", "highlight": "#fb923c", "hover": "#fed7aa"},
                             })
 
                 # Markdown Document Links (LINKS_TO)
@@ -244,8 +256,17 @@ def build_graph_view(
                                 "label": "TAG",
                                 "arrows": "to",
                                 "dashes": [2, 2],
-                                "font": {"size": 9, "align": "middle", "color": "#f59e0b"},
-                                "color": {"color": "#f59e0b", "highlight": "#fbbf24"},
+                                "font": {
+                                    "size": 9,
+                                    "align": "middle",
+                                    "color": "#fed7aa",
+                                    "background": "rgba(42, 20, 6, 0.94)",
+                                },
+                                "color": {
+                                    "color": "#f97316",
+                                    "highlight": "#fb923c",
+                                    "hover": "#fed7aa",
+                                },
                             })
             else:
                 # Full Raw View (all symbols, including external calls)
@@ -287,22 +308,26 @@ def build_graph_view(
                             if dst not in nodes_dict:
                                 nodes_dict[dst] = {"id": dst, "label": Path(dst).name if "/" in dst else dst, "full_name": dst, "group": "file", "title": dst}
 
-                            color_map = {
-                                "DEFINED_IN": "#38bdf8",
-                                "IMPORTS": "#a78bfa",
-                                "REFERENCES": "#34d399",
-                                "IMPLEMENTS": "#ec4899",
-                                "TYPE_OF": "#f59e0b",
+                            color_specs = {
+                                "DEFINED_IN": {"color": "#06b6d4", "highlight": "#22d3ee", "hover": "#38bdf8", "font": "#38bdf8", "bg": "rgba(8, 20, 36, 0.94)", "width": 1.8, "dashes": False},
+                                "IMPORTS": {"color": "#8b5cf6", "highlight": "#a78bfa", "hover": "#c4b5fd", "font": "#a78bfa", "bg": "rgba(22, 14, 46, 0.94)", "width": 1.8, "dashes": False},
+                                "REFERENCES": {"color": "#10b981", "highlight": "#34d399", "hover": "#6ee7b7", "font": "#34d399", "bg": "rgba(6, 28, 20, 0.94)", "width": 2.0, "dashes": False},
+                                "IMPLEMENTS": {"color": "#ec4899", "highlight": "#f472b6", "hover": "#fbcfe8", "font": "#f472b6", "bg": "rgba(38, 10, 24, 0.94)", "width": 2.0, "dashes": [6, 4]},
+                                "TYPE_OF": {"color": "#f97316", "highlight": "#fb923c", "hover": "#fed7aa", "font": "#fb923c", "bg": "rgba(36, 16, 6, 0.94)", "width": 1.8, "dashes": [3, 4]},
+                                "RELATES_TO": {"color": "#0ea5e9", "highlight": "#38bdf8", "hover": "#7dd3fc", "font": "#38bdf8", "bg": "rgba(8, 24, 40, 0.94)", "width": 1.8, "dashes": False},
+                                "SUPERSEDES": {"color": "#ef4444", "highlight": "#f87171", "hover": "#fca5a5", "font": "#f87171", "bg": "rgba(40, 8, 8, 0.94)", "width": 2.2, "dashes": [6, 3]},
                             }
-                            edge_color = color_map.get(rel, "#94a3b8")
+                            spec = color_specs.get(rel, {"color": "#6366f1", "highlight": "#818cf8", "hover": "#c7d2fe", "font": "#818cf8", "bg": "rgba(15, 23, 42, 0.94)", "width": 1.6, "dashes": False})
                             edges_list.append({
                                 "from": src,
                                 "to": dst,
                                 "label": rel,
-                                "arrows": "to",
-                                "dashes": True if rel == "IMPLEMENTS" else ([4, 4] if rel == "TYPE_OF" else False),
-                                "font": {"size": 9, "align": "middle", "color": edge_color},
-                                "color": {"color": edge_color, "highlight": "#ffffff"},
+                                "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                "smooth": {"type": "continuous", "roundness": 0.28},
+                                "width": spec["width"],
+                                "dashes": spec["dashes"],
+                                "font": {"size": 9, "align": "middle", "color": spec["font"], "face": "ui-monospace, monospace", "background": spec["bg"]},
+                                "color": {"color": spec["color"], "highlight": spec["highlight"], "hover": spec["hover"]},
                             })
 
         else:
@@ -343,13 +368,21 @@ def build_graph_view(
                             nodes_dict[dst] = {"id": dst, "label": dst, "full_name": dst, "group": "entity", "title": dst}
 
                         is_mention = rel == "MENTIONS"
+                        is_supersedes = rel == "SUPERSEDES"
+                        edge_color = "#475569" if is_mention else ("#ef4444" if is_supersedes else "#0ea5e9")
+                        hi_color = "#94a3b8" if is_mention else ("#f87171" if is_supersedes else "#38bdf8")
+                        bg_color = "rgba(15, 23, 42, 0.94)" if is_mention else ("rgba(40, 8, 8, 0.94)" if is_supersedes else "rgba(8, 24, 40, 0.94)")
                         edges_list.append({
                             "from": src,
                             "to": dst,
                             "label": rel,
                             "is_mention": is_mention,
-                            "arrows": "to",
-                            "font": {"size": 9, "align": "middle", "color": "#64748b" if is_mention else "#a5b4fc"},
+                            "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                            "smooth": {"type": "continuous", "roundness": 0.28},
+                            "width": 1.2 if is_mention else (2.2 if is_supersedes else 1.8),
+                            "dashes": [4, 4] if is_mention else ([6, 3] if is_supersedes else False),
+                            "font": {"size": 9, "align": "middle", "color": hi_color, "face": "ui-monospace, monospace", "background": bg_color},
+                            "color": {"color": edge_color, "highlight": hi_color, "hover": hi_color},
                         })
 
         return {
@@ -391,12 +424,12 @@ def build_symbol_impact_view(
 
     COLOR_TARGET = {"background": "#2e1065", "border": "#818cf8", "highlight": {"background": "#3b0764", "border": "#c7d2fe"}}
     COLOR_HOP1 = {"background": "#450a0a", "border": "#f43f5e", "highlight": {"background": "#7f1d1d", "border": "#fda4af"}}
-    COLOR_HOP2 = {"background": "#451a03", "border": "#f59e0b", "highlight": {"background": "#78350f", "border": "#fcd34d"}}
+    COLOR_HOP2 = {"background": "#2a1406", "border": "#f97316", "highlight": {"background": "#3d1d09", "border": "#fb923c"}}
     COLOR_HOP3 = {"background": "#082f49", "border": "#38bdf8", "highlight": {"background": "#0c4a6e", "border": "#bae6fd"}}
 
     SHADOW_TARGET = {"enabled": True, "color": "rgba(129, 140, 248, 0.45)", "size": 16, "x": 0, "y": 4}
     SHADOW_HOP1 = {"enabled": True, "color": "rgba(244, 63, 94, 0.4)", "size": 12, "x": 0, "y": 3}
-    SHADOW_HOP2 = {"enabled": True, "color": "rgba(245, 158, 11, 0.35)", "size": 10, "x": 0, "y": 3}
+    SHADOW_HOP2 = {"enabled": True, "color": "rgba(249, 115, 22, 0.35)", "size": 10, "x": 0, "y": 3}
     SHADOW_HOP3 = {"enabled": True, "color": "rgba(56, 189, 248, 0.3)", "size": 8, "x": 0, "y": 2}
 
     try:
@@ -554,7 +587,7 @@ def build_symbol_impact_view(
                         "margin": 8,
                         "borderWidth": 1.8,
                         "shadow": SHADOW_HOP2,
-                        "font": {"color": "#fef3c7", "face": "ui-monospace, monospace", "size": 11},
+                        "font": {"color": "#fed7aa", "face": "ui-monospace, monospace", "size": 11, "bold": True},
                         "title": f"<b>Type Relation: {t_sym}</b><br/>{t_rel} in {Path(t_file).name}",
                         "level": 2,
                     }
@@ -564,11 +597,11 @@ def build_symbol_impact_view(
                     "to": raw_target if direction.lower() == "upstream" else t_sym,
                     "label": t_rel,
                     "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
-                    "smooth": {"type": "continuous", "roundness": 0.25},
-                    "width": 1.6,
-                    "dashes": True,
-                    "font": {"size": 9, "align": "middle", "color": "#fbbf24", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
-                    "color": {"color": "#f59e0b", "highlight": "#ffffff"},
+                    "smooth": {"type": "continuous", "roundness": 0.28},
+                    "width": 1.8,
+                    "dashes": [3, 4],
+                    "font": {"size": 9, "align": "middle", "color": "#fb923c", "face": "ui-monospace, monospace", "background": "rgba(36, 16, 6, 0.94)"},
+                    "color": {"color": "#f97316", "highlight": "#fb923c", "hover": "#fed7aa"},
                 })
 
                 tree_items.append({
