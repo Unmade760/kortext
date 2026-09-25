@@ -61,36 +61,93 @@ async def _check_http(url: str, timeout: float = 2.0) -> tuple[bool, Optional[di
 
 @app.get("/api/status")
 async def get_status():
-    qdrant_ok, _ = await _check_http("http://localhost:6333/collections")
-    falkordb_ok = _check_tcp(FALKORDB_HOST, FALKORDB_PORT)
-    falkor_browser_ok, _ = await _check_http("http://localhost:3000")
-    omlx_ok, omlx_data = await _check_http("http://localhost:8000/health")
+    from pathlib import Path
+    import json
+
+    # 1. Qdrant check (Remote vs Embedded)
+    qdrant_url = os.getenv("QDRANT_URL")
+    if qdrant_url:
+        qdrant_ok, _ = await _check_http(f"{qdrant_url.rstrip('/')}/collections")
+        qdrant_status = "RUNNING" if qdrant_ok else "DOWN"
+        qdrant_healthy = qdrant_ok
+        qdrant_desc = "Remote Qdrant vector store"
+        qdrant_port = 6333
+        qdrant_url_link = f"{qdrant_url.rstrip('/')}/dashboard"
+    else:
+        qpath = Path(os.getenv("CEREBRUM_HOME", str(Path.home() / ".cerebrum"))) / "qdrant"
+        meta_file = qpath / "meta.json"
+        if meta_file.is_file():
+            try:
+                meta_data = json.loads(meta_file.read_text(encoding="utf-8"))
+                col_names = list(meta_data.get("collections", {}).keys())
+                qdrant_ok = True
+                qdrant_status = "EMBEDDED"
+                qdrant_healthy = True
+                qdrant_desc = f"In-process Rust engine ({len(col_names)} collections: {', '.join(col_names)})"
+                qdrant_port = "Embedded"
+                qdrant_url_link = "#collections"
+            except Exception:
+                qdrant_ok = qpath.is_dir()
+                qdrant_status = "EMBEDDED" if qdrant_ok else "DOWN"
+                qdrant_healthy = qdrant_ok
+                qdrant_desc = "In-process Rust engine (Zero-Docker)"
+                qdrant_port = "Embedded"
+                qdrant_url_link = "#collections"
+        elif qpath.is_dir():
+            qdrant_ok = True
+            qdrant_status = "EMBEDDED"
+            qdrant_healthy = True
+            qdrant_desc = "In-process Rust engine (Zero-Docker)"
+            qdrant_port = "Embedded"
+            qdrant_url_link = "#collections"
+        else:
+            qdrant_ok = False
+            qdrant_status = "DOWN"
+            qdrant_healthy = False
+            qdrant_desc = "Storage directory ~/.cerebrum/qdrant not found"
+            qdrant_port = "Embedded"
+            qdrant_url_link = "#collections"
+
+    # 2. FalkorDB check (Unix Domain Socket first, then TCP)
+    falkor_sock = Path(os.getenv("CEREBRUM_HOME", str(Path.home() / ".cerebrum"))) / "run" / "falkordb.sock"
+    if falkor_sock.is_socket():
+        try:
+            import redis
+            r = redis.Redis(unix_socket_path=str(falkor_sock), socket_timeout=1.0)
+            falkordb_ok = bool(r.ping())
+        except Exception:
+            falkordb_ok = _check_tcp(FALKORDB_HOST, FALKORDB_PORT)
+    else:
+        falkordb_ok = _check_tcp(FALKORDB_HOST, FALKORDB_PORT)
+
+    falkor_browser_ok, _ = await _check_http("http://127.0.0.1:3000")
+    omlx_ok, omlx_data = await _check_http("http://127.0.0.1:8000/health")
 
     return {
         "services": [
             {
                 "name": "Qdrant Vector Store",
-                "port": 6333,
-                "url": "http://localhost:6333/dashboard",
-                "status": "RUNNING" if qdrant_ok else "DOWN",
-                "healthy": qdrant_ok,
-                "description": "Dense code chunk retrieval (4096-dim vectors)",
+                "port": qdrant_port,
+                "url": qdrant_url_link,
+                "status": qdrant_status,
+                "healthy": qdrant_healthy,
+                "description": qdrant_desc,
             },
             {
                 "name": "FalkorDB Graph Engine",
-                "port": 6379,
+                "port": FALKORDB_PORT if not falkor_sock.is_socket() else "Unix Socket",
                 "url": "http://localhost:3000",
                 "status": "RUNNING" if falkordb_ok else "DOWN",
                 "healthy": falkordb_ok,
-                "description": "GraphBLAS native temporal property graph (Web UI on :3000)",
+                "description": "GraphBLAS native temporal property graph (Unix Socket / :6379)",
             },
             {
                 "name": "FalkorDB Browser UI",
                 "port": 3000,
                 "url": "http://localhost:3000",
-                "status": "RUNNING" if falkor_browser_ok else "DOWN",
+                "status": "RUNNING" if falkor_browser_ok else "OFFLINE",
                 "healthy": falkor_browser_ok,
-                "description": "Official Cypher query visualizer & browser",
+                "description": "Official Cypher query visualizer & browser (optional)",
             },
             {
                 "name": "oMLX Admin Dashboard",
@@ -109,27 +166,66 @@ async def get_status():
 @app.get("/api/collections")
 async def list_collections():
     """List Qdrant collections with point counts and configs."""
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get("http://localhost:6333/collections")
-            if resp.status_code != 200:
-                return {"status": "error", "collections": []}
-            data = resp.json().get("result", {}).get("collections", [])
+    qdrant_url = os.getenv("QDRANT_URL")
+    if qdrant_url:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{qdrant_url.rstrip('/')}/collections")
+                if resp.status_code != 200:
+                    return {"status": "error", "collections": []}
+                data = resp.json().get("result", {}).get("collections", [])
+                details = []
+                for c in data:
+                    name = c["name"]
+                    info_resp = await client.get(f"{qdrant_url.rstrip('/')}/collections/{name}")
+                    info = info_resp.json().get("result", {}) if info_resp.status_code == 200 else {}
+                    details.append({
+                        "name": name,
+                        "status": info.get("status", "green"),
+                        "points_count": info.get("points_count", 0),
+                        "vectors_count": info.get("vectors_count", 0),
+                        "indexed_vectors_count": info.get("indexed_vectors_count", 0),
+                    })
+                return {"status": "ok", "collections": details}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "collections": []}
+    else:
+        # Native Embedded Qdrant inspection via meta.json & storage.sqlite (Read-Only)
+        from pathlib import Path
+        import json, sqlite3
+        qpath = Path(os.getenv("CEREBRUM_HOME", str(Path.home() / ".cerebrum"))) / "qdrant"
+        meta_file = qpath / "meta.json"
+        if not meta_file.is_file():
+            return {"status": "ok", "collections": []}
+        try:
+            meta_data = json.loads(meta_file.read_text(encoding="utf-8"))
+            collections_map = meta_data.get("collections", {})
             details = []
-            for c in data:
-                name = c["name"]
-                info_resp = await client.get(f"http://localhost:6333/collections/{name}")
-                info = info_resp.json().get("result", {}) if info_resp.status_code == 200 else {}
+            for name in sorted(collections_map.keys()):
+                pt_count = 0
+                sql_file = qpath / "collection" / name / "storage.sqlite"
+                if sql_file.is_file():
+                    try:
+                        conn = sqlite3.connect(f"file:{sql_file}?mode=ro", uri=True)
+                        cur = conn.cursor()
+                        cur.execute("SELECT count(*) FROM points")
+                        row = cur.fetchone()
+                        if row:
+                            pt_count = row[0]
+                        conn.close()
+                    except Exception:
+                        pass
                 details.append({
                     "name": name,
-                    "status": info.get("status", "unknown"),
-                    "points_count": info.get("points_count", 0),
-                    "vectors_count": info.get("vectors_count", 0),
-                    "indexed_vectors_count": info.get("indexed_vectors_count", 0),
+                    "status": "embedded",
+                    "points_count": pt_count,
+                    "vectors_count": pt_count,
+                    "indexed_vectors_count": pt_count,
+                    "engine": "RocksDB (Rust)",
                 })
             return {"status": "ok", "collections": details}
-    except Exception as e:
-        return {"status": "error", "message": str(e), "collections": []}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "collections": []}
 
 
 @app.post("/api/collections")
@@ -140,19 +236,26 @@ async def create_collection(request: Request):
         name = body.get("name", "").strip()
         if not name:
             return {"status": "error", "message": "Collection name is required"}
-        
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            payload = {
-                "vectors": {
-                    "size": 4096,
-                    "distance": "Cosine"
+
+        qdrant_url = os.getenv("QDRANT_URL")
+        if qdrant_url:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                payload = {
+                    "vectors": {
+                        "size": 4096,
+                        "distance": "Cosine"
+                    }
                 }
-            }
-            resp = await client.put(f"http://localhost:6333/collections/{name}", json=payload)
-            if resp.status_code in [200, 201]:
-                return {"status": "ok", "message": f"Collection '{name}' created successfully."}
-            else:
-                return {"status": "error", "message": resp.text}
+                resp = await client.put(f"{qdrant_url.rstrip('/')}/collections/{name}", json=payload)
+                if resp.status_code in [200, 201]:
+                    return {"status": "ok", "message": f"Collection '{name}' created successfully."}
+                else:
+                    return {"status": "error", "message": resp.text}
+        else:
+            from cerebrum.retrieval.qdrant_engine import EmbeddedQdrantEngine
+            engine = EmbeddedQdrantEngine()
+            engine.ensure_collection(name, embed_dim=4096)
+            return {"status": "ok", "message": f"Collection '{name}' created successfully in native embedded Qdrant."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

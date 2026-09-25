@@ -419,7 +419,7 @@
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold text-white">Qdrant Collections Manager</h2>
-          <p class="text-sm text-slate-400">View, create, and manage dense vector collections in Qdrant (:6333).</p>
+          <p class="text-sm text-slate-400">View, create, and manage dense vector collections in Native Embedded Qdrant (Zero-Docker RocksDB).</p>
         </div>
         <button onclick="loadCollections()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">
           Refresh Collections
@@ -558,11 +558,11 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
           <span class="text-xs text-indigo-400 font-mono flex items-center gap-1 pt-2">Open Browser →</span>
         </a>
 
-        <a href="http://localhost:6333/dashboard" target="_blank" class="block p-5 bg-slate-900 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition space-y-2">
+        <a href="#collections" onclick="setTab('collections')" class="block p-5 bg-slate-900 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition space-y-2">
           <div class="text-2xl">📦</div>
-          <h3 class="font-semibold text-white">Qdrant Dashboard (:6333)</h3>
-          <p class="text-xs text-slate-400">Browse vector collections, inspect 4096-dim points, view payload JSON, and run vector searches.</p>
-          <span class="text-xs text-indigo-400 font-mono flex items-center gap-1 pt-2">Open Dashboard →</span>
+          <h3 class="font-semibold text-white">Embedded Qdrant (Rust / RocksDB)</h3>
+          <p class="text-xs text-slate-400">Browse vector collections, inspect 4096-dim points, view payload JSON, and dual-vector schemas embedded at ~/.cerebrum/qdrant.</p>
+          <span class="text-xs text-indigo-400 font-mono flex items-center gap-1 pt-2">Open Collections Manager →</span>
         </a>
       </div>
     </div>
@@ -1452,8 +1452,8 @@ uv run cerebrum-ingest --root /path/to/my_project --collection my_collection</pr
               </div>
             </div>
             <div class="pt-2 border-t border-slate-800/60 flex justify-between items-center text-xs">
-              <span class="text-[10px] text-slate-500">Vector Size: 4096 (Cosine)</span>
-              <a href="http://localhost:6333/dashboard" target="_blank" class="text-indigo-400 hover:underline text-[11px]">Inspect →</a>
+              <span class="text-[10px] text-slate-500">Dual-Vector: 4096-dim + BM25</span>
+              <span class="text-emerald-400 font-mono text-[11px]">RocksDB Embedded</span>
             </div>
           </div>
         `).join('');
