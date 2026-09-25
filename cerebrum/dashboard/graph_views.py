@@ -389,10 +389,15 @@ def build_symbol_impact_view(
     edges_list: List[dict] = []
     tree_items: List[dict] = []
 
-    COLOR_TARGET = {"background": "#6366f1", "border": "#4338ca", "highlight": {"background": "#818cf8", "border": "#6366f1"}}
-    COLOR_HOP1 = {"background": "#ef4444", "border": "#b91c1c", "highlight": {"background": "#f87171", "border": "#ef4444"}}
-    COLOR_HOP2 = {"background": "#f59e0b", "border": "#b45309", "highlight": {"background": "#fbbf24", "border": "#f59e0b"}}
-    COLOR_HOP3 = {"background": "#38bdf8", "border": "#0284c7", "highlight": {"background": "#7dd3fc", "border": "#38bdf8"}}
+    COLOR_TARGET = {"background": "#2e1065", "border": "#818cf8", "highlight": {"background": "#3b0764", "border": "#c7d2fe"}}
+    COLOR_HOP1 = {"background": "#450a0a", "border": "#f43f5e", "highlight": {"background": "#7f1d1d", "border": "#fda4af"}}
+    COLOR_HOP2 = {"background": "#451a03", "border": "#f59e0b", "highlight": {"background": "#78350f", "border": "#fcd34d"}}
+    COLOR_HOP3 = {"background": "#082f49", "border": "#38bdf8", "highlight": {"background": "#0c4a6e", "border": "#bae6fd"}}
+
+    SHADOW_TARGET = {"enabled": True, "color": "rgba(129, 140, 248, 0.45)", "size": 16, "x": 0, "y": 4}
+    SHADOW_HOP1 = {"enabled": True, "color": "rgba(244, 63, 94, 0.4)", "size": 12, "x": 0, "y": 3}
+    SHADOW_HOP2 = {"enabled": True, "color": "rgba(245, 158, 11, 0.35)", "size": 10, "x": 0, "y": 3}
+    SHADOW_HOP3 = {"enabled": True, "color": "rgba(56, 189, 248, 0.3)", "size": 8, "x": 0, "y": 2}
 
     try:
         sym_mgr = SymbolGraphManager()
@@ -401,12 +406,16 @@ def build_symbol_impact_view(
             file_name = Path(raw_target).name
             nodes_map[raw_target] = {
                 "id": raw_target,
-                "label": file_name,
+                "label": f"🎯  {file_name}",
                 "full_name": raw_target,
                 "group": "file",
                 "color": COLOR_TARGET,
                 "shape": "box",
-                "font": {"color": "#ffffff", "bold": True},
+                "shapeProperties": {"borderRadius": 6},
+                "margin": 10,
+                "borderWidth": 2.5,
+                "shadow": SHADOW_TARGET,
+                "font": {"color": "#ffffff", "face": "ui-monospace, monospace", "size": 12, "bold": True},
                 "title": f"<b>Target File: {file_name}</b><br/>{raw_target}",
                 "level": 0,
             }
@@ -422,13 +431,17 @@ def build_symbol_impact_view(
                 if dep_path not in nodes_map:
                     nodes_map[dep_path] = {
                         "id": dep_path,
-                        "label": dep_name,
+                        "label": f"💥  {dep_name}",
                         "full_name": dep_path,
                         "group": "file",
                         "color": COLOR_HOP1,
                         "shape": "box",
-                        "font": {"color": "#ffffff"},
-                        "title": f"<b>Impacted File: {dep_name}</b><br/>Calls {sym_name} (Line {line})",
+                        "shapeProperties": {"borderRadius": 6},
+                        "margin": 8,
+                        "borderWidth": 2,
+                        "shadow": SHADOW_HOP1,
+                        "font": {"color": "#ffe4e6", "face": "ui-monospace, monospace", "size": 11},
+                        "title": f"<b>Direct Impact: {dep_name}</b><br/>Calls {sym_name} (Line {line})",
                         "level": 1,
                     }
 
@@ -436,8 +449,10 @@ def build_symbol_impact_view(
                     "from": dep_path,
                     "to": raw_target,
                     "label": f"{rel} ({sym_name})",
-                    "arrows": "to",
-                    "font": {"size": 9, "align": "middle", "color": "#f87171"},
+                    "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                    "smooth": {"type": "continuous", "roundness": 0.25},
+                    "width": 1.8,
+                    "font": {"size": 9, "align": "middle", "color": "#f87171", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
                     "color": {"color": "#ef4444", "highlight": "#ffffff"},
                 })
                 tree_items.append({
@@ -465,12 +480,16 @@ def build_symbol_impact_view(
 
             nodes_map[raw_target] = {
                 "id": raw_target,
-                "label": raw_target,
+                "label": f"🎯  {raw_target}",
                 "full_name": raw_target,
                 "group": "symbol",
                 "color": COLOR_TARGET,
                 "shape": "box",
-                "font": {"color": "#ffffff", "bold": True},
+                "shapeProperties": {"borderRadius": 6},
+                "margin": 10,
+                "borderWidth": 2.5,
+                "shadow": SHADOW_TARGET,
+                "font": {"color": "#ffffff", "face": "ui-monospace, monospace", "size": 12, "bold": True},
                 "title": f"<b>Target Symbol: {raw_target}</b>",
                 "level": 0,
             }
@@ -484,12 +503,16 @@ def build_symbol_impact_view(
                 if src_file not in nodes_map:
                     nodes_map[src_file] = {
                         "id": src_file,
-                        "label": file_label,
+                        "label": f"💥  {file_label}",
                         "full_name": src_file,
                         "group": "file",
                         "color": COLOR_HOP1,
                         "shape": "box",
-                        "font": {"color": "#ffffff"},
+                        "shapeProperties": {"borderRadius": 6},
+                        "margin": 8,
+                        "borderWidth": 2,
+                        "shadow": SHADOW_HOP1,
+                        "font": {"color": "#ffe4e6", "face": "ui-monospace, monospace", "size": 11},
                         "title": f"<b>Direct Impact: {file_label}</b><br/>{rel} at line {line}",
                         "level": 1,
                     }
@@ -498,8 +521,10 @@ def build_symbol_impact_view(
                     "from": src_file if direction.lower() == "upstream" else raw_target,
                     "to": raw_target if direction.lower() == "upstream" else src_file,
                     "label": f"{rel}:{line}",
-                    "arrows": "to",
-                    "font": {"size": 9, "align": "middle", "color": "#f87171" if direction.lower() == "upstream" else "#38bdf8"},
+                    "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                    "smooth": {"type": "continuous", "roundness": 0.25},
+                    "width": 1.8,
+                    "font": {"size": 9, "align": "middle", "color": "#f87171" if direction.lower() == "upstream" else "#38bdf8", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
                     "color": {"color": "#ef4444" if direction.lower() == "upstream" else "#38bdf8", "highlight": "#ffffff"},
                 })
 
@@ -520,12 +545,16 @@ def build_symbol_impact_view(
                 if t_sym not in nodes_map:
                     nodes_map[t_sym] = {
                         "id": t_sym,
-                        "label": t_sym,
+                        "label": f"⚡  {t_sym}",
                         "full_name": t_sym,
                         "group": "symbol",
                         "color": COLOR_HOP2,
-                        "shape": "ellipse",
-                        "font": {"color": "#ffffff"},
+                        "shape": "box",
+                        "shapeProperties": {"borderRadius": 6},
+                        "margin": 8,
+                        "borderWidth": 1.8,
+                        "shadow": SHADOW_HOP2,
+                        "font": {"color": "#fef3c7", "face": "ui-monospace, monospace", "size": 11},
                         "title": f"<b>Type Relation: {t_sym}</b><br/>{t_rel} in {Path(t_file).name}",
                         "level": 2,
                     }
@@ -534,9 +563,11 @@ def build_symbol_impact_view(
                     "from": t_sym if direction.lower() == "upstream" else raw_target,
                     "to": raw_target if direction.lower() == "upstream" else t_sym,
                     "label": t_rel,
-                    "arrows": "to",
+                    "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                    "smooth": {"type": "continuous", "roundness": 0.25},
+                    "width": 1.6,
                     "dashes": True,
-                    "font": {"size": 9, "align": "middle", "color": "#fbbf24"},
+                    "font": {"size": 9, "align": "middle", "color": "#fbbf24", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
                     "color": {"color": "#f59e0b", "highlight": "#ffffff"},
                 })
 
@@ -567,12 +598,16 @@ def build_symbol_impact_view(
                                 if f2_path not in nodes_map and f2_path != sf:
                                     nodes_map[f2_path] = {
                                         "id": f2_path,
-                                        "label": f2_name,
+                                        "label": f"🌐  {f2_name}",
                                         "full_name": f2_path,
                                         "group": "file",
                                         "color": COLOR_HOP2 if depth == 2 else COLOR_HOP3,
                                         "shape": "box",
-                                        "font": {"color": "#ffffff"},
+                                        "shapeProperties": {"borderRadius": 6},
+                                        "margin": 8,
+                                        "borderWidth": 1.5,
+                                        "shadow": SHADOW_HOP2 if depth == 2 else SHADOW_HOP3,
+                                        "font": {"color": "#e0f2fe", "face": "ui-monospace, monospace", "size": 11},
                                         "title": f"<b>Transitive Consumer: {f2_name}</b><br/>Imports {s2_name}",
                                         "level": 2,
                                     }
@@ -580,8 +615,10 @@ def build_symbol_impact_view(
                                         "from": f2_path,
                                         "to": sf,
                                         "label": f"IMPORTS ({s2_name})",
-                                        "arrows": "to",
-                                        "font": {"size": 8, "align": "middle", "color": "#94a3b8"},
+                                        "arrows": {"to": {"enabled": True, "scaleFactor": 0.75}},
+                                        "smooth": {"type": "continuous", "roundness": 0.25},
+                                        "width": 1.4,
+                                        "font": {"size": 8, "align": "middle", "color": "#94a3b8", "face": "ui-monospace, monospace", "background": "rgba(15, 23, 42, 0.85)"},
                                         "color": {"color": "#64748b", "highlight": "#ffffff"},
                                     })
                                     tree_items.append({

@@ -169,24 +169,81 @@ class TaskDAGTracker:
         tasks = self.get_all_tasks()
         nodes = []
         edges = []
-        status_colors = {
-            "completed": {"background": "#10b981", "border": "#059669"},
-            "ready": {"background": "#3b82f6", "border": "#2563eb"},
-            "in_progress": {"background": "#f59e0b", "border": "#d97706"},
-            "pending": {"background": "#64748b", "border": "#475569"},
-            "failed": {"background": "#ef4444", "border": "#dc2626"},
-            "blocked": {"background": "#b91c1c", "border": "#991b1b"},
+        status_styles = {
+            "completed": {
+                "background": "#022c22",
+                "border": "#10b981",
+                "highlight": {"background": "#064e3b", "border": "#34d399"},
+                "icon": "✓",
+            },
+            "ready": {
+                "background": "#082f49",
+                "border": "#38bdf8",
+                "highlight": {"background": "#0c4a6e", "border": "#7dd3fc"},
+                "icon": "▶",
+            },
+            "in_progress": {
+                "background": "#451a03",
+                "border": "#f59e0b",
+                "highlight": {"background": "#78350f", "border": "#fbbf24"},
+                "icon": "⚡",
+            },
+            "pending": {
+                "background": "#0f172a",
+                "border": "#64748b",
+                "highlight": {"background": "#1e293b", "border": "#94a3b8"},
+                "icon": "⏳",
+            },
+            "failed": {
+                "background": "#450a0a",
+                "border": "#f87171",
+                "highlight": {"background": "#7f1d1d", "border": "#fca5a5"},
+                "icon": "❌",
+            },
+            "blocked": {
+                "background": "#3b0764",
+                "border": "#e11d48",
+                "highlight": {"background": "#581c87", "border": "#fb7185"},
+                "icon": "🔒",
+            },
         }
         for t in tasks:
             st = t["status"]
-            c = status_colors.get(st, {"background": "#6366f1", "border": "#4f46e5"})
+            style = status_styles.get(st, {
+                "background": "#1e1b4b",
+                "border": "#6366f1",
+                "highlight": {"background": "#312e81", "border": "#818cf8"},
+                "icon": "•",
+            })
+            icon = style["icon"]
+            title_display = t["title"][:28] + ("..." if len(t["title"]) > 28 else "")
+
             nodes.append({
                 "id": t["id"],
-                "label": f"{t['id']}\n{t['title'][:25]}",
-                "title": f"<b>{t['title']}</b><br>Status: {st}<br>Complexity: {t['complexity']}<br>Assigned: {t['assigned_to']}",
-                "color": c,
+                "label": f"<b>{icon} {t['id']}</b>\n{title_display}",
+                "title": f"<b>{t['title']}</b><br/>Status: <span style='text-transform:uppercase;color:#38bdf8;'>{st}</span><br/>Complexity: {t['complexity']}/10<br/>Assigned: {t['assigned_to']}",
+                "color": {
+                    "background": style["background"],
+                    "border": style["border"],
+                    "highlight": style["highlight"],
+                },
                 "shape": "box",
-                "font": {"color": "#ffffff", "size": 12},
+                "margin": 10,
+                "borderWidth": 2,
+                "borderWidthSelected": 3,
+                "shadow": {
+                    "enabled": True,
+                    "color": "rgba(0, 0, 0, 0.7)",
+                    "size": 12,
+                    "x": 2,
+                    "y": 4,
+                },
+                "font": {
+                    "color": "#f8fafc",
+                    "face": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    "size": 11,
+                    "multi": "html",
+                },
                 "status": st,
                 "complexity": t["complexity"],
                 "assigned_to": t["assigned_to"],
@@ -198,11 +255,30 @@ class TaskDAGTracker:
                 edges.append({
                     "from": t["id"],
                     "to": dep,
-                    "arrows": "to",
+                    "arrows": {
+                        "to": {"enabled": True, "scaleFactor": 0.8},
+                    },
                     "label": "depends on",
-                    "font": {"size": 9, "color": "#94a3b8", "align": "horizontal"},
-                    "color": {"color": "#475569", "highlight": "#818cf8"},
-                    "smooth": {"type": "cubicBezier", "roundness": 0.2},
+                    "font": {
+                        "size": 9,
+                        "color": "#94a3b8",
+                        "face": "ui-monospace, monospace",
+                        "align": "horizontal",
+                    },
+                    "color": {
+                        "color": "#6366f1",
+                        "highlight": "#a5b4fc",
+                        "opacity": 0.8,
+                    },
+                    "width": 1.75,
+                    "smooth": {"type": "cubicBezier", "roundness": 0.25},
+                    "shadow": {
+                        "enabled": True,
+                        "color": "rgba(0, 0, 0, 0.4)",
+                        "size": 5,
+                        "x": 1,
+                        "y": 2,
+                    },
                 })
         return {"nodes": nodes, "edges": edges, "tasks": tasks}
 
