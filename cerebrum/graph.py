@@ -38,6 +38,9 @@ class CerebrumState(TypedDict, total=False):
     final_context: str
 
 
+CortexState = CerebrumState  # Backwards compatibility alias
+
+
 def _extract_symbol_candidates(query: str) -> List[str]:
     """Extracts likely symbol identifiers from a natural language query."""
     candidates = []
@@ -239,7 +242,7 @@ def make_graph(
 
                 blocks.append("\n".join(lines))
 
-            symbol_section = f"""### Deterministic Code Symbols & Knowledge Graph References (FalkorDB)
+            symbol_section = f"""### Deterministic Code Symbols & Cross-File References (FalkorDB)
 {chr(10).join(blocks)}
 
 """

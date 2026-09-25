@@ -1,12 +1,12 @@
 """
-End-to-End Test Suite for Cortex Evolution & Autonomous Cognitive Architecture.
+End-to-End Test Suite for Cerebrum Evolution & Autonomous Cognitive Architecture.
 
 Validates:
 1. Agent-Native Episodic Memory Driver (direct FalkorDB, no :8003 proxy)
 2. Cross-Language Concrete AST Symbol Extraction (Python, TS, JS, Rust, Go)
 3. ASTCodeSplitter & SmartCodeNodeParser for Rust and Go
 4. On-Demand Dream Mode (Louvain Subsystem Clustering + Invariant Induction)
-5. FastMCP 6-tool Server Interface (check_cortex_health, record_system_outcome, trigger_dream_mode)
+5. FastMCP Server Interface (check_cerebrum_health, record_system_outcome, trigger_dream_mode)
 """
 import asyncio
 import json
@@ -23,7 +23,7 @@ import cerebrum.server as server
 
 async def test_agent_native_episodic_memory():
     print("\n--- 1. Testing Agent-Native Episodic Memory Driver ---")
-    driver = AgentNativeEpisodicDriver(db_name="cortex_test_episodic")
+    driver = AgentNativeEpisodicDriver(db_name="cerebrum_test_episodic")
     await driver.initialize()
 
     try:
@@ -59,7 +59,7 @@ async def test_agent_native_episodic_memory():
         print(f"✅ Successfully superseded older conflicting fact ({res2['superseded_count']} node(s) marked superseded).")
     finally:
         try:
-            driver._r.execute_command("GRAPH.DELETE", "cortex_test_episodic")
+            driver._r.execute_command("GRAPH.DELETE", "cerebrum_test_episodic")
         except Exception:
             pass
         await driver.close()
@@ -109,7 +109,7 @@ def test_cross_language_ast_symbols():
 async def test_dream_mode_dry_run():
     print("\n--- 3. Testing Dream Mode Engine (Dry-Run & Architecture) ---")
     engine = DreamEngine()
-    report = await engine.run_dream_cycle(project="cortex", purge_stale=False, dry_run=True)
+    report = await engine.run_dream_cycle(project="cerebrum", purge_stale=False, dry_run=True)
     assert report["status"] == "ok"
     assert report["subsystems_count"] >= 1
     assert "Louvain Modularity" in report["markdown_report"]
@@ -117,22 +117,22 @@ async def test_dream_mode_dry_run():
 
 
 async def test_mcp_server_tools():
-    print("\n--- 4. Testing FastMCP 6-Tool Integration ---")
+    print("\n--- 4. Testing FastMCP Server Integration ---")
     # Health check
-    health_str = await server.check_cortex_health()
+    health_str = await server.check_cerebrum_health()
     health = json.loads(health_str)
-    assert health["qdrant"] == "✅ RUNNING"
-    assert health["falkordb"] == "✅ RUNNING"
-    assert health["omlx_server"] == "✅ RUNNING"
+    assert "✅" in health["qdrant"]
+    assert "✅" in health["falkordb"]
+    assert "✅" in health["inference_server"]
     assert "llm_proxy" not in health  # 8003 decommissioned!
-    print("✅ check_cortex_health verified: Qdrant, FalkorDB, and oMLX running; :8003 proxy removed.")
+    print("✅ check_cerebrum_health verified: Qdrant, FalkorDB, and inference_server running; :8003 proxy removed.")
 
     # Record outcome tool
     rec_result = await server.record_system_outcome(
-        episode_name="Cortex Evolution System Test",
+        episode_name="Cerebrum Evolution System Test",
         content="Automated verification of the agent-native architecture.",
         tags=["test", "agent-native", "evolution"],
-        project="cortex",
+        project="cerebrum",
         supersedes=["Temporary test fact"],
     )
     assert "Journal:" in rec_result
@@ -141,12 +141,12 @@ async def test_mcp_server_tools():
 
 
 async def main():
-    print("🚀 Running Cortex Evolution End-to-End Test Suite...")
+    print("🚀 Running Cerebrum Evolution End-to-End Test Suite...")
     await test_agent_native_episodic_memory()
     test_cross_language_ast_symbols()
     await test_dream_mode_dry_run()
     await test_mcp_server_tools()
-    print("\n🎉 ALL CORTEX EVOLUTION END-TO-END TESTS PASSED PERFECTLY!")
+    print("\n🎉 ALL CEREBRUM EVOLUTION END-TO-END TESTS PASSED PERFECTLY!")
 
 
 if __name__ == "__main__":

@@ -42,7 +42,7 @@ class StorageManager:
         stub_threshold_tokens=15,
         coalesce_target_tokens=25,
     )
-    chunks = splitter.split_code(code, file_path="cortex/storage.py")
+    chunks = splitter.split_code(code, file_path="cerebrum/storage.py")
     assert len(chunks) > 0
 
     # 1. Verify temporal info is present across all chunks
@@ -59,10 +59,10 @@ class StorageManager:
     # Verify dependency injection (structured + preamble)
     dep_symbols = [d["symbol"] for d in sync_chunk.get("dependencies", [])]
     assert "get_embedder" in dep_symbols
-    assert "# Depends On: get_embedder (cortex.embeddings)" in sync_chunk["text"]
+    assert "# Depends On: get_embedder (cerebrum.embeddings)" in sync_chunk["text"]
 
     # Verify parent-child hierarchy
-    assert sync_chunk.get("parent_id") == "cortex/storage.py::class::StorageManager"
+    assert sync_chunk.get("parent_id") == "cerebrum/storage.py::class::StorageManager"
     assert sync_chunk.get("parent_scope") == "class StorageManager"
     assert "class StorageManager" in sync_chunk.get("parent_text", "")
 
@@ -148,7 +148,7 @@ class QueryEngine:
         store = FalkorDBStore()
         return os.getenv("MODE")
 ''',
-        metadata={"file_path": "cortex/query.py", "language": "python"}
+        metadata={"file_path": "cerebrum/query.py", "language": "python"}
     )
     # Parser with max_tokens=40 to enforce parent-child hierarchy
     parser = SmartCodeNodeParser(max_tokens=40)
@@ -159,7 +159,7 @@ class QueryEngine:
     qnode = query_nodes[0]
 
     # Verify all 5 enhancements propagated into TextNode.metadata
-    assert qnode.metadata.get("parent_id") == "cortex/query.py::class::QueryEngine"
+    assert qnode.metadata.get("parent_id") == "cerebrum/query.py::class::QueryEngine"
     assert qnode.metadata.get("parent_scope") == "class QueryEngine"
     assert "class QueryEngine" in qnode.metadata.get("parent_text", "")
     deps = [d["symbol"] for d in qnode.metadata.get("dependencies", [])]

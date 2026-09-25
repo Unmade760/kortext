@@ -20,6 +20,7 @@ import logging
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
@@ -35,9 +36,11 @@ load_dotenv()
 
 logger = logging.getLogger("cerebrum.retrieval")
 
-EMBED_BASE_URL  = os.getenv("EMBED_BASE_URL", "http://localhost:8000/v1")
-RERANK_BASE_URL = os.getenv("RERANK_BASE_URL", "http://localhost:8000/v1")
-QDRANT_URL      = os.getenv("QDRANT_URL", "http://localhost:6333")
+EMBED_BASE_URL  = os.getenv("EMBED_BASE_URL", "http://127.0.0.1:8000/v1").replace("://localhost", "://127.0.0.1")
+RERANK_BASE_URL = os.getenv("RERANK_BASE_URL", "http://127.0.0.1:8000/v1").replace("://localhost", "://127.0.0.1")
+QDRANT_URL      = os.getenv("QDRANT_URL", "").strip()
+CEREBRUM_HOME   = Path(os.getenv("CEREBRUM_HOME", str(Path.home() / ".cerebrum")))
+DEFAULT_QDRANT_PATH = CEREBRUM_HOME / "qdrant"
 DEFAULT_COLLECTION = os.getenv("QDRANT_COLLECTION", "cerebrum_codebase")
 TOP_K_RETRIEVE  = int(os.getenv("RETRIEVE_TOP_K", "30"))
 TOP_K_RERANK    = int(os.getenv("RERANK_TOP_K", "5"))
@@ -110,7 +113,6 @@ class RetrievalEngine:
 
     def __init__(self):
         self._client: AsyncQdrantClient | None = None
-        self._sync_client: QdrantClient | None = None
         self._hippo = HippoRAGPPR()
         self._falkordb = get_shared_falkordb_client()
 
@@ -127,8 +129,11 @@ class RetrievalEngine:
         Settings.chunk_size = 512
         Settings.chunk_overlap = 64
 
-        self._sync_client = QdrantClient(url=QDRANT_URL)
-        self._client = AsyncQdrantClient(url=QDRANT_URL)
+        if QDRANT_URL:
+            self._client = AsyncQdrantClient(url=QDRANT_URL)
+        else:
+            DEFAULT_QDRANT_PATH.mkdir(parents=True, exist_ok=True)
+            self._client = AsyncQdrantClient(path=str(DEFAULT_QDRANT_PATH))
 
         # Ensure default collection exists
         await self._ensure_collection(DEFAULT_COLLECTION)
@@ -136,8 +141,8 @@ class RetrievalEngine:
     async def _ensure_collection(self, collection_name: str):
         embed_dim = int(os.getenv("EMBED_DIMENSION", "4096"))
         try:
-            if not self._sync_client.collection_exists(collection_name):
-                self._sync_client.create_collection(
+            if not await self._client.collection_exists(collection_name):
+                await self._client.create_collection(
                     collection_name=collection_name,
                     vectors_config={"text-dense": qmodels.VectorParams(size=embed_dim, distance=qmodels.Distance.COSINE)},
                     sparse_vectors_config={"text-sparse-new": qmodels.SparseVectorParams()},
@@ -179,16 +184,10 @@ class RetrievalEngine:
             return []
 
         try:
-            prefetch = [
-                qmodels.Prefetch(
-                    query=dense_vec,
-                    using="text-dense",
-                    limit=limit,
-                )
-            ]
             response = await self._client.query_points(
                 collection_name=col_name,
-                prefetch=prefetch,
+                query=dense_vec,
+                using="text-dense",
                 limit=limit,
                 with_payload=True,
             )
@@ -292,14 +291,16 @@ class RetrievalEngine:
     def _fetch_temporal_facts(self, prompt: str) -> List[str]:
         """Signal 5: Bi-Temporal Validity Filtered Facts."""
         try:
+            from datetime import datetime, timezone
+            now_iso = datetime.now(timezone.utc).isoformat()
             cypher = """
             MATCH (e:Entity)-[r:RELATES_TO]->(t:Entity)
-            WHERE (r.valid_to IS NULL OR r.valid_to >= datetime())
+            WHERE (r.valid_to IS NULL OR r.valid_to >= $now)
             RETURN e.name, r.relation, t.name, r.fact
             ORDER BY r.valid_from DESC
             LIMIT 5
             """
-            res = self._falkordb.query("cerebrum", cypher)
+            res = self._falkordb.query("cerebrum", cypher, {"now": now_iso})
             if res and len(res) > 1 and res[1]:
                 return [f"[Temporal Fact] `{row[0]}` {row[1]} `{row[2]}`: {row[3]}" for row in res[1]]
         except Exception:
@@ -316,15 +317,15 @@ class RetrievalEngine:
         AST symbols, dense vector stores, HippoRAG subgraphs, and bi-temporal facts,
         followed by TAA-k knee trimming and stage-2 cross-encoder reranking.
         """
-        if self._sync_client is None:
+        if self._client is None:
             await self.initialize()
 
         # 1. Resolve collections
         target_cols: List[str] = []
         if collection == "all":
             try:
-                cols = self._sync_client.get_collections().collections
-                target_cols = [c.name for c in cols]
+                cols = await self._client.get_collections()
+                target_cols = [c.name for c in cols.collections]
             except Exception:
                 target_cols = [DEFAULT_COLLECTION]
         elif isinstance(collection, str) and "," in collection:
@@ -413,3 +414,10 @@ class RetrievalEngine:
             err_msg = f"{type(e).__name__}: {e or 'timeout'}"
             logger.debug(f"Reranker unavailable ({err_msg}), returning top-k by RRF score.")
             return passages[:TOP_K_RERANK]
+
+    async def close(self):
+        """Closes the async Qdrant client connection."""
+        if self._client:
+            await self._client.close()
+            self._client = None
+

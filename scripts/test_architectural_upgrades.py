@@ -21,8 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cerebrum.symbols.graph import SymbolGraphManager
 from cerebrum.episodic.driver import AgentNativeEpisodicDriver, TRUST_ANCHOR_LEVELS
 from cerebrum.invariants import compute_ast_body_hash, InvariantGroundingEngine
-from cerebrum.watcher import DebouncedChangeHandler, CortexIncrementalSync
-from cerebrum.server import memory_session_handoff, check_cortex_health
+from cerebrum.watcher import DebouncedChangeHandler, CerebrumIncrementalSync
+from cerebrum.server import memory_session_handoff, check_cerebrum_health
 from cerebrum.symbols.scip import detect_project_scip_indexer
 
 
@@ -51,10 +51,10 @@ async def test_2_cross_agent_session_handoff():
     create_res = await memory_session_handoff(
         action="create",
         target_agent="claude-code",
-        current_scope="cortex/symbols/graph.py refactoring",
+        current_scope="cerebrum/symbols/graph.py refactoring",
         open_hypotheses=["SCIP graph can cache cross-file type references in SQLite"],
         unresolved_questions=["Should we deprecate Tree-sitter fallback or maintain dual-mode?"],
-        active_blast_radius=["cortex/symbols/graph.py", "cortex/server.py"],
+        active_blast_radius=["cerebrum/symbols/graph.py", "cerebrum/server.py"],
     )
     assert "Created cross-agent handoff baton" in create_res
     print("✅ Baton creation verified.")
@@ -119,11 +119,11 @@ async def test_3_trust_anchor_state_machine():
 
 async def test_4_ast_grounding_hashes_and_invariant_drift():
     print("\n--- 4. Testing AST Grounding Hashes & Invariant Drift ---")
-    sample_file = Path("cortex/symbols/graph.py").resolve()
+    sample_file = Path("cerebrum/symbols/seek.py").resolve()
     assert sample_file.exists()
 
     # 1. Compute AST body hash of live symbol
-    hash1 = compute_ast_body_hash(str(sample_file), "trace_symbol_impact")
+    hash1 = compute_ast_body_hash(str(sample_file), "trace_impact")
     assert hash1 is not None and len(hash1) == 64
     print(f"✅ Symbol AST body hash computed: {hash1[:16]}...")
 
@@ -131,9 +131,9 @@ async def test_4_ast_grounding_hashes_and_invariant_drift():
     engine = InvariantGroundingEngine()
     rec = engine.ground_invariant(
         domain="GRAPH_IMPACT",
-        rule="trace_symbol_impact must bound response tokens using progressive degradation",
+        rule="trace_impact must bound response tokens using progressive degradation",
         rationale="Prevents context window explosion for deep call trees",
-        symbol_name="trace_symbol_impact",
+        symbol_name="trace_impact",
         file_path=str(sample_file),
         trust_level="tool_confirmed",
     )
@@ -194,7 +194,7 @@ async def test_5_dynamic_token_budgeting():
 async def test_6_file_watcher_burst_debouncing():
     print("\n--- 6. Testing File Watcher Adaptive Burst Debouncer ---")
     loop = asyncio.get_running_loop()
-    syncer = CortexIncrementalSync()
+    syncer = CerebrumIncrementalSync()
     handler = DebouncedChangeHandler(
         loop=loop,
         syncer=syncer,

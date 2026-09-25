@@ -300,6 +300,9 @@ class CerebrumIncrementalSync:
         return True
 
 
+CortexIncrementalSync = CerebrumIncrementalSync  # Backwards compatibility alias
+
+
 class DebouncedChangeHandler(FileSystemEventHandler):
     """Gathers filesystem events and queues them with an adaptive burst debouncer."""
 

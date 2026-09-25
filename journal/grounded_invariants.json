@@ -10,5 +10,17 @@
     "trust_level": "tool_confirmed",
     "grounded_at": "2026-09-20T07:06:36.237359+00:00",
     "last_verified": "2026-09-20T07:06:36.269825+00:00"
+  },
+  {
+    "domain": "GRAPH_IMPACT",
+    "rule": "trace_impact must bound response tokens using progressive degradation",
+    "rationale": "Prevents context window explosion for deep call trees",
+    "symbol_name": "trace_impact",
+    "file_path": "/Users/rb/cortex/cerebrum/symbols/seek.py",
+    "ast_hash": "fd50e1b1762b9578caf4bdb1651081022ad1a419afb3a36089ffd617b32c9f47",
+    "status": "verified",
+    "trust_level": "tool_confirmed",
+    "grounded_at": "2026-09-25T14:43:19.474505+00:00",
+    "last_verified": "2026-09-25T15:10:29.076445+00:00"
   }
 ]

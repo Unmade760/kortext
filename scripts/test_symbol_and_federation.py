@@ -130,14 +130,17 @@ async def test_federated_retrieval():
     engine = RetrievalEngine()
     await engine.initialize()
 
-    # Query with collection="all" (Federated)
-    results = await engine.query("vector search and AST chunking", collection="all")
-    assert len(results) > 0, "Federated retrieval returned 0 results"
-    
-    # Check that results are tagged with collection provenance
-    for r in results:
-        assert "[Collection:" in r or len(r) > 0
-    print(f"✅ Federated retrieval returned {len(results)} reranked results across collections.")
+    try:
+        # Query with collection="all" (Federated)
+        results = await engine.query("vector search and AST chunking", collection="all")
+        assert len(results) > 0, "Federated retrieval returned 0 results"
+        
+        # Check that results are tagged with collection provenance
+        for r in results:
+            assert "[Collection:" in r or len(r) > 0
+        print(f"✅ Federated retrieval returned {len(results)} reranked results across collections.")
+    finally:
+        await engine.close()
 
 
 async def test_unified_pipeline():
@@ -152,7 +155,7 @@ async def test_unified_pipeline():
     await episodic.initialize()
     symbol_graph = SymbolGraphManager()
     symbol_graph.save_file_ast(
-        f"{CORTEX_ROOT}/cortex/symbols/graph.py",
+        f"{CORTEX_ROOT}/cerebrum/symbols/graph.py",
         declarations=[{
             "name": "SymbolGraphManager",
             "kind": "class",
@@ -164,26 +167,29 @@ async def test_unified_pipeline():
         references=[],
     )
 
-    graph = make_graph(engine, viking, episodic, symbol_graph=symbol_graph)
+    try:
+        graph = make_graph(engine, viking, episodic, symbol_graph=symbol_graph)
 
-    # Query mentioning a known symbol in Cortex
-    state = CortexState(
-        query="Where is SymbolGraphManager defined and how does it index symbols?",
-        collection="cortex_codebase",
-        kg_facts=[],
-        viking_summaries="",
-        doc_snippets=[],
-        symbol_results=[],
-        final_context="",
-    )
-    result = await graph.ainvoke(state)
-    final_context = result["final_context"]
+        # Query mentioning a known symbol in Cerebrum
+        state = CortexState(
+            query="Where is SymbolGraphManager defined and how does it index symbols?",
+            collection="cerebrum_codebase",
+            kg_facts=[],
+            viking_summaries="",
+            doc_snippets=[],
+            symbol_results=[],
+            final_context="",
+        )
+        result = await graph.ainvoke(state)
+        final_context = result["final_context"]
 
-    assert "Deterministic Code Symbols & Cross-File References (FalkorDB)" in final_context, "Deterministic symbols tier missing"
-    assert "SymbolGraphManager" in final_context, "SymbolGraphManager symbol not detected"
-    assert "Ground-Truth Code References" in final_context, "Qdrant references missing"
-    print("✅ Unified LangGraph pipeline successfully synthesized Tier 0 Symbols, Tier 1 Facts, Tier 2 Viking, and Tier 3 Vectors.")
-    await episodic.close()
+        assert "Deterministic Code Symbols & Cross-File References (FalkorDB)" in final_context, "Deterministic symbols tier missing"
+        assert "SymbolGraphManager" in final_context, "SymbolGraphManager symbol not detected"
+        assert "Ground-Truth Code References" in final_context, "Qdrant references missing"
+        print("✅ Unified LangGraph pipeline successfully synthesized Tier 0 Symbols, Tier 1 Facts, Tier 2 Viking, and Tier 3 Vectors.")
+    finally:
+        await engine.close()
+        await episodic.close()
 
 
 async def main():

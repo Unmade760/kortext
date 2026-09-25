@@ -108,6 +108,12 @@ async def search_knowledge_and_memory(
     Returns:
         Structured Markdown with exact symbol references, operational decisions, and code snippets.
     """
+    global _graph
+    if _graph is None:
+        await retrieval.initialize()
+        await episodic.initialize()
+        _graph = make_graph(retrieval, viking, episodic, symbol_graph=symbol_graph)
+
     state = CerebrumState(
         query=prompt,
         collection=collection,
@@ -313,20 +319,19 @@ async def check_cerebrum_health() -> str:
 
     # Dynamic service URLs
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
-    embed_url = os.getenv("EMBED_BASE_URL", "http://localhost:8000/v1")
+    embed_url = os.getenv("EMBED_BASE_URL", "http://127.0.0.1:8000/v1")
     base_host = embed_url.replace("/v1", "").rstrip("/")
     inference_health = os.getenv(
         "INFERENCE_HEALTH_URL",
         f"{base_host}/health" if ("localhost" in base_host or "127.0.0.1" in base_host) else embed_url
     )
-    dash_host = os.getenv("DASHBOARD_HOST", "localhost")
-    dash_port = os.getenv("DASHBOARD_PORT", "8004")
+    inference_health = inference_health.replace("://localhost", "://127.0.0.1")
 
     # Check inference server & dashboard HTTP
     dash_host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
     dash_port = os.getenv("DASHBOARD_PORT", "8004")
 
-    async with httpx.AsyncClient(timeout=3.0) as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         # 1. Qdrant check (Embedded vs Remote)
         qdrant_url = os.getenv("QDRANT_URL")
         if not qdrant_url:

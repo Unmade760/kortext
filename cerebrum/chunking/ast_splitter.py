@@ -896,6 +896,7 @@ class ASTCodeSplitter:
 
 
 from cerebrum.chunking.skeleton import generate_skeleton_chunk
+from cerebrum.chunking.node_parser import SmartCodeNodeParser
 
 __all__ = [
     "ASTCodeSplitter", "ConfigSectionSplitter", "MarkdownSectionSplitter",
