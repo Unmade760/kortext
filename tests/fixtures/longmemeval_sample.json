@@ -1,0 +1,1000 @@
+[
+  {
+    "id": "lme_001",
+    "ability": "information_extraction",
+    "question": "What is Alice Vance's favorite morning hot beverage?",
+    "subject": "Alice Vance",
+    "gold_answer": "Earl Grey tea",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Alice Vance",
+        "relation": "prefers_beverage",
+        "fact": "Alice Vance drinks loose-leaf Earl Grey tea every morning with a dash of bergamot.",
+        "object": "Earl Grey tea"
+      }
+    ]
+  },
+  {
+    "id": "lme_002",
+    "ability": "information_extraction",
+    "question": "What primary programming language does David Kim use for systems development?",
+    "subject": "David Kim",
+    "gold_answer": "Rust",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "David Kim",
+        "relation": "codes_in",
+        "fact": "David Kim specializes in high-throughput network daemons written in Rust.",
+        "object": "Rust"
+      }
+    ]
+  },
+  {
+    "id": "lme_003",
+    "ability": "information_extraction",
+    "question": "What breed of dog does Elena Rostova own?",
+    "subject": "Elena Rostova",
+    "gold_answer": "Golden Retriever",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Elena Rostova",
+        "relation": "owns_pet",
+        "fact": "Elena Rostova lives with her three-year-old Golden Retriever named Apollo.",
+        "object": "Golden Retriever"
+      }
+    ]
+  },
+  {
+    "id": "lme_004",
+    "ability": "information_extraction",
+    "question": "In which city does Marcus Chen maintain his primary residence?",
+    "subject": "Marcus Chen",
+    "gold_answer": "Seattle",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Marcus Chen",
+        "relation": "resides_in",
+        "fact": "Marcus Chen lives in a loft apartment in the Capitol Hill neighborhood of Seattle.",
+        "object": "Seattle"
+      }
+    ]
+  },
+  {
+    "id": "lme_005",
+    "ability": "information_extraction",
+    "question": "What specific electric guitar model does Sarah Connor play?",
+    "subject": "Sarah Connor",
+    "gold_answer": "Fender Stratocaster",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sarah Connor",
+        "relation": "plays_instrument",
+        "fact": "Sarah Connor plays an American Professional II Fender Stratocaster in sunburst finish.",
+        "object": "Fender Stratocaster"
+      }
+    ]
+  },
+  {
+    "id": "lme_006",
+    "ability": "information_extraction",
+    "question": "Which key switches does Julian Weber use in his custom mechanical keyboard?",
+    "subject": "Julian Weber",
+    "gold_answer": "Cherry MX Brown",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Julian Weber",
+        "relation": "uses_hardware",
+        "fact": "Julian Weber built an 80% custom mechanical keyboard equipped with tactile Cherry MX Brown switches.",
+        "object": "Cherry MX Brown"
+      }
+    ]
+  },
+  {
+    "id": "lme_007",
+    "ability": "information_extraction",
+    "question": "At which institution did Priya Patel complete her doctorate degree?",
+    "subject": "Priya Patel",
+    "gold_answer": "Stanford University",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Priya Patel",
+        "relation": "graduated_from",
+        "fact": "Priya Patel earned her PhD in Computer Science from Stanford University.",
+        "object": "Stanford University"
+      }
+    ]
+  },
+  {
+    "id": "lme_008",
+    "ability": "information_extraction",
+    "question": "Who is Carlos Mendez's favorite fiction author?",
+    "subject": "Carlos Mendez",
+    "gold_answer": "Jorge Luis Borges",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Carlos Mendez",
+        "relation": "favorite_author",
+        "fact": "Carlos Mendez's favorite author is Argentine fabulist Jorge Luis Borges.",
+        "object": "Jorge Luis Borges"
+      }
+    ]
+  },
+  {
+    "id": "lme_009",
+    "ability": "information_extraction",
+    "question": "What model of sports car does Hana Takahashi drive?",
+    "subject": "Hana Takahashi",
+    "gold_answer": "Mazda MX-5 Miata",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Hana Takahashi",
+        "relation": "drives_vehicle",
+        "fact": "Hana Takahashi drives a red 2021 Mazda MX-5 Miata convertible.",
+        "object": "Mazda MX-5 Miata"
+      }
+    ]
+  },
+  {
+    "id": "lme_010",
+    "ability": "information_extraction",
+    "question": "Which athletic segment does Liam O'Connor consider his weakest in triathlon competitions?",
+    "subject": "Liam O'Connor",
+    "gold_answer": "swimming",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Liam O'Connor",
+        "relation": "training_focus",
+        "fact": "Liam O'Connor considers open-water swimming to be his weakest discipline compared to cycling and running.",
+        "object": "swimming"
+      }
+    ]
+  },
+  {
+    "id": "lme_011",
+    "ability": "information_extraction",
+    "question": "What model of home espresso machine did Sophia Dubois purchase?",
+    "subject": "Sophia Dubois",
+    "gold_answer": "La Marzocco Micra",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sophia Dubois",
+        "relation": "owns_appliance",
+        "fact": "Sophia Dubois pulled morning espresso shots on her newly installed La Marzocco Micra.",
+        "object": "La Marzocco Micra"
+      }
+    ]
+  },
+  {
+    "id": "lme_012",
+    "ability": "information_extraction",
+    "question": "What is the title of the weekly audio podcast hosted by Benjamin Thorne?",
+    "subject": "Benjamin Thorne",
+    "gold_answer": "The Distributed Ledger",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "produces_podcast",
+        "fact": "Benjamin Thorne hosts a technical weekly podcast titled The Distributed Ledger.",
+        "object": "The Distributed Ledger"
+      }
+    ]
+  },
+  {
+    "id": "lme_013",
+    "ability": "knowledge_updates",
+    "question": "What is Alice Vance's current job role?",
+    "subject": "Alice Vance",
+    "gold_answer": "Engineering Manager",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Alice Vance",
+        "relation": "held_role",
+        "fact": "In January 2023, Alice Vance worked as a Senior Software Engineer on the platform team.",
+        "object": "Senior Software Engineer"
+      },
+      {
+        "subject": "Alice Vance",
+        "relation": "promoted_to",
+        "fact": "In February 2024, Alice Vance was formally promoted to Engineering Manager overseeing infrastructure.",
+        "object": "Engineering Manager"
+      }
+    ]
+  },
+  {
+    "id": "lme_014",
+    "ability": "knowledge_updates",
+    "question": "In which city does Marcus Chen presently live after his recent relocation?",
+    "subject": "Marcus Chen",
+    "gold_answer": "Zurich",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Marcus Chen",
+        "relation": "lived_in",
+        "fact": "Prior to summer 2024, Marcus Chen was a resident of Seattle, Washington.",
+        "object": "Seattle"
+      },
+      {
+        "subject": "Marcus Chen",
+        "relation": "relocated_to",
+        "fact": "In August 2024, Marcus Chen relocated permanently to Zurich, Switzerland for a new laboratory role.",
+        "object": "Zurich"
+      }
+    ]
+  },
+  {
+    "id": "lme_015",
+    "ability": "knowledge_updates",
+    "question": "What code editor does David Kim currently use as his default development environment?",
+    "subject": "David Kim",
+    "gold_answer": "Neovim",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "David Kim",
+        "relation": "previously_used",
+        "fact": "Throughout 2022, David Kim used Visual Studio Code as his primary editor.",
+        "object": "Visual Studio Code"
+      },
+      {
+        "subject": "David Kim",
+        "relation": "switched_to",
+        "fact": "In mid-2023, David Kim transitioned entirely to Neovim with Lua configs as his default development environment.",
+        "object": "Neovim"
+      }
+    ]
+  },
+  {
+    "id": "lme_016",
+    "ability": "knowledge_updates",
+    "question": "What car does Elena Rostova currently drive following her vehicle replacement?",
+    "subject": "Elena Rostova",
+    "gold_answer": "Tesla Model Y",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Elena Rostova",
+        "relation": "previously_owned",
+        "fact": "Elena Rostova previously drove a silver 2016 Honda Civic.",
+        "object": "Honda Civic"
+      },
+      {
+        "subject": "Elena Rostova",
+        "relation": "currently_drives",
+        "fact": "In November 2023, Elena sold her Honda and bought a Tesla Model Y electric crossover.",
+        "object": "Tesla Model Y"
+      }
+    ]
+  },
+  {
+    "id": "lme_017",
+    "ability": "knowledge_updates",
+    "question": "Which company does Priya Patel currently work for?",
+    "subject": "Priya Patel",
+    "gold_answer": "Anthropic",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Priya Patel",
+        "relation": "former_employer",
+        "fact": "Priya Patel worked as a Research Scientist at Google DeepMind until early 2024.",
+        "object": "Google DeepMind"
+      },
+      {
+        "subject": "Priya Patel",
+        "relation": "current_employer",
+        "fact": "In March 2024, Priya Patel joined Anthropic as a Member of Technical Staff on the alignment team.",
+        "object": "Anthropic"
+      }
+    ]
+  },
+  {
+    "id": "lme_018",
+    "ability": "knowledge_updates",
+    "question": "What dietary regimen does Julian Weber follow today?",
+    "subject": "Julian Weber",
+    "gold_answer": "vegan",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Julian Weber",
+        "relation": "former_diet",
+        "fact": "Julian Weber consumed an omnivorous diet through the end of 2022.",
+        "object": "omnivore"
+      },
+      {
+        "subject": "Julian Weber",
+        "relation": "current_diet",
+        "fact": "On January 1, 2023, Julian Weber adopted a strict vegan lifestyle for ethical reasons and maintains it today.",
+        "object": "vegan"
+      }
+    ]
+  },
+  {
+    "id": "lme_019",
+    "ability": "knowledge_updates",
+    "question": "What operating system is installed on Sarah Connor's primary workstation?",
+    "subject": "Sarah Connor",
+    "gold_answer": "NixOS",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sarah Connor",
+        "relation": "former_os",
+        "fact": "Sarah Connor ran macOS on an Apple Silicon MacBook Pro during 2022.",
+        "object": "macOS"
+      },
+      {
+        "subject": "Sarah Connor",
+        "relation": "current_os",
+        "fact": "In October 2023, Sarah Connor switched her primary workstation to a reproducible NixOS setup on a ThinkPad P1.",
+        "object": "NixOS"
+      }
+    ]
+  },
+  {
+    "id": "lme_020",
+    "ability": "knowledge_updates",
+    "question": "Which public cloud provider does Benjamin Thorne now deploy his startup's production services on?",
+    "subject": "Benjamin Thorne",
+    "gold_answer": "GCP",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "former_cloud",
+        "fact": "Benjamin Thorne initially hosted all production workloads on Amazon Web Services (AWS) using EKS.",
+        "object": "AWS"
+      },
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "current_cloud",
+        "fact": "In spring 2024, Benjamin Thorne completed a total migration from AWS to Google Cloud Platform (GCP) for GKE Autopilot.",
+        "object": "GCP"
+      }
+    ]
+  },
+  {
+    "id": "lme_021",
+    "ability": "knowledge_updates",
+    "question": "In which Paris neighborhood is Sophia Dubois's current studio apartment located?",
+    "subject": "Sophia Dubois",
+    "gold_answer": "Montmartre",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sophia Dubois",
+        "relation": "past_residence",
+        "fact": "Sophia Dubois rented a fourth-floor apartment in Belleville until late 2023.",
+        "object": "Belleville"
+      },
+      {
+        "subject": "Sophia Dubois",
+        "relation": "current_residence",
+        "fact": "In January 2024, Sophia signed a lease and moved into an atelier in Montmartre overlooking the Sacré-Cœur.",
+        "object": "Montmartre"
+      }
+    ]
+  },
+  {
+    "id": "lme_022",
+    "ability": "knowledge_updates",
+    "question": "What is Carlos Mendez's current leadership role on the engineering team?",
+    "subject": "Carlos Mendez",
+    "gold_answer": "Tech Lead",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Carlos Mendez",
+        "relation": "past_role",
+        "fact": "Carlos Mendez contributed as an Individual Contributor Backend Developer during 2023.",
+        "object": "Backend Developer"
+      },
+      {
+        "subject": "Carlos Mendez",
+        "relation": "current_role",
+        "fact": "Starting June 2024, Carlos Mendez took on the responsibilities of Tech Lead for the Core Payments cluster.",
+        "object": "Tech Lead"
+      }
+    ]
+  },
+  {
+    "id": "lme_023",
+    "ability": "temporal_reasoning",
+    "question": "Which legacy system was Alice Vance maintaining immediately prior to the Q3 2023 migration?",
+    "subject": "Alice Vance",
+    "gold_answer": "Legacy Billing Service",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Alice Vance",
+        "relation": "worked_on",
+        "fact": "Between January 2022 and June 2023, Alice Vance maintained the monolithic Legacy Billing Service.",
+        "object": "Legacy Billing Service"
+      },
+      {
+        "subject": "Alice Vance",
+        "relation": "migrated_to",
+        "fact": "In July 2023 (Q3), Alice Vance led the migration off the billing monolith to EventStream Engine.",
+        "object": "EventStream Engine"
+      }
+    ]
+  },
+  {
+    "id": "lme_024",
+    "ability": "temporal_reasoning",
+    "question": "How many total years did David Kim spend working at Stripe before his departure?",
+    "subject": "David Kim",
+    "gold_answer": "4 years",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "David Kim",
+        "relation": "joined_company",
+        "fact": "David Kim started his tenure at Stripe in February 2018.",
+        "object": "February 2018"
+      },
+      {
+        "subject": "David Kim",
+        "relation": "departed_company",
+        "fact": "David Kim concluded his final engineering sprint at Stripe in February 2022 after four full years.",
+        "object": "February 2022"
+      }
+    ]
+  },
+  {
+    "id": "lme_025",
+    "ability": "temporal_reasoning",
+    "question": "What companion did Elena Rostova adopt in May 2021?",
+    "subject": "Elena Rostova",
+    "gold_answer": "a Golden Retriever named Apollo",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Elena Rostova",
+        "relation": "adopted",
+        "fact": "On May 14, 2021, Elena Rostova adopted an eight-week-old Golden Retriever named Apollo from a local shelter.",
+        "object": "a Golden Retriever named Apollo"
+      }
+    ]
+  },
+  {
+    "id": "lme_026",
+    "ability": "temporal_reasoning",
+    "question": "Which Japanese city did Marcus Chen travel to immediately after completing his stay in Tokyo during October 2023?",
+    "subject": "Marcus Chen",
+    "gold_answer": "Kyoto",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Marcus Chen",
+        "relation": "visited",
+        "fact": "Marcus Chen stayed in Tokyo from October 1 to October 8, 2023.",
+        "object": "Tokyo"
+      },
+      {
+        "subject": "Marcus Chen",
+        "relation": "traveled_next_to",
+        "fact": "On October 9, 2023, Marcus took the Shinkansen directly from Tokyo to Kyoto, staying there for the subsequent week.",
+        "object": "Kyoto"
+      }
+    ]
+  },
+  {
+    "id": "lme_027",
+    "ability": "temporal_reasoning",
+    "question": "What fellowship did Priya Patel receive during the third year of her doctoral program in 2019?",
+    "subject": "Priya Patel",
+    "gold_answer": "NSF Graduate Research Fellowship",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Priya Patel",
+        "relation": "began_phd",
+        "fact": "Priya Patel entered Stanford's graduate program in September 2017.",
+        "object": "September 2017"
+      },
+      {
+        "subject": "Priya Patel",
+        "relation": "awarded_fellowship",
+        "fact": "In autumn 2019, during her third year of doctoral study, Priya was awarded the NSF Graduate Research Fellowship.",
+        "object": "NSF Graduate Research Fellowship"
+      }
+    ]
+  },
+  {
+    "id": "lme_028",
+    "ability": "temporal_reasoning",
+    "question": "Which major marathon did Julian Weber complete in autumn 2022?",
+    "subject": "Julian Weber",
+    "gold_answer": "Berlin Marathon",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Julian Weber",
+        "relation": "ran_marathon",
+        "fact": "In September 2022, Julian Weber traveled to Germany and completed the Berlin Marathon in 3 hours 18 minutes.",
+        "object": "Berlin Marathon"
+      }
+    ]
+  },
+  {
+    "id": "lme_029",
+    "ability": "temporal_reasoning",
+    "question": "Which open-source async library did Sarah Connor publish in June 2020 before founding Kernel Corp?",
+    "subject": "Sarah Connor",
+    "gold_answer": "FastAsyncIO",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sarah Connor",
+        "relation": "released_library",
+        "fact": "In June 2020, Sarah Connor published the initial 1.0 release of FastAsyncIO on GitHub.",
+        "object": "FastAsyncIO"
+      },
+      {
+        "subject": "Sarah Connor",
+        "relation": "founded_company",
+        "fact": "In November 2020, Sarah Connor co-founded Kernel Corp after the rapid adoption of FastAsyncIO.",
+        "object": "Kernel Corp"
+      }
+    ]
+  },
+  {
+    "id": "lme_030",
+    "ability": "temporal_reasoning",
+    "question": "What professional cloud certification did Carlos Mendez achieve in November 2021?",
+    "subject": "Carlos Mendez",
+    "gold_answer": "AWS Solutions Architect Professional",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Carlos Mendez",
+        "relation": "earned_credential",
+        "fact": "On November 18, 2021, Carlos Mendez passed the examination for AWS Solutions Architect Professional.",
+        "object": "AWS Solutions Architect Professional"
+      }
+    ]
+  },
+  {
+    "id": "lme_031",
+    "ability": "temporal_reasoning",
+    "question": "What was the title of the Paris gallery solo exhibition held by Sophia Dubois in September 2022?",
+    "subject": "Sophia Dubois",
+    "gold_answer": "L'Ombre et La Lumiere",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sophia Dubois",
+        "relation": "exhibited_artwork",
+        "fact": "Throughout September 2022, Sophia Dubois exhibited her charcoal series titled L'Ombre et La Lumiere in the Marais.",
+        "object": "L'Ombre et La Lumiere"
+      }
+    ]
+  },
+  {
+    "id": "lme_032",
+    "ability": "temporal_reasoning",
+    "question": "What was the topic of Benjamin Thorne's keynote talk at RustConf in August 2023?",
+    "subject": "Benjamin Thorne",
+    "gold_answer": "Zero-Cost Async Graphs",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "delivered_keynote",
+        "fact": "At RustConf in August 2023, Benjamin Thorne gave the opening keynote entitled 'Zero-Cost Async Graphs'.",
+        "object": "Zero-Cost Async Graphs"
+      }
+    ]
+  },
+  {
+    "id": "lme_033",
+    "ability": "multi_session_reasoning",
+    "question": "When Alice Vance orders pasta dishes for group dinners, why must they be prepared without wheat?",
+    "subject": "Alice Vance",
+    "gold_answer": "She has celiac disease",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Alice Vance",
+        "relation": "medical_condition",
+        "fact": "[Session 1]: Alice Vance disclosed that she was clinically diagnosed with celiac disease and strictly avoids gluten.",
+        "object": "celiac disease"
+      },
+      {
+        "subject": "Alice Vance",
+        "relation": "dinner_preference",
+        "fact": "[Session 2]: Alice organized a team Italian dinner and requested special gluten-free penne for herself.",
+        "object": "gluten-free pasta"
+      }
+    ]
+  },
+  {
+    "id": "lme_034",
+    "ability": "multi_session_reasoning",
+    "question": "What mount system must a new prime lens support to be compatible with David Kim's primary camera body?",
+    "subject": "David Kim",
+    "gold_answer": "Sony E-mount",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "David Kim",
+        "relation": "owns_camera",
+        "fact": "[Session 1]: David Kim uses a Sony A7 IV full-frame mirrorless camera body for his street photography.",
+        "object": "Sony A7 IV"
+      },
+      {
+        "subject": "David Kim",
+        "relation": "plans_purchase",
+        "fact": "[Session 2]: David Kim asked for prime lens recommendations with fast aperture that fit his existing camera mount.",
+        "object": "Sony E-mount prime lens"
+      }
+    ]
+  },
+  {
+    "id": "lme_035",
+    "ability": "multi_session_reasoning",
+    "question": "Why does Elena Rostova require specific low-phosphorus prescription food for her pet cat Mochi?",
+    "subject": "Elena Rostova",
+    "gold_answer": "Mochi has chronic kidney disease",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Elena Rostova",
+        "relation": "pet_diagnosis",
+        "fact": "[Session 1]: Elena shared that her elderly rescue cat Mochi was diagnosed with early stage chronic kidney disease.",
+        "object": "chronic kidney disease"
+      },
+      {
+        "subject": "Elena Rostova",
+        "relation": "purchased_diet",
+        "fact": "[Session 2]: Elena asked the vet assistant to refill Mochi's wet food order with low-phosphorus renal support pate.",
+        "object": "low-phosphorus renal food"
+      }
+    ]
+  },
+  {
+    "id": "lme_036",
+    "ability": "multi_session_reasoning",
+    "question": "What maximum power wattage constraint must Marcus Chen's portable laptop charger satisfy to match his minimalist travel kit?",
+    "subject": "Marcus Chen",
+    "gold_answer": "45W",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Marcus Chen",
+        "relation": "travel_kit",
+        "fact": "[Session 1]: Marcus Chen packs only a single ultralight 45-watt GaN USB-C wall charger when traveling internationally.",
+        "object": "45W GaN charger"
+      },
+      {
+        "subject": "Marcus Chen",
+        "relation": "laptop_shopping",
+        "fact": "[Session 2]: Marcus seeks an ultrabook that can reliably charge at full speed without exceeding his 45W travel adapter limit.",
+        "object": "45W USB-PD charging"
+      }
+    ]
+  },
+  {
+    "id": "lme_037",
+    "ability": "multi_session_reasoning",
+    "question": "Why did Priya Patel consult a travel clinic physician for an acetazolamide prescription before her upcoming vacation?",
+    "subject": "Priya Patel",
+    "gold_answer": "She is embarking on a high-altitude trek in the Andes",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Priya Patel",
+        "relation": "planned_trip",
+        "fact": "[Session 1]: Priya booked an eight-day trekking expedition along the Salkantay trail in the Peruvian Andes reaching 4,600m.",
+        "object": "high-altitude Peruvian Andes trek"
+      },
+      {
+        "subject": "Priya Patel",
+        "relation": "medical_prep",
+        "fact": "[Session 2]: Priya picked up a preventive prescription of acetazolamide (Diamox) from her physician to combat acute mountain sickness.",
+        "object": "acetazolamide prescription"
+      }
+    ]
+  },
+  {
+    "id": "lme_038",
+    "ability": "multi_session_reasoning",
+    "question": "Why does Julian Weber use an ergonomic vertical mouse rather than a standard flat optical mouse?",
+    "subject": "Julian Weber",
+    "gold_answer": "He suffers from a repetitive strain injury (RSI) in his right wrist",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Julian Weber",
+        "relation": "injury_history",
+        "fact": "[Session 1]: Julian experienced sharp repetitive strain injury (RSI) symptoms in his right wrist tendon during coding marathons.",
+        "object": "right wrist RSI"
+      },
+      {
+        "subject": "Julian Weber",
+        "relation": "ergonomic_hardware",
+        "fact": "[Session 2]: On physical therapist advice, Julian replaced his flat optical gaming mouse with an angled ergonomic vertical mouse.",
+        "object": "ergonomic vertical mouse"
+      }
+    ]
+  },
+  {
+    "id": "lme_039",
+    "ability": "multi_session_reasoning",
+    "question": "What motorcycle model does Sarah Connor order maintenance parts for during her seasonal tune-up?",
+    "subject": "Sarah Connor",
+    "gold_answer": "2019 Triumph Bonneville T120",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sarah Connor",
+        "relation": "owns_vehicle",
+        "fact": "[Session 1]: Sarah Connor's garage houses a jet-black 2019 Triumph Bonneville T120 motorcycle.",
+        "object": "2019 Triumph Bonneville T120"
+      },
+      {
+        "subject": "Sarah Connor",
+        "relation": "part_order",
+        "fact": "[Session 2]: Sarah placed an online order for an OEM oil filter and crush washer matched specifically for her Bonneville.",
+        "object": "Triumph motorcycle parts"
+      }
+    ]
+  },
+  {
+    "id": "lme_040",
+    "ability": "multi_session_reasoning",
+    "question": "Why does Carlos Mendez ask baristas for oat milk in his cortados instead of dairy whole milk?",
+    "subject": "Carlos Mendez",
+    "gold_answer": "He is lactose intolerant",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Carlos Mendez",
+        "relation": "dietary_restriction",
+        "fact": "[Session 1]: Carlos Mendez mentioned having significant lactose intolerance since his college years.",
+        "object": "lactose intolerance"
+      },
+      {
+        "subject": "Carlos Mendez",
+        "relation": "beverage_order",
+        "fact": "[Session 2]: Carlos ordered his morning double-shot cortado explicitly crafted with steamed oat milk.",
+        "object": "oat milk cortado"
+      }
+    ]
+  },
+  {
+    "id": "lme_041",
+    "ability": "multi_session_reasoning",
+    "question": "Why does Sophia Dubois require heavy winter coats to feature smooth synthetic linings rather than wool?",
+    "subject": "Sophia Dubois",
+    "gold_answer": "She is allergic to wool",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Sophia Dubois",
+        "relation": "contact_allergy",
+        "fact": "[Session 1]: Sophia Dubois breaks out into contact dermatitis if untreated wool fibers touch her neck or wrists.",
+        "object": "wool contact allergy"
+      },
+      {
+        "subject": "Sophia Dubois",
+        "relation": "wardrobe_criteria",
+        "fact": "[Session 2]: Sophia vetted winter trench coats to guarantee the collars and interior cuffs had 100% cupro or fleece linings.",
+        "object": "synthetic lining"
+      }
+    ]
+  },
+  {
+    "id": "lme_042",
+    "ability": "multi_session_reasoning",
+    "question": "What video output specification must Benjamin Thorne's desk docking hub provide to run his workstation screens?",
+    "subject": "Benjamin Thorne",
+    "gold_answer": "Dual 4K DisplayPort outputs",
+    "is_answerable": true,
+    "context_facts": [
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "monitor_setup",
+        "fact": "[Session 1]: Benjamin Thorne uses twin 27-inch 4K UHD monitors wired via DisplayPort on his sit-stand desk.",
+        "object": "twin 4K DisplayPort monitors"
+      },
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "dock_requirement",
+        "fact": "[Session 2]: Benjamin evaluated Thunderbolt 4 docking stations capable of driving dual 4K 60Hz DisplayPort signals simultaneously.",
+        "object": "dual 4K DisplayPort outputs"
+      }
+    ]
+  },
+  {
+    "id": "lme_043",
+    "ability": "abstention",
+    "question": "What is Alice Vance's ABO blood type?",
+    "subject": "Alice Vance",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Alice Vance",
+        "relation": "prefers_beverage",
+        "fact": "Alice Vance drinks loose-leaf Earl Grey tea every morning.",
+        "object": "Earl Grey tea"
+      },
+      {
+        "subject": "Alice Vance",
+        "relation": "promoted_to",
+        "fact": "Alice Vance serves as Engineering Manager for infrastructure.",
+        "object": "Engineering Manager"
+      }
+    ]
+  },
+  {
+    "id": "lme_044",
+    "ability": "abstention",
+    "question": "What was David Kim's cumulative high school grade point average?",
+    "subject": "David Kim",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "David Kim",
+        "relation": "codes_in",
+        "fact": "David Kim specializes in high-throughput network daemons written in Rust.",
+        "object": "Rust"
+      },
+      {
+        "subject": "David Kim",
+        "relation": "switched_to",
+        "fact": "David Kim uses Neovim with custom Lua configurations as his editor.",
+        "object": "Neovim"
+      }
+    ]
+  },
+  {
+    "id": "lme_045",
+    "ability": "abstention",
+    "question": "What is the maiden name of Elena Rostova's mother?",
+    "subject": "Elena Rostova",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Elena Rostova",
+        "relation": "owns_pet",
+        "fact": "Elena Rostova lives with her Golden Retriever named Apollo.",
+        "object": "Golden Retriever"
+      },
+      {
+        "subject": "Elena Rostova",
+        "relation": "currently_drives",
+        "fact": "Elena drives a Tesla Model Y electric crossover.",
+        "object": "Tesla Model Y"
+      }
+    ]
+  },
+  {
+    "id": "lme_046",
+    "ability": "abstention",
+    "question": "What is Marcus Chen's official passport identification number?",
+    "subject": "Marcus Chen",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Marcus Chen",
+        "relation": "relocated_to",
+        "fact": "Marcus Chen relocated to Zurich, Switzerland in August 2024.",
+        "object": "Zurich"
+      },
+      {
+        "subject": "Marcus Chen",
+        "relation": "visited",
+        "fact": "Marcus Chen visited Tokyo and Kyoto in autumn 2023.",
+        "object": "Japan"
+      }
+    ]
+  },
+  {
+    "id": "lme_047",
+    "ability": "abstention",
+    "question": "What is the WPA2 pre-shared Wi-Fi key for Priya Patel's home router?",
+    "subject": "Priya Patel",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Priya Patel",
+        "relation": "graduated_from",
+        "fact": "Priya Patel earned her PhD in Computer Science from Stanford University.",
+        "object": "Stanford University"
+      },
+      {
+        "subject": "Priya Patel",
+        "relation": "current_employer",
+        "fact": "Priya Patel joined Anthropic as a Member of Technical Staff in March 2024.",
+        "object": "Anthropic"
+      }
+    ]
+  },
+  {
+    "id": "lme_048",
+    "ability": "abstention",
+    "question": "What is the four-digit security PIN for Julian Weber's debit card?",
+    "subject": "Julian Weber",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Julian Weber",
+        "relation": "uses_hardware",
+        "fact": "Julian Weber built an 80% custom mechanical keyboard equipped with Cherry MX Brown switches.",
+        "object": "Cherry MX Brown"
+      },
+      {
+        "subject": "Julian Weber",
+        "relation": "ran_marathon",
+        "fact": "Julian Weber completed the Berlin Marathon in 3 hours 18 minutes.",
+        "object": "Berlin Marathon"
+      }
+    ]
+  },
+  {
+    "id": "lme_049",
+    "ability": "abstention",
+    "question": "What street address did Sarah Connor live at during her elementary school years?",
+    "subject": "Sarah Connor",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Sarah Connor",
+        "relation": "plays_instrument",
+        "fact": "Sarah Connor plays an American Professional II Fender Stratocaster.",
+        "object": "Fender Stratocaster"
+      },
+      {
+        "subject": "Sarah Connor",
+        "relation": "current_os",
+        "fact": "Sarah Connor runs NixOS on her primary ThinkPad workstation.",
+        "object": "NixOS"
+      }
+    ]
+  },
+  {
+    "id": "lme_050",
+    "ability": "abstention",
+    "question": "What is Benjamin Thorne's private SSH passphrase for his personal GitHub account?",
+    "subject": "Benjamin Thorne",
+    "gold_answer": "",
+    "is_answerable": false,
+    "context_facts": [
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "produces_podcast",
+        "fact": "Benjamin Thorne produces a podcast titled The Distributed Ledger.",
+        "object": "The Distributed Ledger"
+      },
+      {
+        "subject": "Benjamin Thorne",
+        "relation": "delivered_keynote",
+        "fact": "Benjamin Thorne presented a keynote titled 'Zero-Cost Async Graphs' at RustConf.",
+        "object": "RustConf"
+      }
+    ]
+  }
+]
