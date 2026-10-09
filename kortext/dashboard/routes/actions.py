@@ -251,42 +251,22 @@ async def run_scip_auto():
 
 
 @router.get("/api/tasks")
-async def get_tasks(include_graph: bool = True, project_id: Optional[str] = None):
+async def get_tasks(include_graph: bool = True):
     """Returns Task DAG tasks and dependency graph formatted for Vis.js."""
     from kortext.tasks.tracker import TaskDAGTracker
     try:
         tracker = TaskDAGTracker()
-        all_tasks = tracker.get_all_tasks(project_id=project_id)
-        if include_graph:
-            data = tracker.get_graph_data(project_id=project_id)
-        else:
-            data = {"tasks": all_tasks, "nodes": [], "edges": []}
-        ready = tracker.get_ready_tasks(project_id=project_id)
-
-        projects = ["all", "kortext"]
-        try:
-            p_res = tracker.client.query(tracker.graph, "MATCH (p:Project) RETURN DISTINCT coalesce(p.id, p.name)")
-            unique_p = set()
-            if p_res and len(p_res) > 1 and p_res[1]:
-                unique_p.update(str(row[0]) for row in p_res[1] if row and row[0])
-            t_res = tracker.client.query(tracker.graph, "MATCH (t:Task) RETURN DISTINCT coalesce(t.project_id, 'kortext')")
-            if t_res and len(t_res) > 1 and t_res[1]:
-                unique_p.update(str(row[0]) for row in t_res[1] if row and row[0])
-            unique_p.add("kortext")
-            projects = ["all"] + sorted(unique_p)
-        except Exception:
-            pass
-
+        data = tracker.get_graph_data() if include_graph else {"tasks": tracker.get_all_tasks(), "nodes": [], "edges": []}
+        ready = tracker.get_ready_tasks()
         return {
             "status": "ok",
-            "tasks": data.get("tasks", all_tasks),
+            "tasks": data.get("tasks", []),
             "nodes": data.get("nodes", []),
             "edges": data.get("edges", []),
             "ready_tasks": ready,
-            "projects": projects,
         }
     except Exception as e:
-        return {"status": "error", "message": str(e), "tasks": [], "nodes": [], "edges": [], "ready_tasks": [], "projects": ["all", "kortext"]}
+        return {"status": "error", "message": str(e), "tasks": [], "nodes": [], "edges": [], "ready_tasks": []}
 
 
 @router.post("/api/tasks")
@@ -301,19 +281,12 @@ async def manage_task_endpoint(request: Request):
             title = body.get("title")
             if not title:
                 return {"status": "error", "message": "Task title is required"}
-            raw_comp = body.get("complexity", 1)
-            try:
-                comp = int(raw_comp) if raw_comp is not None else 1
-            except (ValueError, TypeError):
-                comp = 1
-            proj_id = body.get("project_id", "kortext") or "kortext"
             tid = tracker.create_task(
                 title=title,
                 description=body.get("description", ""),
-                complexity=comp,
-                assigned_to=body.get("assigned_to", "primary") or "primary",
+                complexity=int(body.get("complexity", 1)),
+                assigned_to=body.get("assigned_to", "primary"),
                 depends_on=body.get("depends_on"),
-                project_id=proj_id,
             )
             return {"status": "ok", "task_id": tid}
         elif action == "update_status":
@@ -322,10 +295,7 @@ async def manage_task_endpoint(request: Request):
             if not tid or not st:
                 return {"status": "error", "message": "task_id and status are required"}
             err = body.get("error")
-            episode_name = body.get("episode_name")
             tracker.update_task_status(tid, status=st, error=err)
-            if episode_name:
-                tracker.link_task_to_outcome(tid, episode_name)
             return {"status": "ok", "task_id": tid, "updated_status": st}
         return {"status": "error", "message": f"Unknown action: {action}"}
     except Exception as e:

@@ -194,26 +194,5 @@ async def get_telemetry():
             "weibull_beta": 0.85,
             "weibull_lambda": 168.0,
             "active_invariants": 14,
-            "tier_0": {"name": "Tree-sitter AST B-Tree", "status": "Active"},
-            "tier_1": {"name": "Qdrant Vectors", "embedder": "FastEmbed BAAI/bge-small-en-v1.5 (fallback)"},
-            "tier_2": {"name": "FalkorDB Episodic Graph", "status": "Active"},
-            "tier_3": {"name": "Federated Hybrid Query", "status": "Active"},
-            "tier_4": {"name": "Cognitive Dream Mode", "status": "Active"},
-            "tiers": {
-                "tier_0": {"name": "Tree-sitter AST B-Tree", "status": "Active"},
-                "tier_1": {"name": "Qdrant Vectors", "embedder": "FastEmbed BAAI/bge-small-en-v1.5 (fallback)"},
-                "tier_2": {"name": "FalkorDB Episodic Graph", "status": "Active"},
-                "tier_3": {"name": "Federated Hybrid Query", "status": "Active"},
-                "tier_4": {"name": "Cognitive Dream Mode", "status": "Active"},
-            },
-            "nextgen_hooks": [
-                "FastMCPLockGuard",
-                "AntiRipgrepGate",
-                "CommandSafetyGuard",
-                "SecretLeakGuard",
-                "IncrementalASTSync",
-                "SubstrateHealthProbe",
-                "GroundTruthTestGate",
-            ],
         }
     }

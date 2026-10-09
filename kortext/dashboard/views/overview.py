@@ -141,16 +141,6 @@ def _infer_cluster(
 ) -> Tuple[str, str]:
     """Deterministically assigns a node to an architectural cluster or subsystem."""
     raw_path = sym_to_file.get(node_id, full_name or node_id) if group == "symbol" else (full_name or node_id)
-    if group == "task":
-        return "tasks", "📋 Task DAG"
-    if group == "project":
-        return "projects", "📁 Projects"
-    if group in ("decision", "adr"):
-        return "decisions", "⚖️ Decisions & ADRs"
-    if group in ("roadmap", "milestone"):
-        return "roadmap", "🗺️ Roadmaps"
-    if group == "subsystem":
-        return "subsystems", "🧩 Louvain Subsystems"
     if group == "tag":
         return "tags", "🏷️ Tags & Categories"
     if group == "episodic":
@@ -261,70 +251,24 @@ def build_graph_view(
                             edges_list.append(_make_vis_edge(src, dst, rel))
 
         else:
-            nodes_res = r.execute_command(
-                "GRAPH.QUERY",
-                target_db,
-                "MATCH (n) RETURN coalesce(n.name, n.title, n.id, n.path, 'Unnamed'), labels(n), coalesce(n.category, n.status, '')",
-            )
+            nodes_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (n) RETURN n.name, labels(n)")
             if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
                 for row in nodes_res[1]:
                     if len(row) >= 2:
-                        name = str(row[0]) if row[0] is not None else "Unnamed"
-                        raw_labels_obj = row[1]
-                        if isinstance(raw_labels_obj, list):
-                            raw_labels_list = [str(x) for x in raw_labels_obj]
-                            raw_labels_str = " ".join(raw_labels_list)
-                        else:
-                            raw_labels_str = str(raw_labels_obj).replace("[", "").replace("]", "").replace("'", "").strip()
-                            raw_labels_list = [lbl.strip() for lbl in raw_labels_str.split(",") if lbl.strip()]
-
-                        cat_or_status = str(row[2]) if len(row) > 2 and row[2] is not None else ""
-                        labels_lower = raw_labels_str.lower()
-                        lbl_set = {l.lower() for l in raw_labels_list}
-
-                        if "task" in lbl_set or "task" in labels_lower:
-                            group = "task"
-                            status_val = cat_or_status or "pending"
-                            comp_val = str(row[3]) if len(row) > 3 and row[3] is not None else "1"
-                            title = f"<b>Task: {name}</b><br/>Status: {status_val}<br/>Complexity: {comp_val}"
-                        elif "project" in lbl_set or "project" in labels_lower:
-                            group = "project"
-                            title = f"<b>Project: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        elif "adr" in lbl_set or "decision" in lbl_set or "adr" in labels_lower:
-                            group = "decision"
-                            title = f"<b>ADR / Decision: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        elif "milestone" in lbl_set or "roadmap" in lbl_set or "milestone" in labels_lower or "roadmap" in labels_lower:
-                            group = "roadmap"
-                            title = f"<b>Milestone: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        elif "subsystem" in lbl_set or "subsystem" in labels_lower:
-                            group = "subsystem"
-                            title = f"<b>Subsystem: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        elif "episodic" in lbl_set or "episodic" in labels_lower:
-                            group = "episodic"
-                            title = f"<b>Episodic: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        elif "file" in lbl_set or "file" in labels_lower:
-                            group = "file"
-                            title = f"<b>File: {name}</b>" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-                        else:
-                            group = "entity"
-                            title = f"<b>{name}</b><br/>Type: {raw_labels_str}" + (f"<br/>{cat_or_status}" if cat_or_status else "")
-
+                        name = str(row[0])
+                        raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
                         display_label = (name[:26] + "…") if len(name) > 28 else name
                         nodes_dict[name] = _make_vis_node(
                             node_id=name,
                             label=display_label,
-                            group=group,
-                            title=title,
+                            group="episodic" if "episodic" in raw_label.lower() else "entity",
+                            title=f"<b>{name}</b><br/>Type: {raw_label}",
                         )
 
-            edges_res = r.execute_command(
-                "GRAPH.QUERY",
-                target_db,
-                "MATCH (s)-[r]->(t) RETURN coalesce(s.name, s.title, s.id, s.path), type(r), coalesce(t.name, t.title, t.id, t.path)",
-            )
+            edges_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (s)-[r]->(t) RETURN s.name, type(r), t.name")
             if edges_res and len(edges_res) > 1 and isinstance(edges_res[1], list):
                 for row in edges_res[1]:
-                    if len(row) >= 3 and row[0] is not None and row[2] is not None:
+                    if len(row) >= 3:
                         src, rel, dst = str(row[0]), str(row[1]), str(row[2])
                         if src not in nodes_dict:
                             nodes_dict[src] = _make_vis_node(node_id=src, label=src, group="entity", title=src)
