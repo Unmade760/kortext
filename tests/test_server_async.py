@@ -353,6 +353,7 @@ async def test_search_knowledge_and_memory_detail_level_and_tier3():
             collection=None,
             workspace_root=None,
             detail_level="comprehensive",
+            project=None,
         )
 
         data = json.loads(res)

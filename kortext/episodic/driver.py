@@ -195,7 +195,8 @@ class AgentNativeEpisodicDriver:
                     "SET r.id = $fact_id, r.created_at = $now, r.valid_from = $now, r.valid_to = null, "
                     "r.transaction_time = $now, r.source_session = $session, r.importance = 5, "
                     "r.confidence = 0.95, r.dormant = false, r.superseded = false, "
-                    "r.trust_level = $trust_level, r.trust_score = $trust_score",
+                    "r.trust_level = $trust_level, r.trust_score = $trust_score, "
+                    "r.project = $project",
                     {
                         "src": src,
                         "tgt": tgt,
@@ -206,6 +207,7 @@ class AgentNativeEpisodicDriver:
                         "session": episode_name,
                         "trust_level": norm_level,
                         "trust_score": trust_score,
+                        "project": proj,
                     },
                 )
 
@@ -232,6 +234,7 @@ class AgentNativeEpisodicDriver:
         confidence: float = 0.95,
         source_session: Optional[str] = None,
         source_tier: int = 2,
+        project: Optional[str] = None,
     ) -> str:
         """
         Records an episodic relationship between subject and object entities with bi-temporal attribution.
@@ -244,6 +247,7 @@ class AgentNativeEpisodicDriver:
         now = datetime.now(timezone.utc).isoformat()
         v_start = valid_from or now
         obj = (object_name or relation).strip()
+        proj = project or getattr(self, "db_name", None) or "kortext"
 
         # 1. Ensure Subject and Object Nodes Exist
         merge_nodes_cypher = """
@@ -262,6 +266,7 @@ class AgentNativeEpisodicDriver:
             id: $fact_id,
             fact: $fact,
             relation: $rel,
+            project: $project,
             valid_from: $v_start,
             valid_to: $v_end,
             created_at: $now,
@@ -286,6 +291,7 @@ class AgentNativeEpisodicDriver:
             "imp": importance,
             "conf": confidence,
             "session": source_session or "active_session",
+            "project": proj,
         }
         self._query(rel_cypher, params)
 
@@ -323,23 +329,31 @@ class AgentNativeEpisodicDriver:
         subject: str,
         as_of_date: str,
         limit: int = 10,
+        project: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Executes a point-in-time bi-temporal query returning facts valid on a specific date (Invariant D5).
         """
-        cypher = """
-        MATCH (s:Entity {name: $sub})-[r:RELATES_TO]->(target)
+        target_project = project.strip() if isinstance(project, str) else None
+        filter_project = bool(target_project and target_project.lower() != "all")
+        proj_filter = "  AND coalesce(r.project, 'kortext') = $project\n" if filter_project else ""
+
+        cypher = f"""
+        MATCH (s:Entity {{name: $sub}})-[r:RELATES_TO]->(target)
         WHERE r.valid_from <= $target_date
           AND (r.valid_to IS NULL OR r.valid_to > $target_date)
-        RETURN r.id, s.name, r.relation, r.fact, r.valid_from, r.valid_to, r.confidence
+        {proj_filter}RETURN r.id, s.name, r.relation, r.fact, r.valid_from, r.valid_to, r.confidence
         ORDER BY r.valid_from DESC
         LIMIT $lim
         """
-        raw = self._query(cypher, {
+        params: Dict[str, Any] = {
             "sub": subject,
             "target_date": as_of_date,
             "lim": limit,
-        })
+        }
+        if filter_project:
+            params["project"] = target_project
+        raw = self._query(cypher, params)
 
         if not raw or len(raw) < 2 or not raw[1]:
             return []
@@ -362,6 +376,7 @@ class AgentNativeEpisodicDriver:
         entity_name: str,
         max_hops: int = 2,
         limit: int = 20,
+        project: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Traverses episodic memory up to max_hops (default 2) starting from entity_name.
@@ -371,17 +386,24 @@ class AgentNativeEpisodicDriver:
         if not entity_name or max_hops < 1:
             return []
 
+        target_project = project.strip() if isinstance(project, str) else None
+        filter_project = bool(target_project and target_project.lower() != "all")
+        proj_filter_1hop = "  AND coalesce(r.project, 'kortext') = $project\n" if filter_project else ""
+
         # 1. Fetch 1-hop facts connected to entity_name (both outgoing and incoming)
-        cypher_1hop = """
-        MATCH (s:Entity {name: $entity})-[r:RELATES_TO]-(t:Entity)
+        cypher_1hop = f"""
+        MATCH (s:Entity {{name: $entity}})-[r:RELATES_TO]-(t:Entity)
         WHERE coalesce(r.superseded, false) = false
           AND coalesce(r.dormant, false) = false
-        RETURN r.id, startNode(r).name, r.relation, endNode(r).name, r.fact, r.source_session,
+        {proj_filter_1hop}RETURN r.id, startNode(r).name, r.relation, endNode(r).name, r.fact, r.source_session,
                r.valid_from, r.valid_to, r.confidence, t.name
         ORDER BY coalesce(r.valid_from, r.transaction_time, '') DESC
         LIMIT $lim
         """
-        raw_1hop = self._query(cypher_1hop, {"entity": entity_name, "lim": limit})
+        params_1hop: Dict[str, Any] = {"entity": entity_name, "lim": limit}
+        if filter_project:
+            params_1hop["project"] = target_project
+        raw_1hop = self._query(cypher_1hop, params_1hop)
 
         results: List[Dict[str, Any]] = []
         seen_fact_ids: set[str] = set()
@@ -430,22 +452,26 @@ class AgentNativeEpisodicDriver:
         # 2. Fetch 2-hop facts connected via intermediate bridge entities
         if max_hops >= 2 and bridge_entities:
             hop2_limit = max(5, limit // 2)
+            proj_filter_2hop = "  AND coalesce(r2.project, 'kortext') = $project\n" if filter_project else ""
             for bridge in bridge_entities[:10]:
-                cypher_2hop = """
-                MATCH (b:Entity {name: $bridge})-[r2:RELATES_TO]-(t2:Entity)
+                cypher_2hop = f"""
+                MATCH (b:Entity {{name: $bridge}})-[r2:RELATES_TO]-(t2:Entity)
                 WHERE coalesce(r2.superseded, false) = false
                   AND coalesce(r2.dormant, false) = false
                   AND t2.name <> $entity AND t2.name <> $bridge
-                RETURN r2.id, startNode(r2).name, r2.relation, endNode(r2).name, r2.fact, r2.source_session,
+                {proj_filter_2hop}RETURN r2.id, startNode(r2).name, r2.relation, endNode(r2).name, r2.fact, r2.source_session,
                        r2.valid_from, r2.valid_to, r2.confidence, t2.name
                 ORDER BY coalesce(r2.valid_from, r2.transaction_time, '') DESC
                 LIMIT $lim
                 """
-                raw_2hop = self._query(cypher_2hop, {
+                params_2hop: Dict[str, Any] = {
                     "bridge": bridge,
                     "entity": entity_name,
                     "lim": hop2_limit,
-                })
+                }
+                if filter_project:
+                    params_2hop["project"] = target_project
+                raw_2hop = self._query(cypher_2hop, params_2hop)
                 if raw_2hop and len(raw_2hop) > 1 and raw_2hop[1]:
                     for row in raw_2hop[1]:
                         fid = str(row[0]) if row[0] else ""
@@ -488,11 +514,20 @@ class AgentNativeEpisodicDriver:
 
         return results
 
-    async def search(self, query: str, limit: int = 5, max_hops: int = 1) -> List[str]:
+    async def search(
+        self,
+        query: str,
+        limit: int = 5,
+        max_hops: int = 1,
+        project: Optional[str] = None,
+        workspace_root: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[str]:
         """
         Retrieves temporally valid, non-superseded facts from FalkorDB.
         Filters out superseded historical facts. Modulates ranking via Weibull retention decay.
         Supports 2-hop multi-session traversal when max_hops >= 2.
+        Supports project-scoping when project is provided and != 'all'.
         """
         q_tokens = [w.lower() for w in query.split() if len(w) > 2]
         if not q_tokens:
@@ -500,19 +535,30 @@ class AgentNativeEpisodicDriver:
 
         now_dt = datetime.now(timezone.utc)
 
+        if not project and "collection" in kwargs and isinstance(kwargs["collection"], str):
+            project = kwargs["collection"]
+
+        target_project = project.strip() if isinstance(project, str) else None
+        filter_project = bool(target_project and target_project.lower() != "all")
+
         # 1. Fetch facts matching query terms where NOT superseded and NOT dormant
         results: List[str] = []
+        proj_filter = "AND coalesce(r.project, 'kortext') = $project " if filter_project else ""
         cypher = (
             "MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity) "
             "WHERE coalesce(r.superseded, false) = false "
             "AND coalesce(r.dormant, false) = false "
+            + proj_filter +
             "AND ANY(tok IN $tokens WHERE toLower(coalesce(r.fact, s.name + ' ' + r.relation + ' ' + t.name)) CONTAINS tok "
             "OR toLower(s.name) CONTAINS tok OR toLower(t.name) CONTAINS tok) "
             "RETURN coalesce(r.fact, s.name + ' ' + r.relation + ' ' + t.name), s.name, t.name, r.valid_from, r.created_at, r.importance, r.confidence "
             "ORDER BY coalesce(r.valid_from, r.created_at, '') DESC "
             "LIMIT 50"
         )
-        rows = self._query(cypher, {"tokens": q_tokens})
+        params: Dict[str, Any] = {"tokens": q_tokens}
+        if filter_project:
+            params["project"] = target_project
+        rows = self._query(cypher, params)
         if rows and len(rows) > 1 and isinstance(rows[1], list):
             scored = []
             for row in rows[1]:
@@ -543,19 +589,24 @@ class AgentNativeEpisodicDriver:
 
         # 1b. If max_hops >= 2 and results < limit, search 2-hop connected facts
         if max_hops >= 2 and len(results) < limit:
+            proj_filter_2hop = "AND coalesce(r2.project, 'kortext') = $project " if filter_project else ""
             cypher_2hop = (
                 "MATCH (s:Entity)-[r1:RELATES_TO]->(mid:Entity)-[r2:RELATES_TO]->(t:Entity) "
                 "WHERE coalesce(r1.superseded, false) = false "
                 "AND coalesce(r1.dormant, false) = false "
                 "AND coalesce(r2.superseded, false) = false "
                 "AND coalesce(r2.dormant, false) = false "
+                + proj_filter_2hop +
                 "AND ANY(tok IN $tokens WHERE toLower(coalesce(r2.fact, mid.name + ' ' + r2.relation + ' ' + t.name)) CONTAINS tok "
                 "OR toLower(mid.name) CONTAINS tok OR toLower(t.name) CONTAINS tok) "
                 "RETURN coalesce(r2.fact, mid.name + ' ' + r2.relation + ' ' + t.name), s.name, mid.name, t.name, r2.valid_from, r2.created_at, r2.importance, r2.confidence "
                 "ORDER BY coalesce(r2.valid_from, r2.created_at, '') DESC "
                 "LIMIT 50"
             )
-            rows2 = self._query(cypher_2hop, {"tokens": q_tokens})
+            params_2hop: Dict[str, Any] = {"tokens": q_tokens}
+            if filter_project:
+                params_2hop["project"] = target_project
+            rows2 = self._query(cypher_2hop, params_2hop)
             if rows2 and len(rows2) > 1 and isinstance(rows2[1], list):
                 scored2 = []
                 for row in rows2[1]:
@@ -589,15 +640,20 @@ class AgentNativeEpisodicDriver:
 
         # 2. Also retrieve matching non-superseded episodic descriptions
         if len(results) < limit:
+            proj_filter_ep = "AND coalesce(e.project, 'kortext') = $project " if filter_project else ""
             cypher_ep = (
                 "MATCH (e:Episodic) "
                 "WHERE (e.superseded IS NULL OR e.superseded = false) "
+                + proj_filter_ep +
                 "AND ANY(tok IN $tokens WHERE toLower(e.name + ' ' + coalesce(e.content, '')) CONTAINS tok) "
                 "RETURN e.name, e.content, e.created_at, e.trust_score "
                 "ORDER BY coalesce(e.created_at, '') DESC "
                 "LIMIT 30"
             )
-            ep_rows = self._query(cypher_ep, {"tokens": q_tokens})
+            params_ep: Dict[str, Any] = {"tokens": q_tokens}
+            if filter_project:
+                params_ep["project"] = target_project
+            ep_rows = self._query(cypher_ep, params_ep)
             if ep_rows and len(ep_rows) > 1 and isinstance(ep_rows[1], list):
                 ep_scored = []
                 for row in ep_rows[1]:

@@ -82,6 +82,26 @@ class SymbolGraphManager:
         Atomically saves a file's declarations, imports, and references using batch UNWIND queries.
         Reduces Redis roundtrips by 60x compared to per-node insertion.
         """
+        # Collect candidate symbols defined in this file before detaching definitions
+        candidate_syms = set()
+        res_defs = self._query(
+            "MATCH (s:Symbol)-[:DEFINED_IN]->(f:File {path: $path}) RETURN DISTINCT s.name",
+            {"path": file_path},
+        )
+        if res_defs and len(res_defs) > 1 and isinstance(res_defs[1], list):
+            for row in res_defs[1]:
+                if row and row[0]:
+                    candidate_syms.add(str(row[0]))
+
+        res_fp = self._query(
+            "MATCH (s:Symbol {file_path: $path}) RETURN DISTINCT s.name",
+            {"path": file_path},
+        )
+        if res_fp and len(res_fp) > 1 and isinstance(res_fp[1], list):
+            for row in res_fp[1]:
+                if row and row[0]:
+                    candidate_syms.add(str(row[0]))
+
         # 1. Purge old relationships connected to this file and ensure File node
         self._query(
             "MERGE (f:File {path: $path}) "
@@ -175,6 +195,16 @@ class SymbolGraphManager:
                 ")"
             )
             self._query(ref_cypher, {"path": file_path, "references": clean_refs})
+
+        # 5. Remove orphaned Symbol nodes whose definitions were removed
+        if candidate_syms:
+            self._query(
+                "UNWIND $names AS name "
+                "MATCH (s:Symbol {name: name}) "
+                "WHERE NOT (s)-[:DEFINED_IN]->(:File) "
+                "DETACH DELETE s",
+                {"names": list(candidate_syms)},
+            )
 
     def save_markdown_ast(
         self,

@@ -331,6 +331,7 @@ class TestFastMCPFederatedMemoryTool:
                     collection="test_col",
                     workspace_root="/test/workspace",
                     detail_level="compact",
+                    project=None,
                 )
 
     @pytest.mark.anyio
@@ -402,4 +403,96 @@ class TestFastMCPFederatedMemoryTool:
             mock_resolve_engine_ws.assert_awaited_once_with("my_custom_collection")
             assert len(res_direct["symbolic_context"]) == 1
             assert res_direct["symbolic_context"][0]["symbol"] == "InsideSymbol"
+
+
+class TestProjectScopedFederatedRetrieval:
+    """Verifies that federated_query and search_knowledge_and_memory respect project scoping."""
+
+    @pytest.mark.anyio
+    async def test_federated_query_respects_explicit_project(self, mock_retrieval_engine):
+        res = await mock_retrieval_engine.federated_query(
+            "Database migration decisions",
+            project="project_alpha",
+        )
+        assert res is not None
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "project_alpha"
+
+    @pytest.mark.anyio
+    async def test_federated_query_respects_project_all(self, mock_retrieval_engine):
+        res = await mock_retrieval_engine.federated_query(
+            "Global architecture outcomes",
+            project="all",
+        )
+        assert res is not None
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "all"
+
+    @pytest.mark.anyio
+    async def test_federated_query_resolves_project_from_collection(self, mock_retrieval_engine):
+        await mock_retrieval_engine.federated_query(
+            "Service auth facts",
+            collection="custom_microservice",
+        )
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "custom_microservice"
+
+    @pytest.mark.anyio
+    async def test_federated_query_resolves_project_from_workspace_root(self, mock_retrieval_engine):
+        await mock_retrieval_engine.federated_query(
+            "App routing facts",
+            workspace_root="/Users/rb/projects/my_mobile_app",
+        )
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "my_mobile_app"
+
+    @pytest.mark.anyio
+    async def test_federated_query_resolves_project_from_env_var(self, mock_retrieval_engine, monkeypatch):
+        monkeypatch.setenv("KORTEXT_PROJECT", "env_assigned_project")
+        await mock_retrieval_engine.federated_query(
+            "Deployment facts",
+        )
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "env_assigned_project"
+
+    @pytest.mark.anyio
+    async def test_federated_query_defaults_project_to_kortext(self, mock_retrieval_engine, monkeypatch):
+        monkeypatch.delenv("KORTEXT_PROJECT", raising=False)
+        await mock_retrieval_engine.federated_query(
+            "Core engine facts",
+        )
+        mock_retrieval_engine._episodic.search.assert_awaited()
+        call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs
+        assert call_kwargs.get("project") == "kortext"
+
+    @pytest.mark.anyio
+    async def test_search_knowledge_and_memory_forwards_project(self, mock_retrieval_engine):
+        from kortext.server import search_knowledge_and_memory
+
+        with patch.object(mock_retrieval_engine, "federated_query", new_callable=AsyncMock) as mock_fq:
+            mock_fq.return_value = {
+                "query": "Scoping query",
+                "symbolic_context": [],
+                "code_chunks": [],
+                "episodic_history": [],
+                "total_estimated_tokens": 50,
+            }
+            with patch("kortext.server.retrieval", mock_retrieval_engine):
+                await search_knowledge_and_memory(
+                    query="Scoping query",
+                    project="target_project",
+                )
+                mock_fq.assert_awaited_once_with(
+                    query="Scoping query",
+                    token_budget=1500,
+                    collection=None,
+                    workspace_root=None,
+                    detail_level="balanced",
+                    project="target_project",
+                )
 

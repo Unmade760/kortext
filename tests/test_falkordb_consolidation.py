@@ -120,27 +120,37 @@ class TestSymbolGraphAstParameterization:
         queries = [call[0][1] for call in mock_client.query.call_args_list]
         params_list = [call[0][2] for call in mock_client.query.call_args_list]
 
-        # Check purge query
-        assert "$path" in queries[0]
+        # Check candidate symbol lookup queries
+        assert "DEFINED_IN" in queries[0]
         assert params_list[0] == {"path": "src/app.py"}
+        assert "file_path: $path" in queries[1]
+        assert params_list[1] == {"path": "src/app.py"}
+
+        # Check purge query
+        assert "$path" in queries[2]
+        assert params_list[2] == {"path": "src/app.py"}
 
         # Check declarations query
-        assert "$declarations" in queries[1]
-        assert params_list[1]["path"] == "src/app.py"
-        assert len(params_list[1]["declarations"]) == 1
-        assert params_list[1]["declarations"][0]["name"] == "UserHandler"
+        assert "$declarations" in queries[3]
+        assert params_list[3]["path"] == "src/app.py"
+        assert len(params_list[3]["declarations"]) == 1
+        assert params_list[3]["declarations"][0]["name"] == "UserHandler"
 
         # Check imports query
-        assert "$imports" in queries[2]
-        assert params_list[2]["path"] == "src/app.py"
-        assert len(params_list[2]["imports"]) == 1
-        assert params_list[2]["imports"][0]["name"] == "BaseHandler"
+        assert "$imports" in queries[4]
+        assert params_list[4]["path"] == "src/app.py"
+        assert len(params_list[4]["imports"]) == 1
+        assert params_list[4]["imports"][0]["name"] == "BaseHandler"
 
         # Check references query
-        assert "$references" in queries[3]
-        assert params_list[3]["path"] == "src/app.py"
-        assert len(params_list[3]["references"]) == 1
-        assert params_list[3]["references"][0]["name"] == "json_loads"
+        assert "$references" in queries[5]
+        assert params_list[5]["path"] == "src/app.py"
+        assert len(params_list[5]["references"]) == 1
+        assert params_list[5]["references"][0]["name"] == "json_loads"
+
+        # Check orphan sweep query
+        assert "$names" in queries[6]
+        assert params_list[6]["names"] == ["ok"]
 
     def test_save_markdown_ast_parameterized(self):
         mock_client = MagicMock(spec=FalkorDBClient)

@@ -1200,6 +1200,7 @@ class RetrievalEngine:
         collection: Optional[str] = None,
         workspace_root: Optional[str] = None,
         detail_level: str = "balanced",
+        project: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Executes concurrent async retrieval across 4 memory tiers:
@@ -1223,6 +1224,28 @@ class RetrievalEngine:
             workspace_root = await resolve_workspace_root_for_collection(collection)
 
         target_sym_graph = resolve_symbol_graph_for_collection(collection)
+
+        # Resolve target project scope:
+        resolved_project: Optional[str] = None
+        if project is not None:
+            p_str = project.strip()
+            if p_str.lower() == "all":
+                resolved_project = "all"
+            else:
+                resolved_project = p_str
+        else:
+            if collection and collection.strip().lower() not in ("all", "default", "kortext_codebase", "cerebrum_codebase"):
+                resolved_project = collection.strip()
+            elif workspace_root:
+                ws_name = Path(workspace_root).name.strip()
+                if ws_name and ws_name.lower() not in ("all", "default", "", ".", "/"):
+                    if ws_name.lower() in ("cortex", "cerebrum"):
+                        resolved_project = "kortext"
+                    else:
+                        resolved_project = ws_name
+
+            if not resolved_project:
+                resolved_project = os.getenv("KORTEXT_PROJECT") or "kortext"
 
         # Detail Level Propagation Across All Tiers:
         dl = detail_level.lower().strip() if isinstance(detail_level, str) else "balanced"
@@ -1402,15 +1425,12 @@ class RetrievalEngine:
         # --- Tier 2: Episodic History ---
         async def _fetch_tier2() -> List[str]:
             try:
-                try:
-                    raw_facts = await self.episodic.search(
-                        query,
-                        limit=max_tier2_facts,
-                        collection=collection,
-                        workspace_root=workspace_root,
-                    )
-                except TypeError:
-                    raw_facts = await self.episodic.search(query, limit=max_tier2_facts)
+                raw_facts = await self.episodic.search(
+                    query,
+                    limit=max_tier2_facts,
+                    project=resolved_project,
+                    workspace_root=workspace_root,
+                )
 
                 if not raw_facts or not isinstance(raw_facts, list):
                     return []
@@ -1554,6 +1574,7 @@ async def federated_query(
     collection: Optional[str] = None,
     workspace_root: Optional[str] = None,
     detail_level: str = "balanced",
+    project: Optional[str] = None,
     engine: Optional[RetrievalEngine] = None,
 ) -> Dict[str, Any]:
     """
@@ -1570,6 +1591,7 @@ async def federated_query(
         collection=collection,
         workspace_root=workspace_root,
         detail_level=detail_level,
+        project=project,
     )
 
 

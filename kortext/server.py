@@ -132,6 +132,7 @@ async def search_knowledge_and_memory(
     workspace_root: Optional[str] = None,
     token_budget: int = 1500,
     detail_level: str = "balanced",
+    project: Optional[str] = None,
 ) -> str:
     """
     Args:
@@ -140,6 +141,7 @@ async def search_knowledge_and_memory(
         workspace_root: Optional workspace path to scope hierarchical structure to.
         token_budget:   Maximum total estimated tokens across all memory tiers (default: 1500).
         detail_level:   Context detail level: 'compact', 'balanced', or 'comprehensive'.
+        project:        Optional project scope, e.g. 'kortext', 'my_app', or 'all' to query across all projects. Defaults to active workspace/project.
     Returns:
         Structured JSON envelope with 4 in-budget memory tiers (Tier 0: symbolic_context,
         Tier 1: code_chunks, Tier 2: episodic_history, Tier 3: architectural_overview),
@@ -154,6 +156,7 @@ async def search_knowledge_and_memory(
         collection=collection,
         workspace_root=workspace_root,
         detail_level=detail_level,
+        project=project,
     )
 
     # Format clean Markdown view
