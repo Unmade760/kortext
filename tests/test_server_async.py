@@ -16,6 +16,7 @@ from kortext.server import (
     record_system_outcome,
     list_vector_collections,
     index_directory,
+    trigger_dream_mode,
 )
 
 
@@ -430,5 +431,77 @@ async def test_search_knowledge_and_memory_detail_level_and_tier3():
         assert data["architectural_overview"] is not None
         assert "### Tier 3: System Architecture Overview" in data["markdown"]
         assert "5-signal fusion" in data["markdown"]
+
+
+@pytest.mark.anyio
+async def test_trigger_dream_mode_with_consolidations_and_skills():
+    mock_report = {
+        "pruned_facts": {
+            "active_facts_remaining": 12,
+            "superseded_facts_pruned": 3,
+            "contradictions_flagged": ["conflict_1"],
+        },
+        "subsystem_clusters": 4,
+        "invariants_inducted": 2,
+        "consolidated_facts_count": 1,
+        "distilled_skills_count": 1,
+        "dream_report_path": "journal/dreams/2026-10-09-dream.md",
+        "invariants_path": "journal/invariants.md",
+    }
+    with patch("kortext.dream.KortextDreamEngine.run_dream_cycle", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = mock_report
+        res = await trigger_dream_mode(
+            project="test_proj",
+            purge_stale=True,
+            consolidations=[{"macro_fact": "Unified Arch", "superseded_fact_ids": ["f1"]}],
+            distilled_skills=[{"name": "test-skill", "description": "desc", "content": "content"}],
+            global_skills=True,
+        )
+        mock_run.assert_awaited_once_with(
+            project="test_proj",
+            purge_stale=True,
+            invariants=None,
+            stale_fact_names=None,
+            consolidations=[{"macro_fact": "Unified Arch", "superseded_fact_ids": ["f1"]}],
+            distilled_skills=[{"name": "test-skill", "description": "desc", "content": "content"}],
+            global_skills=True,
+        )
+        assert "Dream Mode completed for project 'test_proj'" in res
+        assert "- Macro Facts Consolidated: 1" in res
+        assert "- Skills Distilled: 1" in res
+
+
+@pytest.mark.anyio
+async def test_trigger_dream_mode_defaults():
+    mock_report = {
+        "pruned_facts": {
+            "active_facts_remaining": 5,
+            "superseded_facts_pruned": 0,
+            "contradictions_flagged": [],
+        },
+        "subsystem_clusters": 2,
+        "invariants_inducted": 0,
+        "consolidated_facts_count": 0,
+        "distilled_skills_count": 0,
+        "dream_report_path": "journal/dreams/default-dream.md",
+        "invariants_path": "journal/invariants.md",
+    }
+    with patch("kortext.dream.KortextDreamEngine.run_dream_cycle", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = mock_report
+        res = await trigger_dream_mode()
+        mock_run.assert_awaited_once_with(
+            project="kortext",
+            purge_stale=False,
+            invariants=None,
+            stale_fact_names=None,
+            consolidations=None,
+            distilled_skills=None,
+            global_skills=False,
+        )
+        assert "Dream Mode completed for project 'kortext'" in res
+        assert "- Macro Facts Consolidated: 0" in res
+        assert "- Skills Distilled: 0" in res
+
+
 
 

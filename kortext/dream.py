@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -47,6 +48,7 @@ CEREBRUM_ROOT   = KORTEXT_ROOT
 JOURNAL_DIR   = Path(os.getenv("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")))
 ARCHIVE_DIR   = JOURNAL_DIR / "archive"
 DREAMS_DIR    = JOURNAL_DIR / "dreams"
+REPORTS_DIR   = JOURNAL_DIR / "reports"
 INVARIANTS_FILE = JOURNAL_DIR / "invariants.md"
 
 
@@ -84,6 +86,7 @@ class DreamEngine:
 
         ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
         DREAMS_DIR.mkdir(parents=True, exist_ok=True)
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     def _get_client(self) -> redis.Redis:
         return self.client.get_redis()
@@ -126,6 +129,8 @@ class DreamEngine:
             importance = float(row[2] or 5.0)
             try:
                 dt = datetime.fromisoformat(created_at_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
                 delta_hours = max((now - dt).total_seconds() / 3600.0, 0.0)
                 r_eff = self.compute_retention(delta_hours, importance)
                 if r_eff <= self.biological_floor:
@@ -346,7 +351,148 @@ class DreamEngine:
             "drift_audit": drift_report,
         }
 
-    # ── Phase 4: Full Dream Cycle & Report Generation ─────────────────────────
+    # ── Phase 4: Fact Consolidation (Macro-Truth Induction) ───────────────────
+
+    def consolidate_facts(
+        self,
+        macro_fact: str,
+        superseded_fact_ids: List[str],
+        project: str = "kortext",
+    ) -> Dict[str, Any]:
+        """
+        Consolidates fine-grained or redundant episodic facts into a single authoritative macro-truth.
+        Creates a new macro-truth fact relationship in FalkorDB with r.is_macro = true, r.project = $project.
+        Marks candidate facts in superseded_fact_ids with SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id.
+        """
+        macro_fact_id = f"fact_macro_{uuid.uuid4().hex[:10]}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        # 1. Update candidate superseded facts
+        updated_count = 0
+        cand_sub = None
+        cand_obj = None
+
+        if superseded_fact_ids:
+            # First attempt to find existing subject and object entities from candidate facts
+            find_cypher = """
+            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
+            WHERE r.id IN $ids OR r.fact_id IN $ids OR toString(id(r)) IN $ids
+            RETURN s.name, t.name LIMIT 1
+            """
+            find_rows = self._query(self.episodic_db, find_cypher, {"ids": list(superseded_fact_ids)})
+            if find_rows and len(find_rows) > 1 and find_rows[1] and len(find_rows[1][0]) >= 2:
+                cand_sub = str(find_rows[1][0][0])
+                cand_obj = str(find_rows[1][0][1])
+
+            # Mark candidate facts as superseded and dormant
+            update_cypher = """
+            UNWIND $ids AS target_id
+            MATCH ()-[r:RELATES_TO]->()
+            WHERE r.id = target_id OR r.fact_id = target_id OR toString(id(r)) = toString(target_id)
+            SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id
+            RETURN count(r)
+            """
+            res = self._query(
+                self.episodic_db,
+                update_cypher,
+                {"ids": list(superseded_fact_ids), "macro_fact_id": macro_fact_id},
+            )
+            if res and len(res) > 1 and res[1] and res[1][0]:
+                try:
+                    updated_count = int(res[1][0][0])
+                except (ValueError, TypeError):
+                    updated_count = len(superseded_fact_ids)
+            else:
+                updated_count = len(superseded_fact_ids)
+
+        # 2. Materialize new macro-truth fact relationship
+        sub_name = cand_sub or project
+        obj_name = cand_obj or "MacroTruth"
+
+        create_cypher = """
+        MERGE (s:Entity {name: $sub})
+        MERGE (t:Entity {name: $obj})
+        CREATE (s)-[r:RELATES_TO {
+            id: $macro_fact_id,
+            fact: $macro_fact,
+            relation: $relation,
+            project: $project,
+            is_macro: true,
+            superseded: false,
+            dormant: false,
+            importance: 9,
+            confidence: 0.98,
+            created_at: $now,
+            valid_from: $now,
+            transaction_time: $now
+        }]->(t)
+        RETURN id(r)
+        """
+        self._query(
+            self.episodic_db,
+            create_cypher,
+            {
+                "sub": sub_name,
+                "obj": obj_name,
+                "macro_fact_id": macro_fact_id,
+                "macro_fact": macro_fact,
+                "relation": "MACRO_FACT",
+                "project": project,
+                "now": now,
+            },
+        )
+
+        logger.info(
+            f"[DreamEngine] Consolidated {updated_count} facts into macro fact '{macro_fact_id}' for project '{project}'."
+        )
+
+        return {
+            "status": "ok",
+            "macro_fact_id": macro_fact_id,
+            "macro_fact": macro_fact,
+            "project": project,
+            "superseded_count": updated_count,
+            "superseded_fact_ids": list(superseded_fact_ids),
+        }
+
+    # ── Phase 5: Skill Distillation ───────────────────────────────────────────
+
+    def distill_skill(
+        self,
+        skill_name: str,
+        description: str,
+        skill_content: str,
+        global_scope: bool = False,
+        workspace_root: Optional[str] = None,
+    ) -> Path:
+        """
+        Distills consolidated procedures or patterns into an agent skill specification (SKILL.md)
+        with YAML frontmatter (name, description) and markdown body.
+        Resolves to global scope (~/.gemini/config/plugins/kortext/skills/<name>) or
+        workspace scope (<workspace_root>/.agents/skills/<name>).
+        """
+        clean_name = skill_name.strip()
+        if global_scope:
+            dest_dir = Path.home() / ".gemini" / "config" / "plugins" / "kortext" / "skills" / clean_name
+        else:
+            base_dir = Path(workspace_root) if workspace_root else KORTEXT_ROOT
+            dest_dir = base_dir / ".agents" / "skills" / clean_name
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        skill_file = dest_dir / "SKILL.md"
+
+        stripped_content = skill_content.strip()
+        if stripped_content.startswith("---"):
+            full_content = stripped_content + "\n"
+        else:
+            clean_desc = description.strip().replace("\n", " ")
+            full_content = f"---\nname: {clean_name}\ndescription: {clean_desc}\n---\n\n{stripped_content}\n"
+
+        skill_file.write_text(full_content, encoding="utf-8")
+        logger.info(f"[DreamEngine] Distilled skill '{clean_name}' to: {skill_file}")
+        return skill_file
+
+    # ── Full Dream Cycle & Report Generation ─────────────────────────────────
 
     async def run_dream_cycle(
         self,
@@ -355,8 +501,12 @@ class DreamEngine:
         dry_run: bool = False,
         invariants: Optional[List[Dict[str, str]]] = None,
         stale_fact_names: Optional[List[str]] = None,
+        consolidations: Optional[List[Dict[str, Any]]] = None,
+        distilled_skills: Optional[List[Dict[str, Any]]] = None,
+        global_skills: bool = False,
+        workspace_root: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Runs all four cognitive reflection phases on-demand (100% Agent-Native)."""
+        """Runs cognitive reflection phases, consolidation, and skill distillation (100% Agent-Native)."""
         start_time = datetime.now()
         date_str = start_time.strftime("%Y-%m-%d")
 
@@ -384,7 +534,70 @@ class DreamEngine:
         drift_audit = invariant_results["drift_audit"]
         logger.info(f"[DreamEngine] Phase 3 complete: {len(active_invariants)} active invariants, {drift_audit.get('drifted_count', 0)} drifted.")
 
-        # Phase 4: Dream Synthesis Report
+        # Phase 4: Fact Consolidation
+        consolidation_results: List[Dict[str, Any]] = []
+        if consolidations:
+            for item in consolidations:
+                macro_fact = item.get("macro_fact") or item.get("fact")
+                superseded_ids = item.get("superseded_fact_ids") or item.get("supersedes") or []
+                item_project = item.get("project", project)
+                if macro_fact:
+                    if not dry_run:
+                        res = self.consolidate_facts(
+                            macro_fact=macro_fact,
+                            superseded_fact_ids=superseded_ids,
+                            project=item_project,
+                        )
+                        consolidation_results.append(res)
+                    else:
+                        consolidation_results.append({
+                            "status": "dry_run",
+                            "macro_fact": macro_fact,
+                            "superseded_count": len(superseded_ids),
+                            "superseded_fact_ids": list(superseded_ids),
+                            "project": item_project,
+                        })
+            logger.info(f"[DreamEngine] Phase 4 complete: {len(consolidation_results)} macro facts consolidated.")
+
+        # Phase 5: Skill Distillation
+        distilled_skills_results: List[Dict[str, Any]] = []
+        if distilled_skills:
+            for s in distilled_skills:
+                s_name = s.get("name") or s.get("skill_name") or "unnamed-skill"
+                s_desc = s.get("description", "")
+                s_content = s.get("content") or s.get("skill_content") or ""
+                s_global = s.get("global_scope", global_skills)
+                s_ws = s.get("workspace_root", workspace_root)
+                if not dry_run:
+                    created_path = self.distill_skill(
+                        skill_name=s_name,
+                        description=s_desc,
+                        skill_content=s_content,
+                        global_scope=s_global,
+                        workspace_root=s_ws,
+                    )
+                    distilled_skills_results.append({
+                        "name": s_name,
+                        "description": s_desc,
+                        "path": str(created_path),
+                        "global_scope": s_global,
+                    })
+                else:
+                    dest_base = (
+                        (Path.home() / ".gemini" / "config" / "plugins" / "kortext" / "skills" / s_name)
+                        if s_global
+                        else ((Path(s_ws) if s_ws else KORTEXT_ROOT) / ".agents" / "skills" / s_name)
+                    )
+                    distilled_skills_results.append({
+                        "name": s_name,
+                        "description": s_desc,
+                        "path": str(dest_base / "SKILL.md"),
+                        "global_scope": s_global,
+                        "status": "dry_run",
+                    })
+            logger.info(f"[DreamEngine] Phase 5 complete: {len(distilled_skills_results)} skills distilled.")
+
+        # Dream Synthesis Report Generation
         duration = (datetime.now() - start_time).total_seconds()
         report_lines = [
             f"# Kortext Dream Report: {date_str}",
@@ -424,15 +637,47 @@ class DreamEngine:
             for dr in drift_audit["drifted"]:
                 report_lines.append(f"  - [DRIFTED] `{dr.get('symbol_name')}` in `{Path(dr.get('file_path', '')).name}`: rule '{dr.get('rule')[:60]}...'")
 
+        report_lines.append("\n## 5. Consolidated Macro Facts")
+        if consolidation_results:
+            for c in consolidation_results:
+                report_lines.append(f"- **Macro Fact:** {c.get('macro_fact')} (Superseded {c.get('superseded_count', 0)} facts)")
+        else:
+            report_lines.append("- No fact consolidations performed.")
+
+        report_lines.append("\n## 6. Distilled Agent Skills")
+        if distilled_skills_results:
+            for s in distilled_skills_results:
+                report_lines.append(f"- **Skill:** {s.get('name')} -> `{s.get('path')}`")
+        else:
+            report_lines.append("- No agent skills distilled.")
+
         report_md = "\n".join(report_lines)
 
         report_path_str = "dry-run"
+        reports_path_str = "dry-run"
         if not dry_run:
-            report_file = DREAMS_DIR / f"{date_str}-dream.md"
+            if workspace_root:
+                ws_journal = Path(workspace_root) / "journal"
+                target_dreams_dir = ws_journal / "dreams"
+                target_reports_dir = ws_journal / "reports"
+            else:
+                target_dreams_dir = DREAMS_DIR
+                target_reports_dir = REPORTS_DIR
+
+            target_dreams_dir.mkdir(parents=True, exist_ok=True)
+            target_reports_dir.mkdir(parents=True, exist_ok=True)
+
+            dream_file = target_dreams_dir / f"{date_str}-dream.md"
+            with open(dream_file, "w", encoding="utf-8") as f:
+                f.write(report_md)
+            report_path_str = str(dream_file)
+
+            report_file = target_reports_dir / f"{date_str}-dream.md"
             with open(report_file, "w", encoding="utf-8") as f:
                 f.write(report_md)
-            report_path_str = str(report_file)
-            logger.info(f"[DreamEngine] Dream Report persisted to: {report_file}")
+            reports_path_str = str(report_file)
+
+            logger.info(f"[DreamEngine] Dream Report persisted to: {dream_file}")
 
         return {
             "status": "ok",
@@ -445,8 +690,13 @@ class DreamEngine:
             "invariants_count": len(active_invariants),
             "invariants_inducted": len(invariant_results.get("inducted", [])),
             "invariant_drift": drift_audit,
+            "consolidations": consolidation_results,
+            "consolidated_facts_count": len(consolidation_results),
+            "distilled_skills": distilled_skills_results,
+            "distilled_skills_count": len(distilled_skills_results),
             "markdown_report": report_md,
             "dream_report_path": report_path_str,
+            "reports_path": reports_path_str,
             "invariants_path": str(INVARIANTS_FILE),
             "pruned_facts": {
                 "active_facts_remaining": prune_res.get("active_count", 0),

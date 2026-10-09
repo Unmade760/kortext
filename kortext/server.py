@@ -381,8 +381,11 @@ async def record_system_outcome(
 async def trigger_dream_mode(
     project: str = "kortext",
     purge_stale: bool = False,
-    invariants: Optional[list[dict[str, str]]] = None,
-    stale_fact_names: Optional[list[str]] = None,
+    invariants: Optional[List[Dict[str, str]]] = None,
+    stale_fact_names: Optional[List[str]] = None,
+    consolidations: Optional[List[Dict[str, Any]]] = None,
+    distilled_skills: Optional[List[Dict[str, Any]]] = None,
+    global_skills: bool = False,
 ) -> str:
     """
     Args:
@@ -390,16 +393,22 @@ async def trigger_dream_mode(
         purge_stale:      If True, physically removes superseded facts after archiving. Default False (soft-prune).
         invariants:       Optional list of newly induced architectural invariants: [{'domain': '...', 'rule': '...', 'rationale': '...'}].
         stale_fact_names: Optional list of older fact names to supersede during pruning.
+        consolidations:   Optional list of macro-truth facts to consolidate [{'macro_fact': '...', 'superseded_fact_ids': [...]}]
+        distilled_skills: Optional list of skills to distill into SKILL.md [{'name': '...', 'description': '...', 'content': '...'}]
+        global_skills:    Whether to persist distilled skills globally to ~/.gemini/config/plugins/kortext/skills/ instead of .agents/skills/
     Returns:
         Structured summary of the dream consolidation report.
     """
     from kortext.dream import KortextDreamEngine
-    engine = KortextDreamEngine()
-    report = await engine.dream(
+    dream_engine = KortextDreamEngine()
+    report = await dream_engine.run_dream_cycle(
         project=project,
         purge_stale=purge_stale,
         invariants=invariants,
         stale_fact_names=stale_fact_names,
+        consolidations=consolidations,
+        distilled_skills=distilled_skills,
+        global_skills=global_skills,
     )
     return (
         f"🌙 Dream Mode completed for project '{project}':\n"
@@ -408,6 +417,8 @@ async def trigger_dream_mode(
         f"- Contradictions Flagged: {len(report['pruned_facts']['contradictions_flagged'])}\n"
         f"- Subsystem Clusters Found: {report['subsystem_clusters']}\n"
         f"- Invariants Active: {report['invariants_inducted']}\n"
+        f"- Macro Facts Consolidated: {report.get('consolidated_facts_count', 0)}\n"
+        f"- Skills Distilled: {report.get('distilled_skills_count', 0)}\n"
         f"- Dream Report Written: {report['dream_report_path']}\n"
         f"- Invariants Log: {report['invariants_path']}"
     )

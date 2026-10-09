@@ -13,6 +13,7 @@ data/
 journal/20*.md
 journal/archive/
 journal/dreams/
+journal/reports/
 journal/handoffs/
 
 # SCIP Indexes
