@@ -10,7 +10,7 @@
 **Rationale:** Single-mode retrieval (pure vectors or pure keywords) lacks precision and recall balance; hybrid fusion with RRF mitigates sparse vector noise, while cross-encoder reranking ensures high-fidelity context selection across federated graph and vector stores.
 
 ### Invariant [SYMBOLIC MEMORY & GRAPH INTEGRITY]
-**Rule:** Codebase topology must be maintained in a separate, deterministic FalkorDB symbol graph (cerebrum_symbols) derived from exact Tree-sitter AST parsing, isolated from episodic decision logs to prevent graph pollution by built-in language constructs.
+**Rule:** Codebase topology must be maintained in a separate, deterministic FalkorDB symbol graph (kortext_symbols) derived from exact Tree-sitter AST parsing, isolated from episodic decision logs to prevent graph pollution by built-in language constructs.
 **Rationale:** Mixing external library calls (e.g., len, print) with project-specific logic corrupts architectural impact analysis; separating deterministic symbol graphs from episodic memory ensures accurate dependency tracing and clean visualization.
 
 ### Invariant [SYSTEM STABILITY & PORTABILITY]
