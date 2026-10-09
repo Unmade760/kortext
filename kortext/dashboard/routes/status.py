@@ -194,5 +194,22 @@ async def get_telemetry():
             "weibull_beta": 0.85,
             "weibull_lambda": 168.0,
             "active_invariants": 14,
+            "memory_tiers": {
+                "tier_0": {"name": "Tree-sitter AST B-Tree", "status": "Active", "type": "Deterministic AST"},
+                "tier_1": {"name": "Qdrant Vectors", "status": "Active", "embedder": "FastEmbed BAAI/bge-small-en-v1.5 (fallback)"},
+                "tier_2": {"name": "FalkorDB Episodic Graph", "status": "Active" if falkor_ok else "Degraded", "type": "Temporal & Causal"},
+                "tier_3": {"name": "Federated Hybrid Engine", "status": "Active", "type": "Dense + Sparse + Graph"},
+                "tier_4": {"name": "Cognitive Dream Mode", "status": "Active", "type": "Weibull + Louvain Subsystems"}
+            },
+            "nextgen_hooks": [
+                "FastMCPLockGuard",
+                "AntiRipgrepGate",
+                "CommandSafetyGuard",
+                "SecretLeakGuard",
+                "IncrementalASTSync",
+                "SubstrateHealthProbe",
+                "GroundTruthTestGate",
+                "OutcomePersistenceGuard"
+            ]
         }
     }

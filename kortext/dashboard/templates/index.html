@@ -25,8 +25,8 @@
 
   <!-- Header -->
   <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center space-x-3 shrink-0">
         <span class="text-2xl">🧠</span>
         <div>
           <h1 class="font-bold text-lg text-slate-100 tracking-tight flex items-center gap-2">
@@ -34,15 +34,24 @@
           </h1>
         </div>
       </div>
+
+      <!-- Center: Active Project Filter Selector -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400 font-mono hidden sm:inline">Scope:</span>
+        <select id="select-active-project" onchange="setActiveProject(this.value)" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 font-mono font-medium focus:outline-none focus:border-indigo-500 cursor-pointer">
+          <option value="all">🌐 All Projects</option>
+          <option value="kortext" selected>📁 Project: kortext</option>
+        </select>
+      </div>
       
       <!-- Quick Status Pills -->
-      <div id="quick-status" class="hidden md:flex items-center space-x-3 text-xs font-mono">
+      <div id="quick-status" class="hidden md:flex items-center space-x-2 text-xs font-mono">
         <span class="text-slate-400">Services:</span>
-        <span id="pill-qdrant" class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">Qdrant ...</span>
-        <span id="pill-falkordb" class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">FalkorDB ...</span>
-        <span id="pill-omlx" class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">oMLX ...</span>
-        <span id="pill-watcher" class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">Watcher ...</span>
-        <button onclick="refreshAll()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Refresh">
+        <span id="pill-qdrant" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Qdrant ...</span>
+        <span id="pill-falkordb" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">FalkorDB ...</span>
+        <span id="pill-omlx" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">oMLX ...</span>
+        <span id="pill-watcher" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Watcher ...</span>
+        <button onclick="refreshAll()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Refresh All Data">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i>
         </button>
       </div>
@@ -62,22 +71,22 @@
         <i data-lucide="check-square" class="w-4 h-4 text-emerald-400"></i> Task DAG Tracker
       </button>
       <button onclick="setTab('journal')" id="tab-btn-journal" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="book-open" class="w-4 h-4"></i> Decision Journal
+        <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i> Decision Journal
       </button>
       <button onclick="setTab('retrieval')" id="tab-btn-retrieval" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="search" class="w-4 h-4"></i> Retrieval Lab
+        <i data-lucide="search" class="w-4 h-4 text-sky-400"></i> Retrieval Lab
       </button>
       <button onclick="setTab('quarantine')" id="tab-btn-quarantine" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
         <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i> MINJA Quarantine
       </button>
       <button onclick="setTab('collections')" id="tab-btn-collections" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="database" class="w-4 h-4"></i> Collections
+        <i data-lucide="database" class="w-4 h-4 text-purple-400"></i> Collections
       </button>
       <button onclick="setTab('health')" id="tab-btn-health" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="activity" class="w-4 h-4"></i> Topology & Health
+        <i data-lucide="activity" class="w-4 h-4 text-teal-400"></i> Topology & Health
       </button>
       <button onclick="setTab('links')" id="tab-btn-links" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="external-link" class="w-4 h-4"></i> Quick Access
+        <i data-lucide="external-link" class="w-4 h-4 text-slate-400"></i> Quick Access
       </button>
     </div>
   </nav>
@@ -92,7 +101,7 @@
           <h2 class="text-lg font-semibold text-white">FalkorDB Temporal & Symbol Knowledge Graph</h2>
           <p class="text-sm text-slate-400">Interactive property graph visualization for episodic memory and deterministic code symbols.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
           <!-- Graph Source Selector -->
           <select id="select-graph-type" onchange="loadGraph()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
             <option value="episodic">Episodic Memory (kortext)</option>
@@ -105,7 +114,7 @@
             <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
           </div>
 
-          <!-- Macro Subsystems Clustering Toggle (Solves Hairballing) -->
+          <!-- Macro Subsystems Clustering Toggle -->
           <button id="btn-toggle-clustering" onclick="toggleMacroClustering()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-900/60 transition" title="Toggle Subsystem Macro-Clustering (Groups nodes into high-level modules to prevent hairballing)">
             <i data-lucide="package" class="w-3.5 h-3.5"></i>
             <span id="label-clustering-status">Macro View</span>
@@ -122,7 +131,7 @@
             </select>
           </div>
 
-          <!-- Layout Engine Selector (Physics vs Directed Flow) -->
+          <!-- Layout Engine Selector -->
           <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono" title="Switch between Organic Force Physics and Hierarchical DAG Flow">
             <span class="text-slate-400">Layout:</span>
             <select id="select-layout-mode" onchange="handleLayoutModeChange(this.value)" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
@@ -132,7 +141,7 @@
             </select>
           </div>
 
-          <!-- View Mode Toggle -->
+          <!-- Clean View Mode Toggle -->
           <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono">
             <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 select-none">
               <input type="checkbox" id="toggle-hide-mentions" checked onchange="handleToggleClean()" class="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500">
@@ -226,7 +235,7 @@
         <!-- Right: Companion Panel (Telemetry + Relationship Palette & Exact Inspector) -->
         <div class="lg:col-span-4 xl:col-span-3 space-y-4">
           
-          <!-- 1. System Telemetry Card (Moved OUTSIDE canvas) -->
+          <!-- 1. System Telemetry Card -->
           <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-2.5">
             <div class="flex items-center justify-between border-b border-slate-800 pb-2">
               <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 font-mono">
@@ -254,7 +263,7 @@
             </div>
           </div>
 
-          <!-- 2. Relationship Filter & Color Legend (Placed outside canvas, convenient to inspect) -->
+          <!-- 2. Relationship Filter & Color Legend -->
           <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-3">
             <div class="flex items-center justify-between border-b border-slate-800 pb-2">
               <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-mono">
@@ -277,7 +286,7 @@
 
             <!-- Interactive Relationship Types Checklist -->
             <div id="rel-filter-list" class="space-y-1.5 max-h-56 overflow-y-auto pr-1 text-[11px] font-mono">
-              <!-- Dynamically populated with color lines, labels, and toggles -->
+              <!-- Dynamically populated by graph_inspector.js -->
             </div>
           </div>
 
@@ -382,7 +391,6 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Vis Network Graph Container -->
         <div class="lg:col-span-2 relative cyber-canvas">
-          <!-- Floating Canvas Action HUD -->
           <div class="canvas-hud-toolbar bottom-3 right-3 !top-auto !left-auto">
             <button onclick="zoomBlastGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
             <button onclick="zoomBlastGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
@@ -391,7 +399,6 @@
           </div>
 
           <div id="blast-network-graph"></div>
-          <!-- Canvas Legend Overlay -->
           <div class="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 rounded-lg p-2.5 text-[10px] font-mono space-y-1.5 text-slate-300 pointer-events-none">
             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 🎯 Target (Hop 0)</div>
             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span> 💥 Direct Dependents (Hop 1 - High Risk)</div>
@@ -413,14 +420,183 @@
       </div>
     </div>
 
-    <!-- 2. Decision Journal Tab -->
+    <!-- 3. Task DAG Tracker Tab -->
+    <div id="tab-content-tasks" class="tab-content hidden space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i data-lucide="check-square" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG State Machine
+          </h2>
+          <p class="text-sm text-slate-400">Graph-backed task state machine with strict dependency gating, retry loops, and Kanban flow.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- 3-Way View Switcher -->
+          <div class="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl gap-1">
+            <button id="btn-view-kanban" onclick="setTaskViewMode('kanban')" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium text-xs shadow flex items-center gap-1.5 transition">
+              <i data-lucide="trello" class="w-3.5 h-3.5"></i> Kanban
+            </button>
+            <button id="btn-view-dag" onclick="setTaskViewMode('dag')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-1.5 transition">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5 text-indigo-400"></i> DAG Topology
+            </button>
+            <button id="btn-view-list" onclick="setTaskViewMode('list')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-1.5 transition">
+              <i data-lucide="list" class="w-3.5 h-3.5 text-slate-400"></i> Manifest
+            </button>
+          </div>
+
+          <button onclick="openCreateTaskModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-md">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Task
+          </button>
+          <button onclick="loadTasks()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Task Stats Bar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-xl">
+          <div class="text-xs font-mono text-slate-400 uppercase font-semibold">Ready For Execution</div>
+          <div class="text-2xl font-bold text-sky-400 mt-1 font-mono" id="stat-ready-tasks">0</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-xl">
+          <div class="text-xs font-mono text-slate-400 uppercase font-semibold">In Progress</div>
+          <div class="text-2xl font-bold text-amber-400 mt-1 font-mono" id="stat-progress-tasks">0</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-xl">
+          <div class="text-xs font-mono text-slate-400 uppercase font-semibold">Completed</div>
+          <div class="text-2xl font-bold text-emerald-400 mt-1 font-mono" id="stat-completed-tasks">0</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-xl">
+          <div class="text-xs font-mono text-slate-400 uppercase font-semibold">Blocked / Failed</div>
+          <div class="text-2xl font-bold text-rose-400 mt-1 font-mono" id="stat-failed-tasks">0</div>
+        </div>
+      </div>
+
+      <!-- View 1: Responsive Horizontal Kanban Board -->
+      <div id="kanban-board-container" class="kanban-board">
+        <!-- Ready Column -->
+        <div class="kanban-column">
+          <div class="kanban-column-header">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              <span>Ready for Execution</span>
+            </div>
+            <span id="count-ready" class="text-xs font-mono bg-sky-950/80 text-sky-300 border border-sky-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
+          </div>
+          <div id="kanban-col-ready" data-status="ready" class="kanban-cards-container kanban-column-drop">
+            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+          </div>
+        </div>
+
+        <!-- In Progress Column -->
+        <div class="kanban-column">
+          <div class="kanban-column-header">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+              <span>In Progress</span>
+            </div>
+            <span id="count-in_progress" class="text-xs font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
+          </div>
+          <div id="kanban-col-in_progress" data-status="in_progress" class="kanban-cards-container kanban-column-drop">
+            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Pending / Blocked Column -->
+        <div class="kanban-column">
+          <div class="kanban-column-header">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+              <span>Pending / Blocked</span>
+            </div>
+            <span id="count-pending" class="text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full font-bold">0</span>
+          </div>
+          <div id="kanban-col-pending" data-status="pending" class="kanban-cards-container kanban-column-drop">
+            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Completed Column -->
+        <div class="kanban-column">
+          <div class="kanban-column-header">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span>Completed</span>
+            </div>
+            <span id="count-completed" class="text-xs font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
+          </div>
+          <div id="kanban-col-completed" data-status="completed" class="kanban-cards-container kanban-column-drop">
+            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Failed / Tripped Circuit Breaker Column -->
+        <div class="kanban-column">
+          <div class="kanban-column-header">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <span>Failed / Circuit Tripped</span>
+            </div>
+            <span id="count-failed" class="text-xs font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
+          </div>
+          <div id="kanban-col-failed" data-status="failed" class="kanban-cards-container kanban-column-drop">
+            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 2: Vis.js Task DAG Canvas -->
+      <div id="task-dag-canvas-container" class="hidden relative cyber-canvas">
+        <div class="p-3 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-between text-xs font-mono text-slate-400">
+          <span class="flex items-center gap-2"><i data-lucide="git-branch" class="w-4 h-4 text-indigo-400"></i> Dependency DAG Topology</span>
+          <span id="task-graph-status" class="text-emerald-400 font-semibold">PHYSICS: HARD-FROZEN</span>
+        </div>
+
+        <!-- Floating Canvas Action HUD -->
+        <div class="canvas-hud-toolbar bottom-3 right-3 !top-auto !left-auto">
+          <button onclick="zoomTaskGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
+          <button onclick="zoomTaskGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
+          <button onclick="fitTaskGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
+          <button onclick="toggleTaskFreeze()" id="btn-task-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
+        </div>
+
+        <div id="task-network-graph"></div>
+      </div>
+
+      <!-- View 3: Tasks Manifest List Table -->
+      <div id="tasks-manifest-container" class="hidden space-y-3">
+        <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider font-mono">Task Manifest</h3>
+        <div id="tasks-container" class="space-y-2">
+          <!-- Populated by loadTasks() -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Decision Journal Tab -->
     <div id="tab-content-journal" class="tab-content hidden space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold text-white">Decision Journal & Audit Trail</h2>
-          <p class="text-sm text-slate-400">Immutable markdown records persisted in <code class="text-indigo-400 font-mono">journal/</code>.</p>
+          <p class="text-sm text-slate-400">Immutable markdown records persisted in <code class="text-indigo-400 font-mono">journal/</code> with 8-category taxonomy.</p>
         </div>
-        <input type="text" id="journal-search" oninput="filterJournal()" placeholder="Filter by keyword or tag..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 w-64">
+        <div class="relative">
+          <input type="text" id="journal-search" oninput="filterJournal()" placeholder="Filter by keyword or tag..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 w-64">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+        </div>
+      </div>
+
+      <!-- 8-Category Taxonomy Filter Chips -->
+      <div class="flex flex-wrap items-center gap-2 pt-1">
+        <span class="text-xs font-mono text-slate-400 mr-1">Categories:</span>
+        <button onclick="filterJournalByCategory('all')" data-cat="all" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono font-semibold bg-indigo-600 text-white shadow-md transition">All</button>
+        <button onclick="filterJournalByCategory('decision')" data-cat="decision" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Decision (ADR)</button>
+        <button onclick="filterJournalByCategory('roadmap')" data-cat="roadmap" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Roadmap</button>
+        <button onclick="filterJournalByCategory('implementation')" data-cat="implementation" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Implementation</button>
+        <button onclick="filterJournalByCategory('experiment')" data-cat="experiment" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Experiment</button>
+        <button onclick="filterJournalByCategory('benchmark')" data-cat="benchmark" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Benchmark</button>
+        <button onclick="filterJournalByCategory('investigation')" data-cat="investigation" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Investigation</button>
+        <button onclick="filterJournalByCategory('research')" data-cat="research" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Research</button>
+        <button onclick="filterJournalByCategory('report')" data-cat="report" class="journal-cat-chip px-3 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-300 hover:text-white border border-slate-700 transition">Report</button>
       </div>
 
       <div id="journal-timeline" class="space-y-4">
@@ -428,7 +604,7 @@
       </div>
     </div>
 
-    <!-- 3. Retrieval Lab Tab -->
+    <!-- 5. Retrieval Lab Tab -->
     <div id="tab-content-retrieval" class="tab-content hidden space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
@@ -504,7 +680,35 @@
       </div>
     </div>
 
-    <!-- 4. Collections Manager Tab -->
+    <!-- 6. MINJA Quarantine Tab -->
+    <div id="tab-content-quarantine" class="tab-content hidden space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-5 h-5 text-rose-400"></i> MINJA Adversarial Injection Forensics
+          </h2>
+          <p class="text-sm text-slate-400">Real-time quarantine log of blocked prompt injection attempts and Tier 3 privilege escalations.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="clearQuarantine()" id="clear-quarantine-btn" class="bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 text-xs font-mono px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear Quarantine</button>
+          <button onclick="loadQuarantine()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Quarantine
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div class="text-sm font-semibold text-slate-300">Quarantined Injections</div>
+          <div class="text-xs font-mono text-rose-400" id="quarantine-count-label">0 Violations Detected</div>
+        </div>
+        <div id="quarantine-list" class="space-y-3 text-xs">
+          <!-- Populated by loadQuarantine() -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Collections Manager Tab -->
     <div id="tab-content-collections" class="tab-content hidden space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -547,11 +751,11 @@
       </div>
     </div>
 
-    <!-- 5. Topology & Health Tab -->
+    <!-- 8. Topology & Health Tab -->
     <div id="tab-content-health" class="tab-content hidden space-y-4">
       <div>
         <h2 class="text-lg font-semibold text-white">Autonomous Subsystems & Health</h2>
-        <p class="text-sm text-slate-400">Real-time status of Kortext file watcher, chunk embedding cache, and SCIP compiler type relations.</p>
+        <p class="text-sm text-slate-400">Real-time status of Kortext file watcher, chunk embedding cache, 5-tier memory, and next-gen hooks.</p>
       </div>
 
       <!-- Autonomous Subsystems (Watcher, Cache, SCIP) -->
@@ -620,9 +824,29 @@
           </div>
         </div>
       </div>
+
+      <!-- 5-Tier Memory Grid -->
+      <div class="pt-3 space-y-2">
+        <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i> Kortext 5-Tier Memory Architecture Status
+        </h3>
+        <div id="memory-tiers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <!-- Populated by health.js renderMemoryTiersUI -->
+        </div>
+      </div>
+
+      <!-- Next-Gen Hooks Interceptors -->
+      <div class="pt-3 space-y-2">
+        <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i> Next-Gen Interceptor Pipelines & Guardrails
+        </h3>
+        <div id="hooks-status-list" class="flex flex-wrap gap-2">
+          <!-- Populated by health.js renderHooksStatusUI -->
+        </div>
+      </div>
     </div>
 
-    <!-- 6. Quick Access Tab -->
+    <!-- 9. Quick Access Tab -->
     <div id="tab-content-links" class="tab-content hidden space-y-4">
       <div>
         <h2 class="text-lg font-semibold text-white">Quick Access Portals</h2>
@@ -658,100 +882,6 @@
       </div>
     </div>
 
-    <!-- 7. Task DAG Tracker Tab -->
-    <div id="tab-content-tasks" class="tab-content hidden space-y-4">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="check-square" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG State Machine
-          </h2>
-          <p class="text-sm text-slate-400">Graph-backed task state machine in FalkorDB with strict dependency gating and retry loops.</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <button onclick="openCreateTaskModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-md">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Task
-          </button>
-          <button onclick="loadTasks()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Tasks
-          </button>
-        </div>
-      </div>
-
-      <!-- Task Stats Bar -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div class="text-xs font-mono text-slate-500 uppercase">Ready For Execution</div>
-          <div class="text-2xl font-bold text-sky-400 mt-1" id="stat-ready-tasks">0</div>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div class="text-xs font-mono text-slate-500 uppercase">In Progress</div>
-          <div class="text-2xl font-bold text-amber-400 mt-1" id="stat-progress-tasks">0</div>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div class="text-xs font-mono text-slate-500 uppercase">Completed</div>
-          <div class="text-2xl font-bold text-emerald-400 mt-1" id="stat-completed-tasks">0</div>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div class="text-xs font-mono text-slate-500 uppercase">Blocked / Failed</div>
-          <div class="text-2xl font-bold text-rose-400 mt-1" id="stat-failed-tasks">0</div>
-        </div>
-      </div>
-
-      <!-- Vis.js Task DAG Canvas -->
-      <div class="relative cyber-canvas">
-        <div class="p-3 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-between text-xs font-mono text-slate-400">
-          <span class="flex items-center gap-2"><i data-lucide="git-branch" class="w-4 h-4 text-indigo-400"></i> Dependency DAG Topology</span>
-          <span id="task-graph-status" class="text-emerald-400 font-semibold">PHYSICS: HARD-FROZEN</span>
-        </div>
-
-        <!-- Floating Canvas Action HUD -->
-        <div class="canvas-hud-toolbar bottom-3 right-3 !top-auto !left-auto">
-          <button onclick="zoomTaskGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
-          <button onclick="zoomTaskGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
-          <button onclick="fitTaskGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
-          <button onclick="toggleTaskFreeze()" id="btn-task-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
-        </div>
-
-        <div id="task-network-graph"></div>
-      </div>
-
-      <!-- Tasks List Table / Grid -->
-      <div class="space-y-3">
-        <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider font-mono">Task Manifest</h3>
-        <div id="tasks-container" class="space-y-2">
-          <!-- Populated by loadTasks() -->
-        </div>
-      </div>
-    </div>
-
-    <!-- 8. MINJA Quarantine Tab -->
-    <div id="tab-content-quarantine" class="tab-content hidden space-y-4">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="shield-alert" class="w-5 h-5 text-rose-400"></i> MINJA Adversarial Injection Forensics
-          </h2>
-          <p class="text-sm text-slate-400">Real-time quarantine log of blocked prompt injection attempts and Tier 3 privilege escalations.</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="clearQuarantine()" id="clear-quarantine-btn" class="bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 text-xs font-mono px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear Quarantine</button>
-          <button onclick="loadQuarantine()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Quarantine
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-          <div class="text-sm font-semibold text-slate-300">Quarantined Injections</div>
-          <div class="text-xs font-mono text-rose-400" id="quarantine-count-label">0 Violations Detected</div>
-        </div>
-        <div id="quarantine-list" class="space-y-3 text-xs">
-          <!-- Populated by loadQuarantine() -->
-        </div>
-      </div>
-    </div>
-
   </main>
 
   <!-- Footer -->
@@ -759,7 +889,8 @@
     Kortext Knowledge OS • Local Vector & Graph Substrate
   </footer>
 
-  <script src="/static/js/dashboard.js"></script>
+  <!-- Application Bootstrap: Clean ES Modules -->
+  <script type="module" src="/static/js/main.js"></script>
 
   <!-- Dream Mode Modal -->
   <div id="dream-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -776,12 +907,13 @@
       </div>
 
       <div class="space-y-3 text-xs text-slate-300">
-        <p>Dream Mode executes 4 offline consolidation phases:</p>
+        <p>Dream Mode executes 5 offline consolidation phases:</p>
         <ul class="list-disc list-inside space-y-1 text-slate-400 font-mono text-[11px]">
-          <li>Phase 1: Synaptic Pruning (resolves contradictions & archives stale facts)</li>
+          <li>Phase 1: Synaptic Pruning (resolves contradictions & archives stale facts via Weibull decay)</li>
           <li>Phase 2: Louvain Subsystem Community Clustering via NetworkX</li>
           <li>Phase 3: High-Density Invariant Induction across architectural decisions</li>
-          <li>Phase 4: Generates dated Dream Report in <code class="text-purple-300">journal/dreams/</code></li>
+          <li>Phase 4: Fact Consolidation (distills micro-facts into macro-truths)</li>
+          <li>Phase 5: Skill Distillation (synthesizes proven workflows into SKILL.md)</li>
         </ul>
 
         <div class="bg-slate-950/60 border border-slate-800 p-3 rounded-xl space-y-2">
@@ -826,7 +958,7 @@
           <input type="text" id="task-input-title" placeholder="e.g. Implement FastMCP Tool 10" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
         </div>
         <div>
-          <label class="block text-slate-400 font-medium mb-1">Description & Criteria</label>
+          <label class="block text-slate-400 font-medium mb-1">Description & Acceptance Criteria</label>
           <textarea id="task-input-desc" rows="3" placeholder="Task acceptance criteria..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"></textarea>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -836,12 +968,18 @@
           </div>
           <div>
             <label class="block text-slate-400 font-medium mb-1">Assigned Subagent</label>
-            <input type="text" id="task-input-assign" value="primary" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+            <input type="text" id="task-input-assign" value="kortext-task-runner" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
           </div>
         </div>
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">Depends On (Task IDs, comma-separated)</label>
-          <input type="text" id="task-input-deps" placeholder="e.g. task_abc1234, task_def5678" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 font-medium mb-1">Project Scope</label>
+            <input type="text" id="task-input-project" value="kortext" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-slate-400 font-medium mb-1">Depends On (IDs)</label>
+            <input type="text" id="task-input-deps" placeholder="task_abc, task_def" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+          </div>
         </div>
       </div>
       <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
@@ -852,5 +990,22 @@
       </div>
     </div>
   </div>
+
+  <!-- Markdown Viewer Modal -->
+  <div id="modal-markdown-viewer" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 id="md-viewer-title" class="font-bold text-white text-base truncate pr-4">Journal Entry</h3>
+        <button onclick="closeModal('modal-markdown-viewer')" class="text-slate-400 hover:text-white p-1">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto pr-1">
+        <pre id="md-viewer-body" class="p-4 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 font-mono text-xs overflow-x-auto whitespace-pre-wrap"></pre>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button onclick="closeModal('modal-markdown-viewer')" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium">Close</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

@@ -1,82 +1,175 @@
-    /* Premium Futuristic Cyber Graph Canvas */
-    .cyber-canvas {
-      width: 100%;
-      background-color: #070913 !important;
-      background-image: 
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.14), transparent 70%),
-        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03), transparent 60%),
-        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px) !important;
-      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px !important;
-      border-radius: 1rem;
-      border: 1px solid rgba(148, 163, 184, 0.16) !important;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 0 50px rgba(2, 6, 23, 0.95);
-      position: relative;
-      overflow: hidden;
-    }
-    #network-graph {
-      width: 100%;
-      height: 660px;
-    }
-    #blast-network-graph {
-      width: 100%;
-      height: 580px;
-    }
-    #task-network-graph {
-      width: 100%;
-      height: 420px;
-    }
+/* Premium Futuristic Cyber Graph Canvas */
+.cyber-canvas {
+  width: 100%;
+  background-color: #070913 !important;
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.14), transparent 70%),
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03), transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px) !important;
+  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px !important;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 0 50px rgba(2, 6, 23, 0.95);
+  position: relative;
+  overflow: hidden;
+}
+#network-graph {
+  width: 100%;
+  height: 660px;
+}
+#blast-network-graph {
+  width: 100%;
+  height: 580px;
+}
+#task-network-graph {
+  width: 100%;
+  height: 480px;
+}
 
-    /* Glassmorphic Vis.js Tooltips */
-    div.vis-tooltip {
-      position: absolute;
-      visibility: hidden;
-      padding: 10px 14px !important;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-      font-size: 11px !important;
-      color: #f8fafc !important;
-      background: rgba(15, 23, 42, 0.96) !important;
-      border: 1px solid rgba(148, 163, 184, 0.25) !important;
-      border-radius: 10px !important;
-      box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.8), 0 0 20px rgba(99, 102, 241, 0.25) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      pointer-events: none !important;
-      z-index: 1000 !important;
-      max-width: 340px !important;
-      line-height: 1.5 !important;
-    }
+/* Glassmorphic Vis.js Tooltips with WCAG AA High-Contrast */
+div.vis-tooltip {
+  position: absolute;
+  visibility: hidden;
+  padding: 10px 14px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 11px !important;
+  color: #f8fafc !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.8), 0 0 20px rgba(99, 102, 241, 0.25) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  pointer-events: none !important;
+  z-index: 1000 !important;
+  max-width: 360px !important;
+  line-height: 1.5 !important;
+}
 
-    /* Floating Canvas Toolbar Controls */
-    .canvas-hud-toolbar {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      z-index: 5;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      padding: 5px 8px;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-    }
-    .hud-btn {
-      padding: 6px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-family: ui-monospace, monospace;
-      color: #94a3b8;
-      transition: all 0.15s ease;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
-    }
-    .hud-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ffffff;
-    }
+/* Floating Canvas Toolbar Controls */
+.canvas-hud-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 5px 8px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+.hud-btn {
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: #cbd5e1;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.hud-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* Responsive Horizontal Kanban Board */
+.kanban-board {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1.25rem;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kanban-column {
+  min-width: 290px;
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid #334155;
+  border-radius: 0.875rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  max-height: calc(100vh - 270px);
+}
+
+.kanban-column-header {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.85);
+  border-top-left-radius: 0.875rem;
+  border-top-right-radius: 0.875rem;
+}
+
+.kanban-cards-container {
+  padding: 0.75rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 140px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.kanban-card {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  padding: 0.875rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.kanban-card:hover {
+  border-color: #64748b;
+  transform: translateY(-1.5px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+/* Accessible Smooth Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #090d16;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Markdown Viewer Modal Typography */
+#md-viewer-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}

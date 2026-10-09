@@ -430,3 +430,93 @@ def test_action_create_collection_fallback_locked_error(tmp_path, monkeypatch):
         assert "locked by sole custodian daemon" in data.get("message", "")
         assert "Invariant 3" in data.get("message", "")
 
+
+def test_modular_frontend_assets_and_template_structure():
+    """Verify that index.html mounts ES modules, all 9 tabs, Kanban, and companion panel."""
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # ES modules script entry
+    assert '<script type="module" src="/static/js/main.js"></script>' in html
+
+    # All 9 Navigation Tabs preserved
+    expected_tabs = [
+        "tab-btn-graph",
+        "tab-btn-blast",
+        "tab-btn-tasks",
+        "tab-btn-journal",
+        "tab-btn-retrieval",
+        "tab-btn-quarantine",
+        "tab-btn-collections",
+        "tab-btn-health",
+        "tab-btn-links",
+    ]
+    for tab_id in expected_tabs:
+        assert f'id="{tab_id}"' in html, f"Missing tab button: {tab_id}"
+
+    # Companion panel preserved
+    assert 'id="rel-filter-list"' in html
+    assert 'id="inspector-content"' in html
+    assert 'id="hud-badge-status"' in html
+
+    # Task DAG 3-way view switcher & Kanban containers
+    assert 'id="btn-view-kanban"' in html
+    assert 'id="btn-view-dag"' in html
+    assert 'id="btn-view-list"' in html
+    assert 'id="kanban-board-container"' in html
+    assert 'id="kanban-col-ready"' in html
+    assert 'id="kanban-col-in_progress"' in html
+    assert 'id="kanban-col-pending"' in html
+    assert 'id="kanban-col-completed"' in html
+    assert 'id="kanban-col-failed"' in html
+
+    # Journal 8-category taxonomy filter chips
+    for cat in ["decision", "roadmap", "implementation", "experiment", "benchmark", "investigation", "research", "report"]:
+        assert f'data-cat="{cat}"' in html, f"Missing journal category chip: {cat}"
+
+    # Topology & Health: 5-Tier Memory Grid & Next-Gen Hooks
+    assert 'id="memory-tiers-grid"' in html
+    assert 'id="hooks-status-list"' in html
+
+    # Markdown preview modal
+    assert 'id="modal-markdown-viewer"' in html
+
+    # Verify all ES module files exist on disk and obey maintainability line ceilings (<800 lines)
+    js_dir = Path(__file__).resolve().parent.parent / "kortext" / "dashboard" / "static" / "js"
+    assert (js_dir / "main.js").is_file()
+    modules_dir = js_dir / "modules"
+    assert modules_dir.is_dir()
+
+    expected_modules = [
+        "api.js", "blast.js", "dream.js", "graph.js", "graph_inspector.js",
+        "health.js", "journal.js", "retrieval.js", "state.js", "tasks.js", "ui.js"
+    ]
+    for mod_name in expected_modules:
+        mod_file = modules_dir / mod_name
+        assert mod_file.is_file(), f"Missing module: {mod_name}"
+        line_count = len(mod_file.read_text(encoding="utf-8").splitlines())
+        assert line_count < 800, f"Module {mod_name} exceeds 800-line ceiling ({line_count} lines)"
+
+
+def test_telemetry_memory_tiers_and_hooks():
+    """Verify telemetry returns 5-tier memory status and next-gen hooks."""
+    resp = client.get("/api/telemetry")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "telemetry" in data
+    telem = data["telemetry"]
+
+    assert "memory_tiers" in telem
+    tiers = telem["memory_tiers"]
+    assert "tier_0" in tiers
+    assert "tier_1" in tiers
+    assert "tier_2" in tiers
+    assert "tier_3" in tiers
+    assert "tier_4" in tiers
+
+    assert "nextgen_hooks" in telem
+    assert isinstance(telem["nextgen_hooks"], list)
+    assert len(telem["nextgen_hooks"]) >= 5
+
+

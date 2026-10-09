@@ -145,6 +145,16 @@ def _infer_cluster(
         return "tags", "🏷️ Tags & Categories"
     if group == "episodic":
         return "episodic", "💡 Episodic Decisions"
+    if group == "task":
+        return "tasks", "📋 Task DAG"
+    if group == "project":
+        return "projects", "📁 Projects"
+    if group in ("decision", "adr"):
+        return "decisions", "⚖️ Decisions & ADRs"
+    if group in ("roadmap", "milestone"):
+        return "roadmap", "🗺️ Roadmaps"
+    if group == "subsystem":
+        return "subsystems", "🧩 Subsystems"
     if group == "concept":
         return "concepts", "💎 Concepts"
 
@@ -251,21 +261,46 @@ def build_graph_view(
                             edges_list.append(_make_vis_edge(src, dst, rel))
 
         else:
-            nodes_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (n) RETURN n.name, labels(n)")
+            nodes_res = r.execute_command(
+                "GRAPH.QUERY", target_db,
+                "MATCH (n) RETURN coalesce(n.name, n.title, n.id, n.path, 'Unnamed'), labels(n), coalesce(n.category, n.status, '')"
+            )
             if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
                 for row in nodes_res[1]:
                     if len(row) >= 2:
                         name = str(row[0])
                         raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
+                        raw_cat = str(row[2]) if len(row) > 2 else ""
                         display_label = (name[:26] + "…") if len(name) > 28 else name
+                        lbl_lower = raw_label.lower()
+                        if "task" in lbl_lower:
+                            grp = "task"
+                        elif "project" in lbl_lower:
+                            grp = "project"
+                        elif "adr" in lbl_lower:
+                            grp = "decision"
+                        elif "milestone" in lbl_lower:
+                            grp = "roadmap"
+                        elif "subsystem" in lbl_lower:
+                            grp = "subsystem"
+                        elif "episodic" in lbl_lower:
+                            grp = "episodic"
+                        elif "file" in lbl_lower:
+                            grp = "file"
+                        else:
+                            grp = "entity"
+
                         nodes_dict[name] = _make_vis_node(
                             node_id=name,
                             label=display_label,
-                            group="episodic" if "episodic" in raw_label.lower() else "entity",
-                            title=f"<b>{name}</b><br/>Type: {raw_label}",
+                            group=grp,
+                            title=f"<b>{name}</b><br/>Type: {raw_label}" + (f"<br/>Status/Cat: {raw_cat}" if raw_cat else ""),
                         )
 
-            edges_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (s)-[r]->(t) RETURN s.name, type(r), t.name")
+            edges_res = r.execute_command(
+                "GRAPH.QUERY", target_db,
+                "MATCH (s)-[r]->(t) RETURN coalesce(s.name, s.title, s.id, s.path), type(r), coalesce(t.name, t.title, t.id, t.path)"
+            )
             if edges_res and len(edges_res) > 1 and isinstance(edges_res[1], list):
                 for row in edges_res[1]:
                     if len(row) >= 3:

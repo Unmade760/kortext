@@ -251,22 +251,30 @@ async def run_scip_auto():
 
 
 @router.get("/api/tasks")
-async def get_tasks(include_graph: bool = True):
+async def get_tasks(include_graph: bool = True, project_id: Optional[str] = None):
     """Returns Task DAG tasks and dependency graph formatted for Vis.js."""
     from kortext.tasks.tracker import TaskDAGTracker
     try:
         tracker = TaskDAGTracker()
-        data = tracker.get_graph_data() if include_graph else {"tasks": tracker.get_all_tasks(), "nodes": [], "edges": []}
-        ready = tracker.get_ready_tasks()
+        data = tracker.get_graph_data() if include_graph else {"tasks": tracker.get_all_tasks(project_id=project_id), "nodes": [], "edges": []}
+        all_tasks = tracker.get_all_tasks(project_id=project_id)
+        ready = tracker.get_ready_tasks(project_id=project_id)
+        projects = list(set([t.get("project_id", "kortext") for t in all_tasks if t.get("project_id")]))
+        if "all" not in projects:
+            projects.insert(0, "all")
+        if "kortext" not in projects:
+            projects.append("kortext")
+
         return {
             "status": "ok",
-            "tasks": data.get("tasks", []),
+            "tasks": all_tasks,
             "nodes": data.get("nodes", []),
             "edges": data.get("edges", []),
             "ready_tasks": ready,
+            "projects": projects,
         }
     except Exception as e:
-        return {"status": "error", "message": str(e), "tasks": [], "nodes": [], "edges": [], "ready_tasks": []}
+        return {"status": "error", "message": str(e), "tasks": [], "nodes": [], "edges": [], "ready_tasks": [], "projects": ["all", "kortext"]}
 
 
 @router.post("/api/tasks")
@@ -287,6 +295,7 @@ async def manage_task_endpoint(request: Request):
                 complexity=int(body.get("complexity", 1)),
                 assigned_to=body.get("assigned_to", "primary"),
                 depends_on=body.get("depends_on"),
+                project_id=body.get("project_id", "kortext"),
             )
             return {"status": "ok", "task_id": tid}
         elif action == "update_status":
@@ -296,6 +305,9 @@ async def manage_task_endpoint(request: Request):
                 return {"status": "error", "message": "task_id and status are required"}
             err = body.get("error")
             tracker.update_task_status(tid, status=st, error=err)
+            ep_name = body.get("episode_name")
+            if ep_name and st == "completed":
+                tracker.link_task_to_outcome(tid, ep_name)
             return {"status": "ok", "task_id": tid, "updated_status": st}
         return {"status": "error", "message": f"Unknown action: {action}"}
     except Exception as e:
