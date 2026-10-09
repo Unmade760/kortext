@@ -32,6 +32,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client import models as qmodels
 
+from kortext.embeddings import get_dense_embedder
 from kortext.falkordb_client import get_shared_falkordb_client
 from kortext.retrieval.hipporag import HippoRAGPPR
 from kortext.retrieval.reranker import RerankerEngine
@@ -481,7 +482,10 @@ class RetrievalEngine:
         await self._ensure_collection(DEFAULT_COLLECTION)
 
     async def _ensure_collection(self, collection_name: str):
-        embed_dim = int(os.getenv("EMBED_DIMENSION", "4096"))
+        if os.getenv("EMBED_DIMENSION"):
+            embed_dim = int(os.getenv("EMBED_DIMENSION"))
+        else:
+            embed_dim = get_dense_embedder().dimension
         try:
             if not await self._client.collection_exists(collection_name):
                 await self._client.create_collection(
@@ -493,29 +497,16 @@ class RetrievalEngine:
             logger.warning(f"Could not verify/create Qdrant collection '{collection_name}': {e}")
 
     async def _get_query_embedding(self, prompt: str) -> List[float]:
-        if is_ci_mode():
+        if not prompt or not prompt.strip():
             return []
         try:
-            payload = {
-                "input": prompt,
-                "model": os.getenv("EMBED_MODEL_NAME", "mlx-community--Qwen3-Embedding-8B-4bit-DWQ"),
-            }
-            embed_key = os.getenv("EMBED_API_KEY") or os.getenv("OPENAI_API_KEY") or "not-needed"
-            headers = {"Authorization": f"Bearer {embed_key}"}
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(f"{EMBED_BASE_URL}/embeddings", json=payload, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return data["data"][0]["embedding"]
-        except Exception:
-            pass
-
-        if Settings.embed_model:
-            try:
-                return await Settings.embed_model.aget_query_embedding(prompt)
-            except Exception:
-                pass
-        return []
+            embedder = get_dense_embedder()
+            if hasattr(embedder, "aembed_query") and callable(embedder.aembed_query):
+                return await embedder.aembed_query(prompt)
+            return embedder.embed_query(prompt)
+        except Exception as e:
+            logger.warning(f"Failed to generate query embedding: {e}")
+            return []
 
     def _get_sparse_embedding(self, prompt: str) -> Optional[Tuple[List[int], List[float]]]:
         """Generates sparse indices and values using fastembed Qdrant/bm25."""

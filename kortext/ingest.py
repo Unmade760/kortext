@@ -23,6 +23,7 @@ from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client import models as qmodels
 
 from kortext.cache import IngestCache, ChunkEmbeddingCache
+from kortext.embeddings import get_dense_embedder
 
 try:
     from fastembed import SparseTextEmbedding
@@ -274,7 +275,8 @@ async def index_single_file(
         }
 
     # 6. Embeddings with ChunkEmbeddingCache
-    embed_model_name = os.getenv("EMBED_MODEL_NAME", "mlx-community--Qwen3-Embedding-8B-4bit-DWQ")
+    embedder = get_dense_embedder()
+    embed_model_name = getattr(embedder, "model_name", None) or os.getenv("EMBED_MODEL_NAME", "mlx-community--Qwen3-Embedding-8B-4bit-DWQ")
     texts = [n.get_content() for n in nodes]
     cached_hits, misses = chunk_cache.get_batch(texts, embed_model_name)
     for idx, vec in cached_hits.items():
@@ -287,33 +289,21 @@ async def index_single_file(
         sem = asyncio.Semaphore(concurrency)
 
         try:
-            limits = httpx.Limits(max_keepalive_connections=16, max_connections=32)
-            timeout = httpx.Timeout(60.0, connect=10.0, read=60.0)
-            async with httpx.AsyncClient(timeout=timeout, limits=limits) as http_client:
-                async def embed_batch(batch_idx: int, miss_batch):
-                    async with sem:
-                        texts = [item[1] for item in miss_batch]
-                        for attempt in range(3):
-                            try:
-                                resp = await http_client.post(
-                                    f"{EMBED_BASE_URL}/embeddings",
-                                    json={"model": embed_model_name, "input": texts},
-                                )
-                                resp.raise_for_status()
-                                data = resp.json()["data"]
-                                new_cache_items = []
-                                for (orig_idx, miss_text), item in zip(miss_batch, data):
-                                    emb = item["embedding"]
-                                    nodes[orig_idx].embedding = emb
-                                    new_cache_items.append((miss_text, emb))
-                                chunk_cache.put_batch(new_cache_items, embed_model_name)
-                                break
-                            except Exception as exc:
-                                if attempt == 2:
-                                    raise
-                                await asyncio.sleep(0.5 * (attempt + 1))
+            async def embed_batch(batch_idx: int, miss_batch):
+                async with sem:
+                    miss_texts = [item[1] for item in miss_batch]
+                    if hasattr(embedder, "aembed_documents") and callable(embedder.aembed_documents):
+                        embeddings = await embedder.aembed_documents(miss_texts)
+                    else:
+                        embeddings = embedder.embed_documents(miss_texts)
 
-                await asyncio.gather(*[embed_batch(i, b) for i, b in enumerate(miss_batches)])
+                    new_cache_items = []
+                    for (orig_idx, miss_text), emb in zip(miss_batch, embeddings):
+                        nodes[orig_idx].embedding = emb
+                        new_cache_items.append((miss_text, emb))
+                    chunk_cache.put_batch(new_cache_items, embed_model_name)
+
+            await asyncio.gather(*[embed_batch(i, b) for i, b in enumerate(miss_batches)])
         except Exception as exc:
             logger.error(f"[Kortext Ingest] ⚠️  Embedding failed for {p.name}: {exc}")
             return {
@@ -399,6 +389,78 @@ async def index_single_file(
 
 
 
+async def setup_collection(
+    client: AsyncQdrantClient,
+    collection: str = COLLECTION,
+    embed_dim: Optional[int] = None,
+    cache: Optional[IngestCache] = None,
+) -> int:
+    """
+    Ensures Qdrant collection exists with dense + sparse BM25 support.
+    Checks existing collection's vector size via client.get_collection(...).
+    If creating a new collection, defaults embed_dim to embedder.dimension.
+    Returns the resolved embed_dim.
+    """
+    embedder = get_dense_embedder()
+    target_dim = embed_dim
+    if target_dim is None:
+        env_dim = os.getenv("EMBED_DIMENSION")
+        target_dim = int(env_dim) if env_dim else getattr(embedder, "dimension", 384)
+
+    collections = await client.get_collections()
+    existing = [c.name for c in collections.collections]
+
+    needs_recreate = False
+    if collection in existing:
+        try:
+            col_info = await client.get_collection(collection_name=collection)
+            has_sparse = (
+                col_info.config.params.sparse_vectors is not None
+                and "text-sparse-new" in col_info.config.params.sparse_vectors
+            )
+            existing_dim = None
+            vec_params = getattr(col_info.config.params, "vectors", None)
+            if isinstance(vec_params, dict) and "text-dense" in vec_params:
+                td = vec_params["text-dense"]
+                if hasattr(td, "size") and isinstance(td.size, int):
+                    existing_dim = td.size
+            elif hasattr(vec_params, "size") and isinstance(vec_params.size, int):
+                existing_dim = vec_params.size
+
+            if not has_sparse or (existing_dim is not None and existing_dim != target_dim):
+                if not has_sparse:
+                    logger.info(f"[Kortext Ingest] Upgrading collection '{collection}' to hybrid dense + sparse (BM25)...")
+                else:
+                    logger.info(
+                        f"[Kortext Ingest] Recreating collection '{collection}' due to dimension change "
+                        f"({existing_dim} -> {target_dim})..."
+                    )
+                await client.delete_collection(collection)
+                if cache is not None:
+                    cache.clear_collection(collection)
+                needs_recreate = True
+        except Exception as exc:
+            logger.warning(f"[Kortext Ingest] Warning checking collection info for '{collection}': {exc}")
+
+    if collection not in existing and not needs_recreate:
+        if collection in ("kortext_codebase", "kortext") and "cerebrum_codebase" in existing:
+            collection = "cerebrum_codebase"
+        elif collection in ("cerebrum_codebase", "cerebrum") and "kortext_codebase" in existing:
+            collection = "kortext_codebase"
+
+    if collection not in existing or needs_recreate:
+        await client.create_collection(
+            collection_name=collection,
+            vectors_config={"text-dense": qmodels.VectorParams(size=target_dim, distance=qmodels.Distance.COSINE)},
+            sparse_vectors_config={"text-sparse-new": qmodels.SparseVectorParams()},
+        )
+        logger.info(f"[Kortext Ingest] Created hybrid collection '{collection}' (dense dim={target_dim} + sparse BM25)")
+    else:
+        logger.info(f"[Kortext Ingest] Using existing hybrid collection '{collection}' (upsert mode)")
+
+    return target_dim
+
+
 async def ingest(
     root: str,
     extra_excludes: Optional[List[str]] = None,
@@ -413,7 +475,8 @@ async def ingest(
     logger.info(f"[Kortext Ingest] Indexing: {root}")
     logger.info(f"[Kortext Ingest] Qdrant Collection: {collection} | FalkorDB Symbol Graph: {target_symbols_db} (force={force})")
 
-    embed_model_name = os.getenv("EMBED_MODEL_NAME", "mlx-community--Qwen3-Embedding-8B-4bit-DWQ")
+    embedder = get_dense_embedder()
+    embed_model_name = getattr(embedder, "model_name", None) or os.getenv("EMBED_MODEL_NAME", "mlx-community--Qwen3-Embedding-8B-4bit-DWQ")
     embed_api_key = os.getenv("EMBED_API_KEY") or os.getenv("OPENAI_API_KEY") or "not-needed"
     embed_model = OpenAIEmbedding(
         api_base=EMBED_BASE_URL,
@@ -428,39 +491,7 @@ async def ingest(
     sync_client = QdrantClient(url=QDRANT_URL)
     cache = IngestCache()
 
-    # Ensure collection exists with hybrid dense + sparse support
-    collections = await client.get_collections()
-    existing = [c.name for c in collections.collections]
-
-    needs_recreate = False
-    if collection in existing:
-        col_info = await client.get_collection(collection_name=collection)
-        has_sparse = (
-            col_info.config.params.sparse_vectors is not None
-            and "text-sparse-new" in col_info.config.params.sparse_vectors
-        )
-        if not has_sparse:
-            logger.info(f"[Kortext Ingest] Upgrading collection '{collection}' to hybrid dense + sparse (BM25)...")
-            await client.delete_collection(collection)
-            cache.clear_collection(collection)
-            needs_recreate = True
-
-    embed_dim = int(os.getenv("EMBED_DIMENSION", "4096"))
-    if collection not in existing and not needs_recreate:
-        if collection in ("kortext_codebase", "kortext") and "cerebrum_codebase" in existing:
-            collection = "cerebrum_codebase"
-        elif collection in ("cerebrum_codebase", "cerebrum") and "kortext_codebase" in existing:
-            collection = "kortext_codebase"
-
-    if collection not in existing or needs_recreate:
-        await client.create_collection(
-            collection_name=collection,
-            vectors_config={"text-dense": qmodels.VectorParams(size=embed_dim, distance=qmodels.Distance.COSINE)},
-            sparse_vectors_config={"text-sparse-new": qmodels.SparseVectorParams()},
-        )
-        logger.info(f"[Kortext Ingest] Created hybrid collection '{collection}' (dense + sparse BM25)")
-    else:
-        logger.info(f"[Kortext Ingest] Using existing hybrid collection '{collection}' (upsert mode)")
+    embed_dim = await setup_collection(client=client, collection=collection, cache=cache)
 
     store = QdrantVectorStore(
         client=sync_client,
@@ -710,41 +741,30 @@ async def ingest(
             sem = asyncio.Semaphore(concurrency)
             completed_batches = 0
 
-            limits = httpx.Limits(max_keepalive_connections=32, max_connections=64)
-            timeout = httpx.Timeout(600.0, connect=30.0, read=600.0)
-            async with httpx.AsyncClient(timeout=timeout, limits=limits) as http_client:
-                async def embed_batch(b_idx: int, miss_batch):
-                    nonlocal completed_batches
-                    async with sem:
-                        texts = [item[1] for item in miss_batch]
-                        for attempt in range(3):
-                            try:
-                                resp = await http_client.post(
-                                    f"{EMBED_BASE_URL}/embeddings",
-                                    json={"model": embed_model_name, "input": texts},
-                                )
-                                resp.raise_for_status()
-                                data = resp.json()["data"]
-                                new_cache_items = []
-                                for (orig_idx, miss_text), item in zip(miss_batch, data):
-                                    emb = item["embedding"]
-                                    nodes[orig_idx].embedding = emb
-                                    new_cache_items.append((miss_text, emb))
-                                chunk_cache.put_batch(new_cache_items, embed_model_name)
-                                break
-                            except Exception as exc:
-                                err_name = f"{type(exc).__name__}: {exc or 'timeout'}"
-                                if attempt == 2:
-                                    logger.error(
-                                        f"[Kortext Ingest] ⚠️  Batch {b_idx + 1}/{total_miss_batches} "
-                                        f"failed after 3 retries ({err_name}). Skipping batch."
-                                    )
-                                else:
-                                    await asyncio.sleep(2.0 * (attempt + 1))
+            async def embed_batch(b_idx: int, miss_batch):
+                nonlocal completed_batches
+                async with sem:
+                    miss_texts = [item[1] for item in miss_batch]
+                    try:
+                        if hasattr(embedder, "aembed_documents") and callable(embedder.aembed_documents):
+                            embeddings = await embedder.aembed_documents(miss_texts)
+                        else:
+                            embeddings = embedder.embed_documents(miss_texts)
 
-                        completed_batches += 1
+                        new_cache_items = []
+                        for (orig_idx, miss_text), emb in zip(miss_batch, embeddings):
+                            nodes[orig_idx].embedding = emb
+                            new_cache_items.append((miss_text, emb))
+                        chunk_cache.put_batch(new_cache_items, embed_model_name)
+                    except Exception as exc:
+                        logger.error(
+                            f"[Kortext Ingest] ⚠️  Batch {b_idx + 1}/{total_miss_batches} "
+                            f"failed: {exc}. Skipping batch."
+                        )
 
-                await asyncio.gather(*[embed_batch(i, b) for i, b in enumerate(miss_batches)])
+                completed_batches += 1
+
+            await asyncio.gather(*[embed_batch(i, b) for i, b in enumerate(miss_batches)])
 
         # 4. Write valid nodes for this batch into Qdrant via storage_context / VectorStoreIndex
         valid_nodes = [n for n in nodes if n.embedding is not None]

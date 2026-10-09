@@ -70,6 +70,17 @@ class IngestCache:
         except Exception:
             return ""
 
+    @staticmethod
+    def get_file_stats(path: Path) -> Tuple[float, str]:
+        """Compute mtime and SHA-256 checksum of a file."""
+        p = Path(path)
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        sha = IngestCache.compute_sha256(p)
+        return mtime, sha
+
     def is_file_changed(
         self, file_path: str, collection: str
     ) -> Tuple[bool, float, str, List[str]]:

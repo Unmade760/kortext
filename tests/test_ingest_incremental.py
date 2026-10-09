@@ -944,3 +944,119 @@ async def test_index_single_file_handles_sparse_model_failure_gracefully(tmp_pat
     assert "text-sparse-new" not in upsert_points[0].vector
 
 
+@pytest.mark.anyio
+async def test_index_single_file_embeds_misses_via_dense_embedder(tmp_path):
+    """Verifies index_single_file uses get_dense_embedder() to embed misses and stores them with embedder.model_name."""
+    from kortext.ingest import index_single_file
+    from llama_index.core.schema import TextNode
+
+    test_file = tmp_path / "misses_embed.py"
+    test_file.write_text("def miss_func(): return 42\n", encoding="utf-8")
+
+    mock_client = AsyncMock()
+    mock_cache = MagicMock()
+    mock_cache.is_file_changed.return_value = (True, 12345, "sha_miss", [])
+    mock_chunk_cache = MagicMock()
+    # Simulate cache miss: cached_hits = {}, misses = [(0, "def miss_func(): return 42\n")]
+    mock_chunk_cache.get_batch.return_value = ({}, [(0, "def miss_func(): return 42\n")])
+
+    mock_node = TextNode(text="def miss_func(): return 42\n", id_="node_miss_1")
+    mock_parser = MagicMock()
+    mock_parser.get_nodes_from_documents.return_value = [mock_node]
+
+    mock_symbol_graph = MagicMock()
+    mock_ast_splitter = MagicMock()
+    mock_ast_splitter.extract_symbols_and_references.return_value = {
+        "declarations": [{"name": "miss_func", "kind": "function", "line": 1}],
+        "imports": [],
+        "references": [],
+    }
+
+    mock_embedder = MagicMock()
+    mock_embedder.model_name = "test-model-fastembed"
+    mock_embedder.dimension = 384
+    mock_embedder.aembed_documents = AsyncMock(return_value=[[0.42] * 384])
+
+    with patch("kortext.ingest.get_dense_embedder", return_value=mock_embedder) as mock_get_embedder, \
+         patch("kortext.chunking.ast_splitter.ASTCodeSplitter", return_value=mock_ast_splitter), \
+         patch("kortext.chunking.SmartCodeNodeParser", return_value=mock_parser):
+        res = await index_single_file(
+            file_path=test_file,
+            collection="test_col",
+            target_symbols_db="test_sym",
+            force=False,
+            client=mock_client,
+            cache=mock_cache,
+            chunk_cache=mock_chunk_cache,
+            symbol_mgr=mock_symbol_graph,
+        )
+
+    assert res["status"] == "indexed"
+    assert res["misses"] == 1
+    mock_get_embedder.assert_called_once()
+    mock_embedder.aembed_documents.assert_awaited_once_with(["def miss_func(): return 42\n"])
+    # Verify cached in chunk_cache with embedder.model_name
+    mock_chunk_cache.put_batch.assert_called_once()
+    put_items, put_model = mock_chunk_cache.put_batch.call_args[0]
+    assert put_model == "test-model-fastembed"
+    assert len(put_items) == 1
+    assert put_items[0] == ("def miss_func(): return 42\n", [0.42] * 384)
+    # Verify node embedding assigned and upserted
+    assert mock_node.embedding == [0.42] * 384
+    assert mock_client.upsert.called
+
+
+@pytest.mark.anyio
+async def test_setup_collection_defaults_to_dense_embedder_dimension():
+    """Verifies setup_collection uses embedder.dimension when creating collection and handles recreation."""
+    from kortext.ingest import setup_collection
+    import os
+
+    mock_client = AsyncMock()
+    mock_collections_obj = MagicMock()
+    mock_collections_obj.collections = []
+    mock_client.get_collections.return_value = mock_collections_obj
+
+    mock_embedder = MagicMock()
+    mock_embedder.dimension = 384
+
+    # 1. New collection creation: defaults to embedder.dimension (384) when EMBED_DIMENSION is unset
+    with patch("kortext.ingest.get_dense_embedder", return_value=mock_embedder), \
+         patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("EMBED_DIMENSION", None)
+        dim = await setup_collection(client=mock_client, collection="new_fastembed_col")
+        assert dim == 384
+        mock_client.create_collection.assert_awaited_once()
+        create_kwargs = mock_client.create_collection.call_args.kwargs
+        assert create_kwargs["collection_name"] == "new_fastembed_col"
+        assert create_kwargs["vectors_config"]["text-dense"].size == 384
+
+    # 2. Existing collection with different vector dimension triggers recreation
+    mock_client.create_collection.reset_mock()
+    mock_existing_col = MagicMock()
+    mock_existing_col.name = "existing_col"
+    mock_collections_obj.collections = [mock_existing_col]
+
+    col_info = MagicMock()
+    col_info.config.params.sparse_vectors = {"text-sparse-new": MagicMock()}
+    dense_param = MagicMock()
+    dense_param.size = 4096  # Old dimension was 4096, now target is 384
+    col_info.config.params.vectors = {"text-dense": dense_param}
+    mock_client.get_collection.return_value = col_info
+
+    mock_cache = MagicMock()
+
+    with patch("kortext.ingest.get_dense_embedder", return_value=mock_embedder), \
+         patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("EMBED_DIMENSION", None)
+        dim = await setup_collection(client=mock_client, collection="existing_col", cache=mock_cache)
+        assert dim == 384
+        # Should delete existing collection and clear cache
+        mock_client.delete_collection.assert_awaited_once_with("existing_col")
+        mock_cache.clear_collection.assert_called_once_with("existing_col")
+        # Should recreate collection with new dimension 384
+        mock_client.create_collection.assert_awaited_once()
+        assert mock_client.create_collection.call_args.kwargs["vectors_config"]["text-dense"].size == 384
+
+
+

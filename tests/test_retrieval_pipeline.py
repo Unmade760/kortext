@@ -485,3 +485,101 @@ class TestRetrievalPipeline:
 
         asyncio.run(_run())
 
+    def test_get_query_embedding_delegates_to_dense_embedder(self):
+        """Verifies _get_query_embedding delegates to get_dense_embedder().aembed_query()."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        async def _run():
+            engine = RetrievalEngine()
+            mock_embedder = MagicMock()
+            mock_embedder.aembed_query = AsyncMock(return_value=[0.123] * 384)
+            mock_embedder.dimension = 384
+
+            with patch("kortext.retrieval.engine.get_dense_embedder", return_value=mock_embedder) as mock_get:
+                vec = await engine._get_query_embedding("search query")
+                assert vec == [0.123] * 384
+                mock_get.assert_called_once()
+                mock_embedder.aembed_query.assert_awaited_once_with("search query")
+
+        asyncio.run(_run())
+
+    def test_ensure_collection_resolves_embedder_dimension(self):
+        """Verifies _ensure_collection defaults embed_dim to get_dense_embedder().dimension unless overridden."""
+        import asyncio
+        import os
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from qdrant_client import models as qmodels
+
+        async def _run():
+            engine = RetrievalEngine()
+            mock_client = AsyncMock()
+            mock_client.collection_exists.return_value = False
+            engine._client = mock_client
+
+            mock_embedder = MagicMock()
+            mock_embedder.dimension = 384
+
+            # 1. Without EMBED_DIMENSION: defaults to embedder.dimension (384)
+            with patch("kortext.retrieval.engine.get_dense_embedder", return_value=mock_embedder), \
+                 patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("EMBED_DIMENSION", None)
+                await engine._ensure_collection("test_col_fastembed")
+
+                mock_client.create_collection.assert_awaited_once()
+                call_kwargs = mock_client.create_collection.call_args.kwargs
+                assert call_kwargs["collection_name"] == "test_col_fastembed"
+                vec_params = call_kwargs["vectors_config"]["text-dense"]
+                assert vec_params.size == 384
+
+            # 2. With EMBED_DIMENSION overridden: respects EMBED_DIMENSION
+            mock_client.create_collection.reset_mock()
+            with patch("kortext.retrieval.engine.get_dense_embedder", return_value=mock_embedder), \
+                 patch.dict(os.environ, {"EMBED_DIMENSION": "1024"}):
+                await engine._ensure_collection("test_col_custom")
+
+                mock_client.create_collection.assert_awaited_once()
+                call_kwargs = mock_client.create_collection.call_args.kwargs
+                assert call_kwargs["collection_name"] == "test_col_custom"
+                vec_params = call_kwargs["vectors_config"]["text-dense"]
+                assert vec_params.size == 1024
+
+        asyncio.run(_run())
+
+    def test_reranker_handles_unreachable_endpoint_gracefully(self, caplog):
+        """Verifies RerankerEngine handles unreachable/offline endpoints by logging and returning candidates ordered by score."""
+        import asyncio
+        import logging
+        from unittest.mock import patch
+
+        async def _run():
+            # Test with an invalid / unreachable endpoint
+            engine = RerankerEngine(base_url="http://127.0.0.1:59999/v1")
+            candidates = [
+                {"text": "Lower score item", "score": 0.10},
+                {"text": "Higher score item", "score": 0.90},
+                {"text": "Medium score item", "score": 0.50},
+            ]
+
+            with patch("kortext.retrieval.reranker.is_ci_mode", return_value=False):
+                with caplog.at_level(logging.DEBUG, logger="kortext.retrieval.reranker"):
+                    caplog.clear()
+                    results = await engine.rerank("query without matching keywords", candidates, top_k=3)
+
+                assert len(results) == 3
+                assert all(c.get("offline_fallback") is True for c in results)
+                # Candidates must be cleanly ordered by input score
+                assert results[0]["text"] == "Higher score item"
+                assert results[1]["text"] == "Medium score item"
+                assert results[2]["text"] == "Lower score item"
+                # Must log debug or warning
+                assert any(
+                    "Reranker unavailable" in record.message or "offline" in record.message.lower()
+                    for record in caplog.records
+                )
+
+            await engine.close()
+
+        asyncio.run(_run())
+
+

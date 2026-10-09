@@ -23,6 +23,14 @@ from kortext._qdrant import (
     get_async_qdrant_client,
     is_qdrant_online,
 )
+from kortext.embeddings import (
+    DenseEmbedder,
+    DenseEmbedderProtocol,
+    FastEmbedDenseProvider,
+    RemoteDenseProvider,
+    get_dense_embedder,
+    is_remote_embed_alive,
+)
 
 CEREBRUM_HOME = KORTEXT_HOME
 
