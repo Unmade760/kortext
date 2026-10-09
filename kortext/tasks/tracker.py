@@ -25,6 +25,14 @@ class TaskDAGTracker:
             self.graph = self.client.resolve_graph_name(graph_name)
         else:
             self.graph = graph_name
+        self._ensure_indexes()
+
+    def _ensure_indexes(self) -> None:
+        """Ensures FalkorDB schema index on :Task(project_id)."""
+        try:
+            self.client.query(self.graph, "CREATE INDEX ON :Task(project_id)")
+        except Exception as e:
+            logger.debug(f"Index creation on :Task(project_id) error: {e}")
 
     def create_task(
         self,
@@ -33,13 +41,16 @@ class TaskDAGTracker:
         complexity: int = 1,
         assigned_to: str = "primary",
         depends_on: Optional[List[str]] = None,
+        project_id: Optional[str] = None,
     ) -> str:
-        """Creates a new Task node and sets up dependency edges."""
+        """Creates a new Task node, links it to Project, and sets up dependency edges."""
         task_id = f"task_{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc).isoformat()
         dep_list = [d for d in (depends_on or []) if d]
+        proj_id = project_id or "kortext"
 
         cypher = """
+        MERGE (p:Project {id: $project_id})
         CREATE (t:Task {
             id: $id,
             title: $title,
@@ -50,8 +61,10 @@ class TaskDAGTracker:
             retry_count: 0,
             created_at: $now,
             completed_at: null,
-            depends_on: $dep_list
+            depends_on: $dep_list,
+            project_id: $project_id
         })
+        MERGE (p)-[:HAS_TASK]->(t)
         RETURN t.id
         """
         status = "ready" if not dep_list else "pending"
@@ -64,6 +77,7 @@ class TaskDAGTracker:
             "assign": assigned_to,
             "now": now,
             "dep_list": dep_list,
+            "project_id": proj_id,
         }
         self.client.query(self.graph, cypher, params)
 
@@ -85,26 +99,32 @@ class TaskDAGTracker:
 
         return task_id
 
-    def get_ready_tasks(self) -> List[Dict[str, Any]]:
+    def get_ready_tasks(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Finds all tasks whose upstream dependencies are completed."""
-        cypher = """
+        filter_clause = ""
+        params: Dict[str, Any] = {}
+        if project_id and project_id.lower() != "all":
+            filter_clause = "  AND coalesce(t.project_id, 'kortext') = $project_id\n"
+            params["project_id"] = project_id
+
+        cypher = f"""
         MATCH (t:Task)
         WHERE t.status IN ['pending', 'ready']
           AND coalesce(size(t.depends_on), 0) = 0
           AND NOT (t)-[:DEPENDS_ON]->(:Task)
-        SET t.status = 'ready'
+        {filter_clause}SET t.status = 'ready'
         RETURN t.id, t.title, t.complexity, t.assigned_to, t.description
         UNION
         MATCH (t:Task)
         WHERE t.status IN ['pending', 'ready']
           AND (t)-[:DEPENDS_ON]->(:Task)
-        WITH t, [(t)-[:DEPENDS_ON]->(dep) | dep.status] AS dep_statuses
+        {filter_clause}WITH t, [(t)-[:DEPENDS_ON]->(dep) | dep.status] AS dep_statuses
         WHERE (t.depends_on IS NULL OR size(dep_statuses) = size(t.depends_on))
           AND ALL(d IN dep_statuses WHERE d = 'completed')
         SET t.status = 'ready'
         RETURN t.id, t.title, t.complexity, t.assigned_to, t.description
         """
-        raw = self.client.query(self.graph, cypher)
+        raw = self.client.query(self.graph, cypher, params if params else None)
         if not raw or len(raw) < 2 or not raw[1]:
             return []
 
@@ -147,16 +167,23 @@ class TaskDAGTracker:
             self.client.query(self.graph, cypher, {"id": task_id, "status": status})
         return True
 
-    def get_all_tasks(self) -> List[Dict[str, Any]]:
+    def get_all_tasks(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Returns all Task nodes with metadata and their dependencies."""
-        cypher = """
+        where_clause = ""
+        params: Dict[str, Any] = {}
+        if project_id and project_id.lower() != "all":
+            where_clause = "WHERE coalesce(t.project_id, 'kortext') = $project_id\n        "
+            params["project_id"] = project_id
+
+        cypher = f"""
         MATCH (t:Task)
-        OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task)
+        {where_clause}OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task)
         RETURN t.id, t.title, t.description, t.status, t.complexity, t.assigned_to,
-               t.retry_count, t.created_at, t.completed_at, t.last_error, collect(dep.id)
+               t.retry_count, t.created_at, t.completed_at, t.last_error, collect(dep.id),
+               coalesce(t.project_id, 'kortext')
         ORDER BY t.created_at DESC
         """
-        raw = self.client.query(self.graph, cypher)
+        raw = self.client.query(self.graph, cypher, params if params else None)
         if not raw or len(raw) < 2 or not raw[1]:
             return []
 
@@ -181,12 +208,32 @@ class TaskDAGTracker:
                 "completed_at": str(row[8] or "") if row[8] is not None else None,
                 "last_error": str(row[9] or "") if row[9] is not None else None,
                 "depends_on": deps,
+                "project_id": str(row[11]) if len(row) > 11 and row[11] is not None else "kortext",
             })
         return tasks
 
-    def get_graph_data(self) -> Dict[str, Any]:
+    def link_task_to_outcome(self, task_id: str, episode_name: str) -> bool:
+        """Links a completed Task node to an Episodic outcome node."""
+        cypher = """
+        MATCH (t:Task {id: $task_id}), (e:Episodic {name: $episode_name})
+        MERGE (t)-[:PRODUCED_OUTCOME]->(e)
+        RETURN count(e)
+        """
+        raw = self.client.query(
+            self.graph,
+            cypher,
+            {"task_id": task_id, "episode_name": episode_name},
+        )
+        if not raw or len(raw) < 2 or not raw[1]:
+            return False
+        try:
+            return int(raw[1][0][0]) > 0
+        except (ValueError, TypeError, IndexError):
+            return False
+
+    def get_graph_data(self, project_id: Optional[str] = None) -> Dict[str, Any]:
         """Formats all tasks into nodes and edges for Vis.js rendering."""
-        tasks = self.get_all_tasks()
+        tasks = self.get_all_tasks(project_id=project_id)
         nodes = []
         edges = []
         status_styles = {

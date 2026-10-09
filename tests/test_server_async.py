@@ -95,6 +95,75 @@ async def test_manage_tasks_list_all_nonblocking():
 
 
 @pytest.mark.anyio
+async def test_manage_tasks_project_id_and_outcome_linking():
+    with patch("kortext.tasks.tracker.TaskDAGTracker.create_task") as mock_create, \
+         patch("kortext.tasks.tracker.TaskDAGTracker.get_ready_tasks") as mock_ready, \
+         patch("kortext.tasks.tracker.TaskDAGTracker.get_all_tasks") as mock_get_all, \
+         patch("kortext.tasks.tracker.TaskDAGTracker.update_task_status") as mock_update, \
+         patch("kortext.tasks.tracker.TaskDAGTracker.link_task_to_outcome") as mock_link:
+
+        mock_create.return_value = "task_proj1"
+        mock_ready.return_value = [{"id": "task_proj1", "title": "Project Task"}]
+        mock_get_all.return_value = [{"id": "task_proj1", "title": "Project Task"}]
+        mock_update.return_value = True
+        mock_link.return_value = True
+
+        # 1. create with project_id
+        res_create = await manage_tasks(
+            action="create",
+            title="Project Task",
+            project_id="my_app",
+        )
+        data_create = json.loads(res_create)
+        assert data_create["status"] == "created"
+        assert data_create["task_id"] == "task_proj1"
+        mock_create.assert_called_once_with(
+            title="Project Task",
+            description="",
+            complexity=1,
+            assigned_to="primary",
+            depends_on=None,
+            project_id="my_app",
+        )
+
+        # 2. get_ready with project_id
+        res_ready = await manage_tasks(action="get_ready", project_id="my_app")
+        data_ready = json.loads(res_ready)
+        assert len(data_ready["ready_tasks"]) == 1
+        mock_ready.assert_called_once_with(project_id="my_app")
+
+        # 3. list_all with project_id
+        res_list = await manage_tasks(action="list_all", project_id="my_app")
+        data_list = json.loads(res_list)
+        assert len(data_list["tasks"]) == 1
+        mock_get_all.assert_called_once_with(project_id="my_app")
+
+        # 4. update_status with episode_name and status='completed'
+        res_update = await manage_tasks(
+            action="update_status",
+            task_id="task_proj1",
+            status="completed",
+            episode_name="episode_refactor_123",
+        )
+        data_update = json.loads(res_update)
+        assert data_update["status"] == "completed"
+        assert data_update["updated"] is True
+        mock_update.assert_called_once_with("task_proj1", status="completed", error=None)
+        mock_link.assert_called_once_with("task_proj1", "episode_refactor_123")
+
+        # 5. update_status with episode_name but status != 'completed' should NOT link
+        mock_link.reset_mock()
+        await manage_tasks(
+            action="update_status",
+            task_id="task_proj1",
+            status="failed",
+            episode_name="episode_refactor_123",
+            error="syntax error",
+        )
+        mock_link.assert_not_called()
+
+
+@pytest.mark.anyio
 async def test_check_cerebrum_health_nonblocking():
     with patch("kortext.invariants.InvariantGroundingEngine.audit_invariant_drift") as mock_audit:
         mock_audit.return_value = {

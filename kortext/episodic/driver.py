@@ -52,6 +52,17 @@ TRUST_ANCHOR_LEVELS: Dict[str, float] = {
     "user_approved": 1.00,
 }
 
+VALID_CATEGORIES = (
+    "decision",
+    "roadmap",
+    "implementation",
+    "experiment",
+    "benchmark",
+    "investigation",
+    "research",
+    "report",
+)
+
 
 class AgentNativeEpisodicDriver:
     """Direct FalkorDB driver for Episodic & Temporal Knowledge Memory."""
@@ -86,6 +97,7 @@ class AgentNativeEpisodicDriver:
         facts: Optional[List[Dict[str, str]]] = None,
         supersedes: Optional[List[str]] = None,
         trust_level: str = "speculative",
+        category: str = "implementation",
     ) -> Dict[str, Any]:
         """
         Agent-Native recording with Trust Anchor State Machine:
@@ -95,6 +107,10 @@ class AgentNativeEpisodicDriver:
         Inserts (:Episodic), (:Entity), and [:RELATES_TO] edges directly into FalkorDB.
         Exposure does not validate: reading facts never promotes or mutates trust levels.
         """
+        if not isinstance(category, str) or category.lower().strip() not in VALID_CATEGORIES:
+            raise ValueError(f"Invalid category '{category}'. Must be one of: {VALID_CATEGORIES}")
+        cat = category.lower().strip()
+
         now = datetime.now(timezone.utc).isoformat()
         proj = project or "kortext"
 
@@ -119,13 +135,16 @@ class AgentNativeEpisodicDriver:
                     except Exception:
                         pass
 
-        # 2. Persist (:Episodic) Node with Trust Anchor
+        # 2. Persist (:Episodic) Node with Trust Anchor and link to Project
         tags_str = ", ".join(tags) if tags else ""
         self._query(
             "MERGE (e:Episodic {name: $name}) "
             "SET e.content = $content, e.created_at = $now, e.project = $project, "
             "e.tags = $tags, e.superseded = false, e.trust_level = $trust_level, "
-            "e.trust_score = $trust_score",
+            "e.trust_score = $trust_score, e.category = $category "
+            "MERGE (p:Project {id: $project}) "
+            "ON CREATE SET p.name = $project "
+            "MERGE (p)-[:HAS_EPISODE]->(e)",
             {
                 "name": episode_name,
                 "content": content,
@@ -134,6 +153,7 @@ class AgentNativeEpisodicDriver:
                 "tags": tags_str,
                 "trust_level": norm_level,
                 "trust_score": trust_score,
+                "category": cat,
             },
         )
 
@@ -211,12 +231,41 @@ class AgentNativeEpisodicDriver:
                     },
                 )
 
+        auto_entities = 0
+        if cat == "decision" and not actual_entities:
+            self._query(
+                "MATCH (e:Episodic {name: $ename}) "
+                "MERGE (adr:Entity:ADR {name: $ename}) "
+                "SET adr.summary = $summary, adr.entity_type = 'adr', adr.updated_at = $now "
+                "MERGE (e)-[:DECIDES]->(adr)",
+                {
+                    "ename": episode_name,
+                    "summary": content,
+                    "now": now,
+                },
+            )
+            auto_entities += 1
+        elif cat == "roadmap":
+            self._query(
+                "MATCH (e:Episodic {name: $ename}) "
+                "MERGE (m:Entity:Milestone {name: $ename}) "
+                "SET m.summary = $summary, m.entity_type = 'milestone', m.updated_at = $now "
+                "MERGE (e)-[:MILESTONE]->(m)",
+                {
+                    "ename": episode_name,
+                    "summary": content,
+                    "now": now,
+                },
+            )
+            auto_entities += 1
+
         return {
             "status": "ok",
             "episode": episode_name,
+            "category": cat,
             "trust_level": norm_level,
             "trust_score": trust_score,
-            "entities_written": len(actual_entities),
+            "entities_written": len(actual_entities) + auto_entities,
             "facts_written": len(actual_facts),
             "superseded_count": superseded_count,
         }

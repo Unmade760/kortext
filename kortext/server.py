@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
 import sys
 
@@ -41,7 +42,7 @@ from kortext.retrieval import (
     discover_vector_collections,
     resolve_workspace_root_for_collection,
 )
-from kortext.episodic import AgentNativeEpisodicDriver
+from kortext.episodic import AgentNativeEpisodicDriver, VALID_CATEGORIES
 from kortext.handoff import HandoffManager
 from kortext.ingest import ingest as _ingest
 from kortext.symbols.graph import SymbolGraphManager
@@ -65,6 +66,17 @@ JOURNAL_DIR = Path(os.getenv("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")))
 JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 HANDOFFS_DIR = JOURNAL_DIR / "handoffs"
 HANDOFFS_DIR.mkdir(parents=True, exist_ok=True)
+
+CATEGORY_DIRS: Dict[str, str] = {
+    "decision": "decisions",
+    "roadmap": "roadmaps",
+    "implementation": "implementations",
+    "experiment": "experiments",
+    "benchmark": "benchmarks",
+    "investigation": "investigations",
+    "research": "research",
+    "report": "reports",
+}
 
 
 
@@ -235,6 +247,7 @@ async def search_knowledge_and_memory(
 async def record_system_outcome(
     episode_name: str,
     content: str,
+    category: str = "implementation",
     tags: Optional[list[str]] = None,
     project: Optional[str] = None,
     entities: Optional[list[dict[str, str]]] = None,
@@ -246,6 +259,7 @@ async def record_system_outcome(
     Args:
         episode_name: Short title (5-10 words), e.g. 'Switched embed server to port 8001'
         content:      Full description of the outcome, decision, or change.
+        category:     Mandatory category: 'decision', 'roadmap', 'implementation', 'experiment', 'benchmark', 'investigation', 'research', 'report'
         tags:         Optional list of lowercase keyword tags, e.g. ['embedding', 'ports']
         project:      Optional project label, e.g. 'kortext' or 'big-je'
         entities:     Optional structured entities [{'name': '...', 'type': '...', 'summary': '...'}]
@@ -255,6 +269,10 @@ async def record_system_outcome(
     Returns:
         Confirmation with paths to KG and journal.
     """
+    if not isinstance(category, str) or category.lower().strip() not in VALID_CATEGORIES:
+        raise ValueError(f"Invalid category '{category}'. Must be one of: {VALID_CATEGORIES}")
+    cat = category.lower().strip()
+
     full_content = content
     if project:
         full_content = f"[Project: {project}]\n\n{content}"
@@ -277,11 +295,33 @@ async def record_system_outcome(
     except SecurityViolation as sv:
         return f"🚨 BLOCKED BY MINJA CAUSAL SANITIZER: {sv}. Write operation rejected and quarantined."
 
+    safe_title = re.sub(r"[^\w\-]+", "_", episode_name.strip().lower()).strip("_") or "outcome"
+    today = datetime.now().strftime("%Y-%m-%d")
+    now_time = datetime.now().strftime("%H:%M")
+
+    # Category folder and dedicated outcome markdown file
+    cat_dir_name = CATEGORY_DIRS[cat]
+    category_dir = JOURNAL_DIR / cat_dir_name
+    outcome_file = category_dir / f"{today}_{safe_title}.md"
+
+    outcome_lines = [
+        f"# {episode_name}\n",
+        f"- **Date:** {today} {now_time}",
+        f"- **Category:** {cat}",
+        f"- **Project:** {project or 'kortext'}",
+        f"- **Trust Level:** {trust_level}",
+    ]
+    if tags:
+        outcome_lines.append(f"- **Tags:** {', '.join(tags)}")
+    if supersedes:
+        outcome_lines.append(f"- **Supersedes:** {', '.join(supersedes)}")
+    outcome_lines.extend(["\n## Outcome Description\n", full_content, "\n"])
+    outcome_content = "\n".join(outcome_lines)
+
     # Append to daily Markdown journal first (so data is never lost)
-    today        = datetime.now().strftime("%Y-%m-%d")
-    now_time     = datetime.now().strftime("%H:%M")
     journal_file = JOURNAL_DIR / f"{today}.md"
-    entry_lines  = [f"\n## {now_time} - {episode_name}\n", full_content]
+    entry_lines = [f"\n## {now_time} - {episode_name}\n", full_content]
+    entry_lines.append(f"\n**Category:** {cat}")
     if tags:
         entry_lines.append(f"\n**Tags:** {', '.join(tags)}")
     if project:
@@ -291,7 +331,11 @@ async def record_system_outcome(
     if trust_level:
         entry_lines.append(f"\n**Trust Level:** {trust_level}")
     entry_lines.append("\n")
+
     def _write_journal():
+        category_dir.mkdir(parents=True, exist_ok=True)
+        with open(outcome_file, "w") as f:
+            f.write(outcome_content)
         with open(journal_file, "a") as f:
             f.write("\n".join(entry_lines))
 
@@ -309,6 +353,7 @@ async def record_system_outcome(
             facts=facts,
             supersedes=supersedes,
             trust_level=trust_level,
+            category=cat,
         )
         kg_status = f"✅ FalkorDB KG ({res.get('entities_written', 0)} entities, {res.get('facts_written', 0)} facts, {res.get('superseded_count', 0)} superseded, trust: {res.get('trust_level', 'speculative')} [{res.get('trust_score', 0.5)}])"
     except Exception as e:
@@ -316,6 +361,7 @@ async def record_system_outcome(
 
     return (
         f"✅ Recorded: '{episode_name}'\n"
+        f"   → Category: {outcome_file}\n"
         f"   → Journal: {journal_file}\n"
         f"   → {kg_status}"
     )
@@ -649,6 +695,8 @@ async def manage_tasks(
     task_id: Optional[str] = None,
     status: Optional[str] = None,
     error: Optional[str] = None,
+    project_id: Optional[str] = None,
+    episode_name: Optional[str] = None,
 ) -> str:
     """
     Args:
@@ -661,6 +709,8 @@ async def manage_tasks(
         task_id: Target task ID for 'update_status'.
         status: New state ('pending', 'ready', 'in_progress', 'completed', 'failed').
         error: Failure explanation if status is 'failed'.
+        project_id: Optional project ID, e.g. 'kortext', 'my_app', or 'all'. Defaults to 'kortext' if unspecified.
+        episode_name: Optional episode name to link the completed task to via (:Task)-[:PRODUCED_OUTCOME]->(:Episodic).
     Returns:
         JSON response with task details, ready tasks, or operation confirmation.
     """
@@ -678,21 +728,24 @@ async def manage_tasks(
                 complexity=complexity,
                 assigned_to=assigned_to,
                 depends_on=depends_on,
+                project_id=project_id,
             )
             return json.dumps({"status": "created", "task_id": tid})
 
         elif act in ("get_ready", "ready"):
-            ready = tracker.get_ready_tasks()
+            ready = tracker.get_ready_tasks(project_id=project_id)
             return json.dumps({"ready_tasks": ready}, indent=2)
 
         elif act in ("list_all", "list"):
-            tasks = tracker.get_all_tasks()
+            tasks = tracker.get_all_tasks(project_id=project_id)
             return json.dumps({"tasks": tasks}, indent=2)
 
         elif act == "update_status":
             if not task_id or not status:
                 return json.dumps({"error": "Missing 'task_id' or 'status'"})
             ok = tracker.update_task_status(task_id, status=status, error=error)
+            if episode_name and status == "completed":
+                tracker.link_task_to_outcome(task_id, episode_name)
             return json.dumps({"task_id": task_id, "updated": ok, "status": status})
 
         return json.dumps({"error": f"Unknown action: {action}"})
