@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Kortext Knowledge OS: Qdrant Vector Substrate Daemon -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.kortext.qdrant</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/rb/.kortext/bin/qdrant</string>
+        <string>--config-path</string>
+        <string>/Users/rb/.kortext/config/qdrant.yaml</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/rb/.kortext/logs/qdrant_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/rb/.kortext/logs/qdrant_stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/rb/.kortext</string>
+</dict>
+</plist>

@@ -1,5 +1,5 @@
 [project]
-name = "cerebrum"
+name = "kortext"
 version = "2.0.0"
 description = "5-Tier Dual-Memory, AST Code Intelligence & Cognitive OS for Google Antigravity CLI"
 readme = "README.md"
@@ -14,12 +14,10 @@ keywords = [
 ]
 dependencies = [
   "fastmcp>=2.0",
-  "langgraph>=0.3",
   "llama-index-core>=0.12",
   "llama-index-embeddings-openai>=0.3",
-  "llama-index-vector-stores-qdrant>=0.4",
   "qdrant-client>=1.12.0",
-  "graphiti-core>=0.4",
+  "fastembed>=0.5.0",
   "redis>=5.0.0",
   "tree-sitter>=0.23.2,<0.27.0",
   "tree-sitter-python>=0.23.6,<0.26.0",
@@ -38,6 +36,8 @@ dependencies = [
   "rich>=13.7",
   "falkordb>=1.7.1",
   "numpy>=1.26.0",
+  "scipy>=1.10.0",
+  "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -54,13 +54,31 @@ dev = [
   "pytest-asyncio>=0.23",
 ]
 
+[project.urls]
+Homepage = "https://github.com/bravest-cat/cortex"
+Repository = "https://github.com/bravest-cat/cortex.git"
+
 [project.scripts]
-cerebrum           = "cerebrum.cli:main"
-cerebrum-server    = "cerebrum.server:main"
-cerebrum-ingest    = "cerebrum.ingest:main"
-cerebrum-watch     = "cerebrum.watcher:main"
-cerebrum-dashboard = "cerebrum.dashboard.app:main"
+kortext           = "kortext.cli:main"
+kortext-server    = "kortext.server:main"
+kortext-ingest    = "kortext.ingest:main"
+kortext-watch     = "kortext.watcher:main"
+kortext-dashboard = "kortext.dashboard.app:main"
+# Legacy aliases
+cerebrum           = "kortext.cli:main"
+cerebrum-server    = "kortext.server:main"
+cerebrum-ingest    = "kortext.ingest:main"
+cerebrum-watch     = "kortext.watcher:main"
+cerebrum-dashboard = "kortext.dashboard.app:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+filterwarnings = [
+    "always::DeprecationWarning",
+]
+

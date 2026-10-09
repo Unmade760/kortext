@@ -1,7 +1,7 @@
 [
   {
     "id": "hotpot_001",
-    "question": "Which class in cerebrum uses apply_taak_trimming for retrieval and what hybrid algorithm does it apply?",
+    "question": "Which class in kortext uses apply_taak_trimming for retrieval and what hybrid algorithm does it apply?",
     "gold_passages": [
       "RetrievalEngine",
       "apply_taak_trimming"
@@ -409,7 +409,7 @@
   },
   {
     "id": "hotpot_050",
-    "question": "trigger_dream_mode triggers what background operation in Cerebrum?",
+    "question": "trigger_dream_mode triggers what background operation in Kortext?",
     "gold_passages": [
       "trigger_dream_mode"
     ],

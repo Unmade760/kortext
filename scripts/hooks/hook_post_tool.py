@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cerebrum PostToolUse Hook: Safe spool-based cache invalidation.
+Kortext PostToolUse Hook: Safe spool-based cache invalidation.
 Lifecycle hooks NEVER instantiate QdrantClient or write directly to SQLite
 to prevent exclusive OS lock crashes (RocksDB LOCK_EX).
 """
@@ -29,7 +29,11 @@ def main():
     if name in FILE_MODIFYING_TOOLS:
         target_file = args.get("TargetFile")
         if target_file and os.path.isfile(target_file):
-            spool_dir = Path.home() / ".cerebrum" / "spool" / "invalidation"
+            spool_base = os.environ.get(
+                "KORTEXT_HOME",
+                os.environ.get("CEREBRUM_HOME", str(Path.home() / ".cerebrum")),
+            )
+            spool_dir = Path(spool_base) / "spool" / "invalidation"
             try:
                 spool_dir.mkdir(parents=True, exist_ok=True)
                 event_file = spool_dir / f"event_{os.getpid()}_{int(time.time() * 1000)}.json"

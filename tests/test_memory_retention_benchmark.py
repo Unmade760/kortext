@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import math
+import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -24,35 +26,39 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from cerebrum.chunking.token_utils import count_tokens
-from cerebrum.episodic.driver import AgentNativeEpisodicDriver
-from cerebrum.falkordb_client import get_shared_falkordb_client
-from cerebrum.retrieval.engine import apply_taak_trimming
-from cerebrum.retrieval.hipporag import HippoRAGPPR
-from cerebrum.symbols.seek import SymbolSeekEngine
+from kortext.chunking.token_utils import count_tokens
+from kortext.episodic.driver import AgentNativeEpisodicDriver
+from kortext.falkordb_client import get_shared_falkordb_client
+from kortext.retrieval.engine import apply_taak_trimming
+from kortext.retrieval.hipporag import HippoRAGPPR
+from kortext.symbols.seek import SymbolSeekEngine
 
 
-# ============================================================================
-# Weibull Retention Model Implementation (MR-1, MR-2, MR-3)
-# ============================================================================
+def _simulate_rg(cortex_root: Path, target_dir_rel: str, pattern: str) -> str:
+    """Fallback text search simulating `rg --no-heading -n <pattern> <target_dir_rel>`."""
+    lines = []
+    target_dir = cortex_root / target_dir_rel
+    try:
+        regex = re.compile(pattern)
+    except re.error:
+        regex = None
 
-def compute_weibull_retention(
-    delta_hours: float,
-    importance: int,
-    lambda_h: float = 72.0,
-    beta: float = 0.65,
-    floor: float = 0.05,
-) -> float:
-    """
-    Computes Stretched Weibull Decay memory retention probability with a biological floor.
+    for p in sorted(target_dir.rglob("*")):
+        if not p.is_file() or "__pycache__" in p.parts:
+            continue
+        try:
+            rel_str = str(p.relative_to(cortex_root))
+            with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                for line_num, line in enumerate(f, start=1):
+                    matched = regex.search(line) if regex is not None else (pattern in line)
+                    if matched:
+                        lines.append(f"{rel_str}:{line_num}:{line.rstrip()}")
+        except Exception:
+            continue
+    return "\n".join(lines)
 
-    R(t) = max(exp(-((delta_hours / (lambda_h * exp(importance / 10.0))) ** beta)), floor)
-    """
-    s_factor = math.exp(importance / 10.0)
-    scale = lambda_h * s_factor
-    r = math.exp(-((delta_hours / scale) ** beta))
-    return max(r, floor)
 
+from kortext.retrieval.retention import compute_weibull_retention
 
 # Alias matching alternative internal naming
 _weibull_retention = compute_weibull_retention
@@ -135,7 +141,7 @@ class TestWeibullRetentionCurve:
     def test_generate_weibull_decay_curve_artifact(self):
         """MR-3: Generates data/weibull_decay_curve.md artifact with ASCII sparkline visualization."""
         # Arrange
-        output_file = Path("/Users/rb/cortex/data/weibull_decay_curve.md")
+        output_file = Path(__file__).resolve().parent.parent / "data" / "weibull_decay_curve.md"
         horizons: List[Tuple[float, str]] = [
             (0.1, "6 minutes"),
             (1.0, "1 hour"),
@@ -152,7 +158,7 @@ class TestWeibullRetentionCurve:
 
         # Act: Build structured artifact markdown content
         lines = [
-            "# Cerebrum Stretched Weibull Memory Retention Decay Curves",
+            "# Kortext Stretched Weibull Memory Retention Decay Curves",
             "",
             "> Mathematical specification benchmark: Invariants MR-1, MR-2, MR-3.",
             "> Governing Equation: $R(t) = \\max\\left(\\exp\\left(-\\left(\\frac{t}{\\lambda \\cdot e^{I/10}}\\right)^\\beta\\right), \\text{floor}\\right)$",
@@ -305,6 +311,370 @@ class TestBiTemporalFactRetention:
                 {"s": subject, "r": relation},
             )
 
+    @pytest.mark.anyio
+    async def test_unified_fact_filtering_excludes_both_superseded_and_dormant(self):
+        """MR-4: Validates unified filtering: facts are active iff coalesce(r.superseded, false)=false AND coalesce(r.dormant, false)=false."""
+        now = datetime.now(timezone.utc).isoformat()
+        subject = f"UnifiedSubj_{uuid.uuid4().hex[:8]}"
+        target = f"UnifiedTgt_{uuid.uuid4().hex[:8]}"
+        rel = "PARAM"
+
+        # 1. Active fact: superseded=false, dormant=false
+        fact_active_id = self.driver.record_fact(
+            subject=subject,
+            relation=rel,
+            fact=f"{subject} has active_setting",
+            object_name=target,
+        )
+
+        # 2. Dormant fact (only dormant=true, superseded=false)
+        fact_dormant_id = self.driver.record_fact(
+            subject=subject,
+            relation=rel,
+            fact=f"{subject} has dormant_setting",
+            object_name=target,
+        )
+        self.driver._query(
+            "MATCH ()-[r:RELATES_TO {id: $id}]->() SET r.dormant = true, r.superseded = false",
+            {"id": fact_dormant_id},
+        )
+
+        # 3. Superseded fact (only superseded=true, dormant=false)
+        fact_superseded_id = self.driver.record_fact(
+            subject=subject,
+            relation=rel,
+            fact=f"{subject} has superseded_setting",
+            object_name=target,
+        )
+        self.driver._query(
+            "MATCH ()-[r:RELATES_TO {id: $id}]->() SET r.superseded = true, r.dormant = false",
+            {"id": fact_superseded_id},
+        )
+
+        try:
+            # Test query_multi_hop_facts
+            multi_hop = self.driver.query_multi_hop_facts(entity_name=subject, max_hops=1)
+            mh_ids = [f["fact_id"] for f in multi_hop]
+            assert fact_active_id in mh_ids, "Active fact should be returned in query_multi_hop_facts"
+            assert fact_dormant_id not in mh_ids, "Dormant fact must be excluded from query_multi_hop_facts"
+            assert fact_superseded_id not in mh_ids, "Superseded fact must be excluded from query_multi_hop_facts"
+
+            # Test search
+            search_results = await self.driver.search(query=f"{subject} setting", limit=10)
+            search_text = " ".join(search_results)
+            assert "active_setting" in search_text, "Active fact should be found in search"
+            assert "dormant_setting" not in search_text, "Dormant fact must be excluded from search"
+            assert "superseded_setting" not in search_text, "Superseded fact must be excluded from search"
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+
+    def test_query_facts_as_of_historical_reconstruction(self):
+        """MR-4: Verifies point-in-time reconstruction returns historical fact even if currently superseded."""
+        subject = f"HistSubj_{uuid.uuid4().hex[:8]}"
+        target = f"HistTgt_{uuid.uuid4().hex[:8]}"
+        rel = "VERSION"
+        t_base = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        t_v1_start = t_base.isoformat()
+        t_as_of_past = (t_base + timedelta(days=10)).isoformat()
+        t_v2_start = (t_base + timedelta(days=30)).isoformat()
+        t_as_of_present = (t_base + timedelta(days=40)).isoformat()
+
+        try:
+            # Fact 1: valid from Jan 1
+            f1_id = self.driver.record_fact(
+                subject=subject,
+                relation=rel,
+                fact=f"{subject} version is 1.0",
+                object_name=target,
+                valid_from=t_v1_start,
+            )
+
+            # Fact 2: supersedes Fact 1 starting Jan 31
+            f2_id = self.driver.record_fact(
+                subject=subject,
+                relation=rel,
+                fact=f"{subject} version is 2.0",
+                object_name=target,
+                valid_from=t_v2_start,
+                supersedes=f1_id,
+            )
+            # Adjust f1 valid_to to match the transition point t_v2_start
+            self.driver._query(
+                "MATCH ()-[r:RELATES_TO {id: $id}]->() SET r.valid_to = $v_end",
+                {"id": f1_id, "v_end": t_v2_start},
+            )
+
+            # Query historical point-in-time: Jan 11 (f1 was valid, f2 did not exist yet)
+            past_facts = self.driver.query_facts_as_of(subject=subject, as_of_date=t_as_of_past)
+            past_ids = [f["fact_id"] for f in past_facts]
+            assert f1_id in past_ids, "Historical query must return f1 even though it is currently superseded"
+            assert f2_id not in past_ids, "Historical query must not return future fact f2"
+
+            # Query present point-in-time: Feb 10 (f1 validity expired, f2 is active)
+            present_facts = self.driver.query_facts_as_of(subject=subject, as_of_date=t_as_of_present)
+            present_ids = [f["fact_id"] for f in present_facts]
+            assert f1_id not in present_ids, "Present query must exclude expired fact f1"
+            assert f2_id in present_ids, "Present query must return active fact f2"
+
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+
+    def test_delete_fact_by_id_marks_relationship_and_episodic_superseded(self):
+        """MR-4: Verifies delete_fact matches by relation ID and marks r.superseded = true."""
+        import asyncio
+
+        subject = f"DeleteSubj_{uuid.uuid4().hex[:8]}"
+        target = f"DeleteTgt_{uuid.uuid4().hex[:8]}"
+        relation = "CONNECTED_TO"
+        fact_content = f"{subject} is connected to {target}"
+        reason = "Decommissioned connection"
+
+        try:
+            fact_id = self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=fact_content,
+                object_name=target,
+            )
+            assert fact_id.startswith("fact_")
+
+            # Act: Delete the fact by its fact_id
+            asyncio.run(self.driver.delete_fact(fact_id=fact_id, reason=reason))
+
+            # Query relationship edge directly
+            cypher_edge = "MATCH ()-[r:RELATES_TO {id: $id}]->() RETURN r.superseded, r.superseded_reason"
+            res = self.driver._query(cypher_edge, {"id": fact_id})
+            assert res and len(res) > 1 and res[1], f"Could not find relationship edge {fact_id}"
+            superseded, actual_reason = res[1][0][0], res[1][0][1]
+            assert str(superseded).lower() == "true", f"Expected r.superseded == true, got {superseded}"
+            assert actual_reason == reason
+
+            # Also verify episodic node deletion by episode name/id
+            ep_name = f"DeleteEp_{uuid.uuid4().hex[:8]}"
+            asyncio.run(
+                self.driver.record_outcome(
+                    episode_name=ep_name,
+                    content="Episode about to be superseded",
+                )
+            )
+            asyncio.run(self.driver.delete_fact(fact_id=ep_name, reason="Outdated episode"))
+
+            cypher_ep = "MATCH (e:Episodic {name: $name}) RETURN e.superseded, e.superseded_reason"
+            res_ep = self.driver._query(cypher_ep, {"name": ep_name})
+            assert res_ep and len(res_ep) > 1 and res_ep[1], f"Could not find episodic node {ep_name}"
+            ep_superseded, ep_reason = res_ep[1][0][0], res_ep[1][0][1]
+            assert str(ep_superseded).lower() == "true", f"Expected e.superseded == true, got {ep_superseded}"
+            assert ep_reason == "Outdated episode"
+
+            # Also verify relationship edge deletion by fact text substring
+            fact_text_unique = f"UniqueSubstring_{uuid.uuid4().hex[:8]}"
+            fact_id2 = self.driver.record_fact(
+                subject=subject,
+                relation="SUB_REL",
+                fact=f"{subject} has property {fact_text_unique}",
+                object_name=target,
+            )
+            asyncio.run(self.driver.delete_fact(fact_id=fact_text_unique, reason="Text superseded"))
+            res2 = self.driver._query(cypher_edge, {"id": fact_id2})
+            assert res2 and len(res2) > 1 and res2[1]
+            assert str(res2[1][0][0]).lower() == "true"
+            assert res2[1][0][1] == "Text superseded"
+
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+            if "ep_name" in locals():
+                self.driver._query(
+                    "MATCH (e:Episodic {name: $name}) DETACH DELETE e",
+                    {"name": ep_name},
+                )
+
+    def test_query_facts_as_of_temporal_ordering(self):
+        """MR-4: Verifies query_facts_as_of returns facts sorted by valid_from DESC."""
+        now = datetime.now(timezone.utc)
+        t_now = now.isoformat()
+        t_2022 = (now - timedelta(days=700)).isoformat()
+        t_2023 = (now - timedelta(days=350)).isoformat()
+        t_2024 = (now - timedelta(days=10)).isoformat()
+
+        subject = f"TemporalOrderSubj_{uuid.uuid4().hex[:8]}"
+        target = f"TemporalOrderTarget_{uuid.uuid4().hex[:8]}"
+        relation = "ROLE_PROGRESSION"
+
+        try:
+            # Insert in non-chronological order
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} was engineer in 2022",
+                object_name=target,
+                valid_from=t_2022,
+            )
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} was lead in 2024",
+                object_name=target,
+                valid_from=t_2024,
+            )
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} was senior in 2023",
+                object_name=target,
+                valid_from=t_2023,
+            )
+
+            facts = self.driver.query_facts_as_of(subject=subject, as_of_date=t_now)
+            assert len(facts) == 3, f"Expected 3 facts, got {len(facts)}"
+            # Verify strict descending order by valid_from
+            dates = [f["valid_from"] for f in facts]
+            assert dates == sorted(dates, reverse=True), f"Facts not sorted descending by valid_from: {dates}"
+            assert "2024" in facts[0]["fact"]
+            assert "2023" in facts[1]["fact"]
+            assert "2022" in facts[2]["fact"]
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+
+    @pytest.mark.anyio
+    async def test_episodic_search_temporal_ordering(self):
+        """MR-4: Verifies search ranks newer matching facts above older ones when relevance scores tie."""
+        now = datetime.now(timezone.utc)
+        t_older = (now + timedelta(seconds=1)).isoformat()
+        t_newer = (now + timedelta(seconds=2)).isoformat()
+
+        subject = f"TemporalSearchSubj_{uuid.uuid4().hex[:8]}"
+        target = f"TemporalSearchTarget_{uuid.uuid4().hex[:8]}"
+        relation = "STATUS"
+        unique_term = f"uniquekeyword{uuid.uuid4().hex[:6]}"
+
+        try:
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} historical fact with {unique_term}",
+                object_name=target,
+                valid_from=t_older,
+            )
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} current fact with {unique_term}",
+                object_name=target,
+                valid_from=t_newer,
+            )
+
+            results = await self.driver.search(unique_term, limit=5)
+            assert len(results) >= 2, f"Expected at least 2 matching facts, got {len(results)}"
+            # Newer fact should be ranked before older fact
+            assert "current fact" in results[0], f"Expected newest fact first, got: {results}"
+            assert "historical fact" in results[1], f"Expected older fact second, got: {results}"
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+
+    def test_transitive_invalidation_marks_dependent_facts_provisional_stale(self):
+        """MR-4: Invalidation marks 1-hop outgoing facts connected to superseded object as provisional_stale=True."""
+        s_name = f"TransSubj_{uuid.uuid4().hex[:8]}"
+        mid_name = f"TransMid_{uuid.uuid4().hex[:8]}"
+        down_name = f"TransDown_{uuid.uuid4().hex[:8]}"
+
+        try:
+            # S -> Mid (fact 1)
+            old_fid = self.driver.record_fact(
+                subject=s_name,
+                relation="CONNECTED_TO",
+                fact=f"{s_name} connects to {mid_name}",
+                object_name=mid_name,
+            )
+            # Mid -> Down (fact 2, outgoing from Mid)
+            dep_fid = self.driver.record_fact(
+                subject=mid_name,
+                relation="HOSTS_SERVICE",
+                fact=f"{mid_name} hosts {down_name}",
+                object_name=down_name,
+            )
+
+            # Supersede old_fid with a new fact
+            new_fid = self.driver.record_fact(
+                subject=s_name,
+                relation="CONNECTED_TO",
+                fact=f"{s_name} now connects to a different service",
+                object_name=mid_name,
+                supersedes=old_fid,
+            )
+
+            # Verify dep_fid has provisional_stale = true
+            res = self.driver._query(
+                "MATCH ()-[r:RELATES_TO {id: $fid}]->() RETURN r.provisional_stale",
+                {"fid": dep_fid},
+            )
+            assert res and len(res) > 1 and res[1], f"Could not find relationship {dep_fid}"
+            val = res[1][0][0]
+            assert str(val).lower() == "true", f"Expected r.provisional_stale == true, got {val}"
+
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $m, $d] DETACH DELETE e",
+                {"s": s_name, "m": mid_name, "d": down_name},
+            )
+
+    @pytest.mark.anyio
+    async def test_episodic_search_weibull_retention_ranking(self):
+        """MR-4: Verifies Weibull retention decay ranks recent fact above an identical-relevance old fact."""
+        now = datetime.now(timezone.utc)
+        # Old fact from 30 days ago (720 hours)
+        t_old = (now - timedelta(days=30)).isoformat()
+        # Fresh fact from 1 hour ago
+        t_fresh = (now - timedelta(hours=1)).isoformat()
+
+        subject = f"WeibullSearchSubj_{uuid.uuid4().hex[:8]}"
+        target = f"WeibullSearchTarget_{uuid.uuid4().hex[:8]}"
+        relation = "STATUS"
+        unique_term = f"weibullterm{uuid.uuid4().hex[:6]}"
+
+        try:
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} old stale entry with {unique_term}",
+                object_name=target,
+                valid_from=t_old,
+                importance=5,
+            )
+            self.driver.record_fact(
+                subject=subject,
+                relation=relation,
+                fact=f"{subject} fresh recent entry with {unique_term}",
+                object_name=target,
+                valid_from=t_fresh,
+                importance=5,
+            )
+
+            results = await self.driver.search(unique_term, limit=5)
+            assert len(results) >= 2, f"Expected 2 matching facts, got {len(results)}"
+            # Fresh fact must rank first due to Weibull retention modulation
+            assert "fresh recent entry" in results[0], f"Expected fresh fact first due to Weibull retention, got {results}"
+            assert "old stale entry" in results[1], f"Expected old fact second due to Weibull decay, got {results}"
+        finally:
+            self.driver._query(
+                "MATCH (e:Entity) WHERE e.name IN [$s, $t] DETACH DELETE e",
+                {"s": subject, "t": target},
+            )
+
 
 # ============================================================================
 # Test Suite: TestHippoRAGAssociativeRetention (MR-5)
@@ -435,7 +805,7 @@ class TestE2ETokenBudget:
     def test_aggregate_session_token_savings(self):
         """MR-6: Simulates 8 symbol queries with live rg vs seek_symbol, asserts overall savings >= 0.85 or 0.90."""
         # Arrange
-        cortex_root = Path("/Users/rb/cortex")
+        cortex_root = Path(__file__).resolve().parent.parent
         symbols = [
             "RetrievalEngine",
             "SymbolSeekEngine",
@@ -451,16 +821,21 @@ class TestE2ETokenBudget:
         total_rg_tokens = 0
         total_seek_tokens = 0
 
+        pkg_dir = "kortext"
         # Act
         for sym in symbols:
             # 1. Run live ripgrep and accumulate matched files content (agent inspection volume)
-            rg_res = subprocess.run(
-                ["rg", "--no-heading", sym, "cerebrum"],
-                cwd=cortex_root,
-                capture_output=True,
-                text=True,
-            )
-            rg_text = rg_res.stdout
+            if shutil.which("rg"):
+                rg_res = subprocess.run(
+                    ["rg", "--no-heading", sym, pkg_dir],
+                    cwd=cortex_root,
+                    capture_output=True,
+                    text=True,
+                )
+                rg_text = rg_res.stdout
+            else:
+                rg_text = _simulate_rg(cortex_root, pkg_dir, sym)
+
             matched_files = sorted({line.split(":", 1)[0] for line in rg_text.splitlines() if ":" in line})
             for f in matched_files:
                 fpath = cortex_root / f

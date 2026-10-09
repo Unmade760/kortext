@@ -1,0 +1,318 @@
+"""
+Relational Cypher query handlers, cluster inference, and overview graph view builder.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from kortext.dashboard.views.specs import (
+    DEFAULT_REL_SPEC,
+    REL_SPECS,
+    _make_vis_edge,
+    _make_vis_node,
+)
+
+
+def _handle_defined_in(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
+    for row in rows:
+        if len(row) >= 4:
+            sym_name, file_path, kind, line = str(row[0]), str(row[1]), str(row[2]), str(row[3])
+            sym_to_file[sym_name] = file_path
+            is_doc = file_path.lower().endswith((".md", ".markdown"))
+            if file_path not in nodes_dict:
+                nodes_dict[file_path] = _make_vis_node(
+                    node_id=file_path,
+                    label=Path(file_path).stem.replace("-", " ").replace("_", " ").title() if is_doc else Path(file_path).name,
+                    group="document" if is_doc else "file",
+                    title=f"<b>{'Document' if is_doc else 'File'}: {Path(file_path).name}</b><br/>{file_path}",
+                )
+            if sym_name not in nodes_dict:
+                nodes_dict[sym_name] = _make_vis_node(
+                    node_id=sym_name,
+                    label=sym_name,
+                    group="symbol",
+                    title=f"<b>{sym_name}</b> ({kind})<br/>Line {line} in {Path(file_path).name}",
+                )
+            edges_list.append(_make_vis_edge(sym_name, file_path, rel))
+
+
+def _handle_filter_existing(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
+    for row in rows:
+        if len(row) >= 2:
+            src, dst = str(row[0]), str(row[1])
+            if src in nodes_dict and dst in nodes_dict:
+                edges_list.append(_make_vis_edge(src, dst, rel))
+
+
+def _handle_symbol_hierarchy(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
+    src_suffix = f" ({spec['src_role']})" if spec.get("src_role") else ""
+    dst_suffix = f" ({spec['dst_role']})" if spec.get("dst_role") else ""
+    for row in rows:
+        if len(row) >= 2:
+            s1, s2 = str(row[0]), str(row[1])
+            if s1 not in nodes_dict:
+                nodes_dict[s1] = _make_vis_node(node_id=s1, label=s1, group="symbol", title=f"<b>{s1}</b>{src_suffix}")
+            if s2 not in nodes_dict:
+                nodes_dict[s2] = _make_vis_node(node_id=s2, label=s2, group="symbol", title=f"<b>{s2}</b>{dst_suffix}")
+            edges_list.append(_make_vis_edge(s1, s2, rel))
+
+
+def _handle_doc_links(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
+    for row in rows:
+        if len(row) >= 7:
+            src_path, src_title, dst_id, dst_title, dst_labels, rel_label, link_type = (str(row[i]) for i in range(7))
+            if src_path in nodes_dict:
+                nodes_dict[src_path]["group"] = "document"
+                if src_title and src_title != src_path:
+                    nodes_dict[src_path]["label"] = src_title
+                    nodes_dict[src_path]["title"] = f"<b>Document: {src_title}</b><br/>{src_path}"
+            else:
+                nodes_dict[src_path] = _make_vis_node(
+                    node_id=src_path,
+                    label=src_title or Path(src_path).stem,
+                    group="document",
+                    title=f"<b>Document: {src_title}</b><br/>{src_path}",
+                )
+            dst_group = "concept" if "concept" in dst_labels.lower() else ("document" if "document" in dst_labels.lower() else "file")
+            if dst_id in nodes_dict:
+                nodes_dict[dst_id]["group"] = dst_group
+            else:
+                nodes_dict[dst_id] = _make_vis_node(
+                    node_id=dst_id,
+                    label=dst_title or Path(dst_id).name,
+                    group=dst_group,
+                    title=f"<b>{dst_title}</b> ({dst_group})<br/>{dst_id}",
+                )
+            edges_list.append(_make_vis_edge(
+                src_path, dst_id, rel,
+                title=f"<b>LINKS_TO</b>: {rel_label}<br/>{Path(src_path).name} &rarr; {Path(dst_id).name}",
+            ))
+
+
+def _handle_tags(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
+    for row in rows:
+        if len(row) >= 3:
+            src_path, src_title, tag_name = str(row[0]), str(row[1]), str(row[2])
+            if src_path not in nodes_dict:
+                nodes_dict[src_path] = _make_vis_node(
+                    node_id=src_path,
+                    label=src_title or Path(src_path).stem,
+                    group="document",
+                    title=f"<b>Document: {src_title}</b><br/>{src_path}",
+                )
+            tag_id = f"tag:{tag_name}"
+            if tag_id not in nodes_dict:
+                nodes_dict[tag_id] = _make_vis_node(
+                    node_id=tag_id,
+                    label=f"#{tag_name}",
+                    full_name=tag_name,
+                    group="tag",
+                    title=f"<b>Tag: #{tag_name}</b>",
+                )
+            edges_list.append(_make_vis_edge(src_path, tag_id, rel))
+
+
+# Register handlers in declarative REL_SPECS table
+REL_SPECS["DEFINED_IN"]["handler"] = _handle_defined_in
+REL_SPECS["REFERENCES"]["handler"] = _handle_filter_existing
+REL_SPECS["IMPORTS"]["handler"] = _handle_filter_existing
+REL_SPECS["IMPLEMENTS"]["handler"] = _handle_symbol_hierarchy
+REL_SPECS["TYPE_OF"]["handler"] = _handle_symbol_hierarchy
+REL_SPECS["LINKS_TO"]["handler"] = _handle_doc_links
+REL_SPECS["TAG"]["handler"] = _handle_tags
+
+
+def populate_clean_symbols_graph(
+    r, target_db: str, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]
+) -> None:
+    """Populates nodes and edges for clean symbols view via declarative REL_SPECS."""
+    for rel_name, spec in REL_SPECS.items():
+        query = spec.get("query")
+        handler = spec.get("handler")
+        if query and handler:
+            res = r.execute_command("GRAPH.QUERY", target_db, query)
+            if res and len(res) > 1 and isinstance(res[1], list):
+                handler(res[1], rel_name, spec, nodes_dict, edges_list, sym_to_file)
+
+
+def _infer_cluster(
+    node_id: str, group: str, full_name: str, sym_to_file: Dict[str, str], target_db: str
+) -> Tuple[str, str]:
+    """Deterministically assigns a node to an architectural cluster or subsystem."""
+    raw_path = sym_to_file.get(node_id, full_name or node_id) if group == "symbol" else (full_name or node_id)
+    if group == "tag":
+        return "tags", "🏷️ Tags & Categories"
+    if group == "episodic":
+        return "episodic", "💡 Episodic Decisions"
+    if group == "concept":
+        return "concepts", "💎 Concepts"
+
+    if "/" in raw_path or "\\" in raw_path:
+        parts = Path(raw_path).parts
+        for folder in ("kortext", "cerebrum", "cortex", "tests", "scripts", "journal", "docs"):
+            if folder in parts:
+                idx = parts.index(folder)
+                if idx + 1 < len(parts) and not parts[idx + 1].endswith(".py"):
+                    return f"{folder}.{parts[idx + 1]}", f"{folder}.{parts[idx + 1]}"
+                return folder, folder
+        p = Path(raw_path)
+        stem = p.name.split("#")[0]
+        if stem.endswith((".md", ".markdown")):
+            return f"doc:{stem}", f"📄 {stem.rsplit('.', 1)[0].replace('-', ' ').replace('_', ' ').title()}"
+        return p.parent.name or "root", p.parent.name or "Root"
+
+    if "#" in raw_path:
+        doc_part = raw_path.split("#")[0]
+        return f"doc:{doc_part}", f"📄 {Path(doc_part).stem.replace('-', ' ').title()}"
+
+    return "general", "🌐 General"
+
+
+def _get_falkordb_client(host: str, port: int):
+    """Facade-aware FalkorDB client resolver preserving backward-compatible mock hooks."""
+    import sys
+    views_mod = (
+        sys.modules.get("kortext.dashboard.views")
+        or sys.modules.get("kortext.dashboard.graph_views")
+        or sys.modules.get("cerebrum.dashboard.graph_views")
+    )
+    if views_mod and hasattr(views_mod, "get_shared_falkordb_client"):
+        return views_mod.get_shared_falkordb_client(host=host, port=port)
+    from kortext.falkordb_client import get_shared_falkordb_client
+    return get_shared_falkordb_client(host=host, port=port)
+
+
+def build_graph_view(
+    host: str,
+    port: int,
+    default_db: str,
+    graph_type: str = "episodic",
+    clean: bool = True,
+    graph_name: Optional[str] = None,
+) -> dict:
+    """
+    Queries FalkorDB for nodes and relationships formatted for vis-network.
+    graph_type: 'episodic' (kortext db) or 'symbols' (kortext_symbols db).
+    clean: If True (default for symbols), filters out external built-ins.
+    """
+    nodes_dict: Dict[str, dict] = {}
+    edges_list: List[dict] = []
+    sym_to_file: Dict[str, str] = {}
+
+    # Known episodic/causal memory graph names (legacy 'cerebrum' kept for backward-compat)
+    EPISODIC_GRAPH_NAMES = {"kortext", "cerebrum", default_db}
+
+    if graph_name:
+        target_db = graph_name
+        is_symbols_graph = (
+            "symbol" in graph_name.lower()
+            or "doc" in graph_name.lower()
+            or graph_type == "symbols"
+        ) and graph_name not in EPISODIC_GRAPH_NAMES
+    else:
+        target_db = "kortext_symbols" if graph_type == "symbols" else default_db
+        is_symbols_graph = graph_type == "symbols"
+
+    try:
+        client = _get_falkordb_client(host=host, port=port)
+        r = client.get_redis()
+
+        if is_symbols_graph:
+            if clean:
+                populate_clean_symbols_graph(r, target_db, nodes_dict, edges_list, sym_to_file)
+            else:
+                nodes_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (n) RETURN coalesce(n.name, n.path), labels(n)")
+                if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
+                    for row in nodes_res[1]:
+                        if len(row) >= 2:
+                            raw_id = str(row[0])
+                            raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
+                            is_file = "file" in raw_label.lower()
+                            display_name = Path(raw_id).name if is_file else raw_id
+                            nodes_dict[raw_id] = _make_vis_node(
+                                node_id=raw_id,
+                                label=display_name,
+                                group="file" if is_file else "symbol",
+                                title=f"<b>{display_name}</b><br/>Type: {raw_label}<br/>Path: {raw_id}",
+                            )
+
+                edges_res = r.execute_command(
+                    "GRAPH.QUERY", target_db, "MATCH (s)-[r]->(t) RETURN coalesce(s.name, s.path), type(r), coalesce(t.name, t.path)"
+                )
+                if edges_res and len(edges_res) > 1 and isinstance(edges_res[1], list):
+                    for row in edges_res[1]:
+                        if len(row) >= 3:
+                            src, rel, dst = str(row[0]), str(row[1]), str(row[2])
+                            if src not in nodes_dict:
+                                nodes_dict[src] = _make_vis_node(node_id=src, label=Path(src).name if "/" in src else src, group="symbol", title=src)
+                            if dst not in nodes_dict:
+                                nodes_dict[dst] = _make_vis_node(node_id=dst, label=Path(dst).name if "/" in dst else dst, group="file", title=dst)
+                            edges_list.append(_make_vis_edge(src, dst, rel))
+
+        else:
+            nodes_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (n) RETURN n.name, labels(n)")
+            if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
+                for row in nodes_res[1]:
+                    if len(row) >= 2:
+                        name = str(row[0])
+                        raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
+                        display_label = (name[:26] + "…") if len(name) > 28 else name
+                        nodes_dict[name] = _make_vis_node(
+                            node_id=name,
+                            label=display_label,
+                            group="episodic" if "episodic" in raw_label.lower() else "entity",
+                            title=f"<b>{name}</b><br/>Type: {raw_label}",
+                        )
+
+            edges_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (s)-[r]->(t) RETURN s.name, type(r), t.name")
+            if edges_res and len(edges_res) > 1 and isinstance(edges_res[1], list):
+                for row in edges_res[1]:
+                    if len(row) >= 3:
+                        src, rel, dst = str(row[0]), str(row[1]), str(row[2])
+                        if src not in nodes_dict:
+                            nodes_dict[src] = _make_vis_node(node_id=src, label=src, group="entity", title=src)
+                        if dst not in nodes_dict:
+                            nodes_dict[dst] = _make_vis_node(node_id=dst, label=dst, group="entity", title=dst)
+                        edges_list.append(_make_vis_edge(src, dst, rel, extra_props={"is_mention": rel == "MENTIONS"}))
+
+        deduped_edges: Dict[Tuple[str, str, str], dict] = {}
+        for edge in edges_list:
+            key = (edge["from"], edge["to"], edge.get("label", ""))
+            if key not in deduped_edges:
+                ec = dict(edge)
+                ec["count"] = 1
+                deduped_edges[key] = ec
+            else:
+                deduped_edges[key]["count"] += 1
+                cnt = deduped_edges[key]["count"]
+                u_name = Path(key[0]).name if "/" in key[0] else key[0]
+                v_name = Path(key[1]).name if "/" in key[1] else key[1]
+                deduped_edges[key]["title"] = f"<b>{key[2]}</b> ({cnt}x occurrences)<br/>{u_name} &rarr; {v_name}"
+
+        final_edges = list(deduped_edges.values())
+
+        degrees: Dict[str, int] = {}
+        for edge in final_edges:
+            degrees[edge["from"]] = degrees.get(edge["from"], 0) + 1
+            degrees[edge["to"]] = degrees.get(edge["to"], 0) + 1
+
+        for n in nodes_dict.values():
+            nid = n["id"]
+            n["degree"] = degrees.get(nid, 0)
+            cid, cname = _infer_cluster(nid, n.get("group", ""), n.get("full_name", nid), sym_to_file, target_db)
+            n["cluster_id"] = cid
+            n["cluster_name"] = cname
+
+        return {
+            "status": "ok",
+            "graph_type": graph_type,
+            "nodes": list(nodes_dict.values()),
+            "edges": final_edges,
+            "stats": {
+                "nodes_count": len(nodes_dict),
+                "edges_count": len(final_edges),
+            },
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "nodes": [], "edges": []}

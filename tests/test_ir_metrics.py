@@ -1,5 +1,5 @@
 """
-Unit tests for cerebrum.benchmarks.ir_metrics.
+Unit tests for kortext.benchmarks.ir_metrics.
 
 Verifies Information Retrieval & QA evaluation metrics:
 - recall_at_k
@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import pytest
 
-from cerebrum.benchmarks.ir_metrics import (
+from kortext.benchmarks.ir_metrics import (
     exact_match,
     mean_reciprocal_rank,
     ndcg_at_k,
@@ -226,7 +226,7 @@ class TestExactMatch:
 
     def test_perfect_score(self):
         assert exact_match("hello world", "hello world") == 1.0
-        assert exact_match("Cerebrum System", "cerebrum system") == 1.0
+        assert exact_match("Kortext System", "kortext system") == 1.0
         assert exact_match("Hello, World!", "hello world") == 1.0
         assert exact_match("  spaced   out   text\n", "spaced out text") == 1.0
 

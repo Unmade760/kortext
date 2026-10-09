@@ -1,0 +1,13 @@
+{
+  "display_name": "Kortext Cognitive Dream Consolidation",
+  "description": "Cognitive consolidation, Weibull memory decay sweep, and invariant induction daemon",
+  "command": "/Users/rb/cortex/.venv/bin/python3",
+  "args": [
+    "-m",
+    "kortext.dream"
+  ],
+  "restart_policy": "on-failure",
+  "env": {
+    "KORTEXT_HOME": "${HOME}/.kortext"
+  }
+}

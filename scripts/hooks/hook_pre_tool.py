@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cerebrum PreToolUse Hook: Safety gating for dangerous shell commands and AST complexity audit.
+Kortext PreToolUse Hook: Safety gating for dangerous shell commands and AST complexity audit.
 """
 from __future__ import annotations
 
@@ -54,8 +54,8 @@ def main():
     elif name in ("write_to_file", "replace_file_content", "multi_replace_file_content"):
         target_file = args.get("TargetFile", "")
         file_name = target_file.split("/")[-1]
-        if file_name in CORE_ARCHITECTURAL_FILES and "cerebrum/cerebrum/" in target_file:
-            print(f"[Cerebrum PreTool] ℹ️ Modifying core architectural file {file_name}. Ensure trace_symbol_impact was run.", file=sys.stderr)
+        if file_name in CORE_ARCHITECTURAL_FILES and ("kortext/" in target_file or "cerebrum/" in target_file):
+            print(f"[Kortext PreTool] ℹ️ Modifying core architectural file {file_name}. Ensure trace_symbol_impact was run.", file=sys.stderr)
 
     emit_hook_response({"decision": "allow"})
 

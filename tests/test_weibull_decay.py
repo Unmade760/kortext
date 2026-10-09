@@ -6,11 +6,7 @@ import math
 import pytest
 
 
-def compute_weibull_retention(delta_hours: float, importance: int, lambda_h: float = 72.0, beta: float = 0.65, floor: float = 0.05) -> float:
-    s_factor = math.exp(importance / 10.0)
-    scale = lambda_h * s_factor
-    r = math.exp(-((delta_hours / scale) ** beta))
-    return max(r, floor)
+from kortext.retrieval.retention import compute_weibull_retention
 
 
 class TestWeibullDecay:

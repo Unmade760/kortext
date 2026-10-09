@@ -1,5 +1,5 @@
 {
-  "cerebrum-ambient-grounding": {
+  "kortext-ambient-grounding": {
     "PreInvocation": [
       {
         "type": "command",
@@ -8,7 +8,7 @@
       }
     ]
   },
-  "cerebrum-safety-gate": {
+  "kortext-safety-gate": {
     "PreToolUse": [
       {
         "matcher": "run_command|replace_file_content|write_to_file",
@@ -22,7 +22,7 @@
       }
     ]
   },
-  "cerebrum-cache-invalidation": {
+  "kortext-cache-invalidation": {
     "PostToolUse": [
       {
         "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
@@ -36,7 +36,7 @@
       }
     ]
   },
-  "cerebrum-dag-stop-guard": {
+  "kortext-dag-stop-guard": {
     "Stop": [
       {
         "type": "command",

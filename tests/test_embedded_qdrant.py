@@ -4,10 +4,11 @@ Verifies modern query_points API, named multi-vectors, and hybrid fusion.
 """
 
 import tempfile
+from unittest.mock import AsyncMock, patch
 import pytest
 from pathlib import Path
 from qdrant_client.models import PointStruct
-from cerebrum.retrieval.qdrant_engine import EmbeddedQdrantEngine
+from kortext.retrieval.qdrant_engine import EmbeddedQdrantEngine
 
 
 class TestEmbeddedQdrant:
@@ -68,3 +69,37 @@ class TestEmbeddedQdrant:
         assert len(results) == 1
         assert results[0]["id"] == 1
         assert results[0]["payload"]["title"] == "SessionManager Documentation"
+
+
+@pytest.mark.anyio
+async def test_resolve_workspace_root_embedded_mode(monkeypatch):
+    """In native embedded mode (QDRANT_URL unset/empty), AsyncQdrantClient is not instantiated."""
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    from kortext.retrieval.engine import _COLLECTION_WORKSPACE_CACHE, resolve_workspace_root_for_collection
+
+    _COLLECTION_WORKSPACE_CACHE.clear()
+
+    with patch("qdrant_client.AsyncQdrantClient") as mock_async_client:
+        res = await resolve_workspace_root_for_collection("unknown_embedded_collection_123")
+        # Ensure network client is not instantiated
+        mock_async_client.assert_not_called()
+        assert res is not None
+
+
+@pytest.mark.anyio
+async def test_resolve_workspace_root_remote_mode(monkeypatch):
+    """When QDRANT_URL is set, AsyncQdrantClient is instantiated."""
+    monkeypatch.setenv("QDRANT_URL", "http://qdrant-host:6333")
+    from kortext.retrieval.engine import _COLLECTION_WORKSPACE_CACHE, resolve_workspace_root_for_collection
+
+    _COLLECTION_WORKSPACE_CACHE.clear()
+
+    with patch("qdrant_client.AsyncQdrantClient") as mock_async_client:
+        mock_inst = AsyncMock()
+        mock_inst.scroll.return_value = ([], None)
+        mock_async_client.return_value = mock_inst
+
+        res = await resolve_workspace_root_for_collection("remote_collection_xyz")
+        mock_async_client.assert_called_once_with(url="http://qdrant-host:6333")
+        assert res is not None
+

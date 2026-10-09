@@ -1,6 +1,6 @@
-# Cortex
+# Kortext
 
-> Four-tier memory, AST code intelligence, and RAG system for Google Antigravity CLI
+> 5-Tier Dual-Memory, AST Code Intelligence & Cognitive OS for Google Antigravity CLI
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue)](pyproject.toml)
@@ -8,68 +8,55 @@
 [![VectorDB](https://img.shields.io/badge/Qdrant-1.12+-red)](https://qdrant.tech/)
 [![GraphDB](https://img.shields.io/badge/FalkorDB-1.7+-orange)](https://falkordb.com/)
 
-Cortex is a persistent memory and code intelligence system for the Google Antigravity CLI (`agy`) and AI coding agents. It pairs deterministic AST graphs and temporal episodic records with dense vector search. Everything runs locally without cloud dependencies.
+Kortext is a persistent 5-tier memory and code intelligence system for the Google Antigravity CLI (`agy`) and autonomous AI coding agents. It pairs deterministic AST graphs and bi-temporal episodic records with dense vector search, Reciprocal Rank Fusion (RRF), and causal memory defenses. Everything runs locally without external cloud dependencies.
 
 ---
 
-## Documentation index
+## 5-Tier Memory Architecture
 
-Detailed guides live in [`docs/`](docs/):
-
-| Document | Description |
-| :--- | :--- |
-| [System architecture](docs/architecture.md) | Four-tier memory design, query routing, and local service topology. |
-| [FastMCP tools reference](docs/mcp_tools.md) | Tool arguments, schemas, Cypher traversal queries, and agent protocols. |
-| [Hierarchical AST chunking](docs/chunking_and_ast.md) | Code parser, skeleton chunks, 10 Tree-sitter grammars, Markdown links, and SCIP. |
-| [OpenViking dynamic watching](docs/watcher_and_viking.md) | Incremental file sync in under 5ms, cache eviction, and workspace switching. |
-| [Web dashboard](docs/dashboard.md) | Network graph view, symbol impact tree, and service metrics. |
-| [Antigravity integration](docs/antigravity_integration.md) | Lifecycle hooks, watcher sidecar, subagents, and skills. |
-| [Cognitive dream mode](docs/cognitive_dream_mode.md) | Fact pruning, Louvain community detection, and invariant generation. |
-| [Operations and setup](docs/operations_and_setup.md) | Hardware setups across CUDA, ROCm, Metal, and CPU, plus container commands. |
-
----
-
-## Four-tier memory architecture
-
-Cortex divides codebase context into four layers, starting from exact syntax trees down to text vectors:
+Kortext organizes codebase context across five hierarchical memory tiers, resolving queries from exact syntax trees down to semantic text vectors:
 
 ```mermaid
 flowchart TD
     Agent["Antigravity Agent or MCP Client"] -->|search_knowledge_and_memory| Router["Parallel Query Router"]
 
-    subgraph Tiers["Knowledge Tiers"]
-        T0["Tier 0: Deterministic symbols and backlinks"]
-        T1["Tier 1: Temporal episodic memory"]
-        T2["Tier 2: OpenViking code architecture"]
-        T3["Tier 3: Dense vectors and reranking"]
+    subgraph Tiers["5-Tier Knowledge Hierarchy"]
+        T0["Tier 0: Deterministic AST Symbols & Backlinks"]
+        T1["Tier 1: Temporal Episodic Memory & Invariants"]
+        T2["Tier 2: Code Skeletons & Docstrings"]
+        T3["Tier 3: Dense & Sparse Vectors (BM25 + Qwen3 MRL)"]
+        T4["Tier 4: HippoRAG Associative Personalized PageRank"]
     end
 
     Router --> T0
     Router --> T1
     Router --> T2
     Router --> T3
+    Router --> T4
 
-    T0 --> Synthesis["Structured Context Block"]
-    T1 --> Synthesis
-    T2 --> Synthesis
-    T3 --> Synthesis
+    T0 --> Fusion["Reciprocal Rank Fusion (RRF) & TAA-k Trimming"]
+    T1 --> Fusion
+    T2 --> Fusion
+    T3 --> Fusion
+    T4 --> Fusion
 
-    Synthesis --> Agent
+    Fusion --> Agent
 ```
 
 | Tier | Source | Precedence | Description |
 | :--- | :--- | :--- | :--- |
-| Tier 0: AST symbols | FalkorDB `cortex_symbols` | Ground truth | Symbol declarations, definitions, and cross-file callers across 10 programming languages and Markdown vaults. |
-| Tier 1: Episodic facts | FalkorDB `cortex` | High | Decisions, bug fixes, configuration states, and invariants. Overrides model assumptions. |
-| Tier 2: Code structure | OpenViking Tree-sitter AST | Medium-high | Module docstrings and class or function signatures. Syncs on file changes in under 5ms. |
-| Tier 3: Code references | Qdrant + Reranker | Medium | Dense vector search across code chunks. Falls back to vector scores if no reranker runs. |
+| **Tier 0: AST Symbols** | FalkorDB `kortext_symbols` | Ground Truth | Deterministic symbol declarations, definitions, and cross-file callers across 10 programming languages via Tree-sitter. |
+| **Tier 1: Episodic Facts** | FalkorDB `kortext` | High | Decisions, architectural invariants, bug fixes, and configuration milestones. Overrides model assumptions. |
+| **Tier 2: Code Structure** | Tree-sitter AST | Medium-high | Module skeletons, class signatures, and docstrings synced incrementally on file changes. |
+| **Tier 3: Vector Embeddings** | Qdrant + BM25 | Medium | Hybrid dense and sparse lexical search over code chunks with cross-encoder reranking. |
+| **Tier 4: Associative Graph** | HippoRAG PPR | Associative | Multi-hop Personalized PageRank linking episodic concepts with AST code symbols. |
 
 ---
 
-## Quick start
+## Quick Start
 
 ### 1. Requirements
-- Docker Desktop or Docker Engine (runs FalkorDB and Qdrant)
+- Docker Desktop or Docker Engine (or native FalkorDB and Qdrant)
 - Python 3.11 or newer
 - `uv` package manager
 - Google Antigravity CLI (`agy`)
@@ -77,33 +64,43 @@ flowchart TD
 ### 2. Setup
 
 ```bash
+# Clone repository
+git clone https://github.com/bravest-cat/cortex.git
 cd cortex
-make setup
+
+# Install dependencies with uv
+uv sync
 ```
 
-### 3. Start services
+### 3. Start Substrate Daemons
 
 ```bash
-make start
-make status
+# Launch FalkorDB and substrate daemons
+./scripts/start_kortext.sh
 ```
 
-### 4. Install into Antigravity
+### 4. Install Plugin into Antigravity
 
 ```bash
-make plugin-install
+python3 scripts/install_plugin.py
 ```
 
 ---
 
-## FastMCP tools reference
+## FastMCP Tools Reference
 
-Cortex runs 7 tools over stdio:
+Kortext exposes tools over stdio to Antigravity CLI agents:
 
 ### `search_knowledge_and_memory(prompt, collection=None, workspace_root=None)`
-Runs the four-tier search across all graphs and vector collections. Call this before drafting code edits.
+Runs federated 5-tier hybrid search across all graphs and vector collections. Call this before drafting code edits.
 ```python
 search_knowledge_and_memory("How is symbol blast radius computed?")
+```
+
+### `seek_symbol(query, max_matches=10)`
+Deterministic Tree-sitter AST symbol lookup directly from FalkorDB. Returns exact line ranges, signatures, callers, and callees without ripgrep token bleed.
+```python
+seek_symbol("RetrievalEngine")
 ```
 
 ### `trace_symbol_impact(symbol, direction='upstream', max_depth=3)`
@@ -112,85 +109,86 @@ Traverses symbol graph edges (`DEFINED_IN`, `REFERENCES`, `IMPORTS`, `IMPLEMENTS
 trace_symbol_impact(symbol="SymbolGraphManager", direction="upstream")
 ```
 
-### `record_system_outcome(episode_name, content, tags=None, project='cortex', entities=None, facts=None, supersedes=None)`
+### `record_system_outcome(episode_name, content, tags=None, project='kortext', entities=None, facts=None, supersedes=None)`
 Writes decisions, bug fixes, and milestones to FalkorDB and appends them to the daily markdown journal.
 ```python
 record_system_outcome(
-    episode_name="Enabled dynamic workspace watching in OpenViking",
-    content="Wired sync_file and delete_file directly into file watcher.",
-    tags=["viking", "watcher", "refactor"],
-    project="cortex"
+    episode_name="Migrated to Kortext 5-Tier Memory Architecture",
+    content="Consolidated branding, unified FastMCP tools, and verified 100% test pass rate.",
+    tags=["kortext", "refactor", "branding"],
+    project="kortext"
 )
 ```
 
-### `trigger_dream_mode(project='cortex', purge_stale=False)`
-Prunes superseded facts, computes Louvain graph communities, and writes updated rules to `journal/invariants.md`.
+### `trigger_dream_mode(project='kortext', purge_stale=False)`
+Prunes superseded facts via Weibull decay, computes Louvain graph communities, and writes updated rules to `journal/invariants.md`.
+
+### `manage_tasks(action='list'|'create'|'update'|'show'|'ready', ...)`
+Tracks multi-agent Task DAGs with dependency gating in FalkorDB.
 
 ### `index_directory(path, collection=None)`
 Splits files into syntax-aware chunks with preamble headers and stores them in Qdrant.
 
-### `check_cortex_health()`
-Pings FalkorDB, Qdrant, the inference endpoint, and the dashboard, returning statuses and fix steps.
+### `check_kortext_health()`
+Pings FalkorDB, Qdrant, inference endpoints, and the dashboard, returning health statuses and diagnostic steps.
 
 ### `delete_or_supersede_fact(fact_id, reason)`
 Marks an existing knowledge graph fact as invalid while keeping the audit trail intact.
 
 ---
 
-## Antigravity integration
+## Antigravity Integration
 
-Cortex connects to the Antigravity runtime through four mechanisms:
+Kortext integrates seamlessly into Google Antigravity CLI:
 
-- **Lifecycle hooks** (`scripts/hooks/`):
-  - `PreInvocation`: Injects active invariants and health status on turn 0 and gives periodic reminders.
-  - `PreToolUse`: Blocks destructive shell commands such as `rm -rf /` or `git reset --hard`.
-  - `PostToolUse`: Updates Qdrant, FalkorDB, and OpenViking right after the agent writes a file.
-  - `Stop`: Checks that the agent saved an outcome if files were changed during the turn.
-- **Watcher sidecar** (`integrations/antigravity/sidecars/`):
-  Runs `cortex.watcher` under runtime supervision to track external file edits.
+- **Lifecycle Hooks** (`scripts/hooks/`):
+  - `PreInvocation`: Injects active architectural invariants and health status.
+  - `PreToolUse`: Safety gate blocking destructive commands and checking AST symbol targets.
+  - `PostToolUse`: Incrementally updates Qdrant and FalkorDB on file modifications.
+  - `Stop`: Guards against uncommitted outcomes and incomplete DAG tasks.
+- **Watcher Sidecar** (`integrations/antigravity/sidecars/`):
+  Runs `kortext.watcher` under runtime supervision to track external file edits in real time.
 - **Subagents** (`integrations/antigravity/agents/`):
-  - `cortex-researcher`: Read-only agent for searching memory and checking impact graphs without filling parent context.
-  - `cortex-architect`: System refactoring agent that follows blast-radius verification steps.
+  - `kortext-researcher`: Read-only agent for searching memory and checking impact graphs.
+  - `kortext-architect`: System refactoring agent following blast-radius verification steps.
+  - `kortext-code-reviewer`: Pre-commit reviewer auditing invariants and code hygiene.
+  - `kortext-task-runner`: Leaf-node task execution worker executing TDD cycles.
 - **Skills** (`integrations/antigravity/skills/`):
-  - `/cortex-rag`: Command guide for querying memory and running re-indexing.
-  - `/cortex-architect`: Command guide for blast-radius audits and community clustering.
+  - `/kortext-rag`: Command guide for querying memory and running re-indexing.
+  - `/kortext-architect`: Command guide for blast-radius audits and community clustering.
 
 ---
 
-## Web dashboard
+## Web Dashboard
 
-Start the dashboard on port 8004:
+Start the Kortext dashboard on port 8004:
 
 ```bash
-make dashboard
+kortext-dashboard
+# or
+python3 -m kortext.dashboard.app
 ```
 
-Open `http://localhost:8004` to use:
-- The 2D/3D force layout of episodic facts and symbol relationships.
+Open `http://localhost:8004` to explore:
+- 2D/3D force-directed layout of episodic facts and symbol relationships.
 - Symbol search with upstream and downstream impact trees.
-- Live health indicators for databases, model servers, and the file watcher.
-- A one-click button to trigger memory consolidation.
+- Live health indicators for databases, model servers, and file watchers.
+- One-click trigger for memory consolidation and Dream Mode.
 
 ---
 
-## Testing
+## Testing & Verification
 
-Cortex maintains automated tests across all components:
+Run the comprehensive test suite:
 
 ```bash
-make test
+uv run pytest -q
 ```
 
-Individual test files:
+Verify Antigravity plugin manifests:
+
 ```bash
-uv run python3 scripts/test_dynamic_viking.py           # OpenViking sync and file deletions
-uv run python3 scripts/test_ultimate_chunking.py        # AST parsing, skeletons, and statements
-uv run python3 scripts/test_tier2_languages.py         # 10 Tree-sitter language parsers
-uv run python3 scripts/test_scip_ingest.py              # SCIP protobuf parser and cross references
-uv run python3 scripts/test_markdown_vault_ingestion.py # WikiLinks and bidirectional references
-uv run python3 scripts/test_antigravity_hooks.py        # Pre-invocation, tool gate, and stop hooks
-uv run python3 scripts/test_dashboard_enhancements.py   # Dashboard API endpoints
-uv run python3 scripts/test_plugin_manifest.py         # Plugin schemas and sidecar configs
+python3 scripts/test_plugin_manifest.py
 ```
 
 ---
@@ -199,10 +197,9 @@ uv run python3 scripts/test_plugin_manifest.py         # Plugin schemas and side
 
 Review these guides before opening a pull request:
 
-- [Contributing guide](CONTRIBUTING.md): Environment setup, branch names, and PR workflow.
-- [Coding standards](CODING_STANDARDS.md): Type annotations, 1,000-line file caps, and performance limits.
-- [Code of conduct](CODE_OF_CONDUCT.md): Community expectations.
-- [Security policy](SECURITY.md): How to report vulnerabilities.
+- [Contributing Guide](CONTRIBUTING.md): Environment setup, branch names, and PR workflow.
+- [Coding Standards](CODING_STANDARDS.md): Type annotations, immutability, and file limits.
+- [Security Policy](SECURITY.md): MINJA causal memory defenses and secret management.
 
 ---
 

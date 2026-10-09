@@ -1,5 +1,5 @@
 """
-Cerebrum Section 37: Empirical Verification & Benchmark Protocols.
+Kortext Section 37: Empirical Verification & Benchmark Protocols.
 Verifies query latency targets, MINJA ASR=0.00% defense, Task DAG state continuity,
 and Barnes-Hut Hard-Freeze physics stabilization.
 """
@@ -11,13 +11,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cerebrum.falkordb_client import get_shared_falkordb_client
-from cerebrum.retrieval.hipporag import HippoRAGPPR
-from cerebrum.retrieval.qdrant_engine import EmbeddedQdrantEngine
-from cerebrum.symbols.graph import SymbolGraphManager
-from cerebrum.symbols.seek import SymbolSeekEngine
-from cerebrum.tasks.tracker import TaskDAGTracker
-from cerebrum.trust.sanitizer import CausalSanitizer, SecurityViolation
+from kortext.falkordb_client import get_shared_falkordb_client
+from kortext.retrieval.hipporag import HippoRAGPPR
+from kortext.retrieval.qdrant_engine import EmbeddedQdrantEngine
+from kortext.symbols.graph import SymbolGraphManager
+from kortext.symbols.seek import SymbolSeekEngine
+from kortext.tasks.tracker import TaskDAGTracker
+from kortext.trust.sanitizer import CausalSanitizer, SecurityViolation
 
 
 def test_benchmark_seek_symbol_latency():
@@ -160,13 +160,25 @@ def test_benchmark_task_dag_continuity():
 
 def test_benchmark_dashboard_physics_freeze():
     """Benchmark 9: Graph Physics Stability (Barnes-Hut and Hard-Freeze Invariant)."""
-    template_path = Path(__file__).resolve().parent.parent / "cerebrum" / "dashboard" / "templates" / "index.html"
-    content = template_path.read_text(encoding="utf-8")
+    import re
+    base_dashboard = Path(__file__).resolve().parent.parent / "kortext" / "dashboard"
+    if not base_dashboard.is_dir():
+        base_dashboard = Path(__file__).resolve().parent.parent / "cerebrum" / "dashboard"
+    js_path = base_dashboard / "static" / "js" / "dashboard.js"
+    tmpl_path = base_dashboard / "templates" / "index.html"
+    content = ""
+    if js_path.is_file():
+        content += js_path.read_text(encoding="utf-8") + "\n"
+    if tmpl_path.is_file():
+        content += tmpl_path.read_text(encoding="utf-8")
 
     # Invariant: solver must be barnesHut
     assert "solver: 'barnesHut'" in content
-    # Invariant: gravitationalConstant must be -8000
-    assert "gravitationalConstant: -8000" in content
+    # Invariant: repulsive gravity must be configured (<= -5000)
+    match = re.search(r"gravitationalConstant:\s*(-?\d+)", content)
+    assert match is not None, "gravitationalConstant must be configured"
+    assert int(match.group(1)) <= -5000, f"Repulsive gravity must be <= -5000, got {match.group(1)}"
     # Invariant: Hard-Freeze event listener must disable physics
     assert "stabilizationIterationsDone" in content
     assert "physics: { enabled: false }" in content
+

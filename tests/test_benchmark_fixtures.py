@@ -54,7 +54,7 @@ class TestHotpotQAFixture:
             passages = item["gold_passages"]
             assert isinstance(passages, list), f"Passages must be list in {item['id']}"
             assert 1 <= len(passages) <= 4, (
-                f"Expected 1–4 gold passages in {item['id']}, got {len(passages)}"
+                f"Expected 1-4 gold passages in {item['id']}, got {len(passages)}"
             )
             for p in passages:
                 assert isinstance(p, str) and len(p.strip()) > 0
@@ -165,7 +165,7 @@ class TestCerebrumGoldenSetFixture:
 
     def test_ids_unique_and_formatted(self, golden_data):
         ids = [item["id"] for item in golden_data]
-        assert len(ids) == len(set(ids)), "Duplicate IDs found in cerebrum golden fixture"
+        assert len(ids) == len(set(ids)), "Duplicate IDs found in kortext golden fixture"
         for i, item in enumerate(golden_data, 1):
             assert item["id"] == f"cg_{i:03d}"
             assert isinstance(item["query"], str) and len(item["query"].strip()) > 0

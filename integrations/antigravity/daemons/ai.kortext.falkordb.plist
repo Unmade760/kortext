@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Kortext Knowledge OS: FalkorDB Graph Substrate Daemon -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.kortext.falkordb</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/redis-server</string>
+        <string>/Users/rb/.kortext/config/falkordb.conf</string>
+        <string>--daemonize</string>
+        <string>no</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/rb/.kortext/logs/falkordb_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/rb/.kortext/logs/falkordb_stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/rb/.kortext</string>
+</dict>
+</plist>

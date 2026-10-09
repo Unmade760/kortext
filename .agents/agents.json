@@ -1,0 +1,10 @@
+{
+  "entries": [
+    {
+      "path": "integrations/antigravity/agents"
+    },
+    {
+      "path": ".agents/agents"
+    }
+  ]
+}

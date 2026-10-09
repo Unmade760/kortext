@@ -146,12 +146,12 @@ async def test_federated_retrieval():
 async def test_unified_pipeline():
     print("\n--- 4. Testing Unified 4-Tier State Machine (LangGraph) ---")
     from cerebrum.viking import VikingChunker
-    from cerebrum.episodic import EpisodicMemory
+    from cerebrum.episodic import AgentNativeEpisodicDriver
 
     engine = RetrievalEngine()
     await engine.initialize()
     viking = VikingChunker(workspace_root=str(CORTEX_ROOT))
-    episodic = EpisodicMemory()
+    episodic = AgentNativeEpisodicDriver()
     await episodic.initialize()
     symbol_graph = SymbolGraphManager()
     symbol_graph.save_file_ast(

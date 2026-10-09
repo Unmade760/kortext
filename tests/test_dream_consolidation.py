@@ -4,7 +4,7 @@ Verifies retention curves, biological floor enforcement (R_min = 0.05), and cons
 """
 
 import pytest
-from cerebrum.dream import DreamEngine
+from kortext.dream import DreamEngine
 
 
 class TestDreamConsolidation:
@@ -41,3 +41,41 @@ class TestDreamConsolidation:
         r_high = dream_engine.compute_retention(elapsed_hours=100.0, importance=10.0)
 
         assert r_high > r_low
+
+    @pytest.mark.asyncio
+    async def test_dream_cycle_emits_logs_without_polluting_stdout(self, dream_engine, monkeypatch, capsys, caplog, tmp_path):
+        """Verifies run_dream_cycle uses standard logger and does not pollute stdout (FastMCP stdio safety)."""
+        import logging
+
+        monkeypatch.setattr(dream_engine, "sweep_weibull_decay", lambda dry_run=False: 0)
+        async def mock_prune(*args, **kwargs):
+            return {"superseded_count": 0, "archived_count": 0, "active_count": 0, "details": [], "contradictions": []}
+        async def mock_cluster(*args, **kwargs):
+            return []
+        async def mock_induce(*args, **kwargs):
+            return {"active": [], "drift_audit": {"drifted_count": 0, "total_grounded": 0, "verified_count": 0, "orphaned_count": 0, "drifted": []}, "inducted": []}
+
+        monkeypatch.setattr(dream_engine, "prune_stale_facts", mock_prune)
+        monkeypatch.setattr(dream_engine, "cluster_subsystems", mock_cluster)
+        monkeypatch.setattr(dream_engine, "induce_invariants", mock_induce)
+        monkeypatch.setattr("kortext.dream.DREAMS_DIR", tmp_path)
+
+        with caplog.at_level(logging.INFO):
+            await dream_engine.run_dream_cycle(project="test_proj", dry_run=False)
+
+        captured = capsys.readouterr()
+        # Verify stdout is completely clean to protect MCP stdio JSON-RPC framing
+        assert captured.out == ""
+        # Verify log records were emitted via logger.info
+        assert any("[DreamEngine]" in record.message for record in caplog.records)
+        assert any("Dream Report persisted to" in record.message for record in caplog.records)
+
+    def test_cerebrum_dream_engine_deprecation_warning(self):
+        """Verify that instantiating legacy CerebrumDreamEngine emits DeprecationWarning."""
+        from kortext.dream import CerebrumDreamEngine, KortextDreamEngine
+
+        with pytest.warns(DeprecationWarning, match="CerebrumDreamEngine is deprecated"):
+            engine = CerebrumDreamEngine()
+        assert isinstance(engine, DreamEngine)
+        assert isinstance(engine, KortextDreamEngine)
+
