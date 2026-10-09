@@ -147,6 +147,7 @@ def test_journal_endpoint():
         assert "title" in first
         assert "body" in first
         assert "tags" in first
+        assert "category" in first
 
 
 def test_query_graphs_and_graph_view():

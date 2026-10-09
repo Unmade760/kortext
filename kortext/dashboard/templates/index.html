@@ -114,14 +114,28 @@
             <span id="label-clustering-status">Macro View</span>
           </button>
 
+          <!-- Component Scope Anti-Hairball Selector -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono" title="Filter visible components to untangle large graphs">
+            <span class="text-slate-400">Scope:</span>
+            <select id="select-component-scope" onchange="handleComponentScopeChange(this.value)" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+              <option value="all">🌐 All Components</option>
+              <option value="architecture">🧩 Architecture (Subsystems & Files)</option>
+              <option value="subsystems">📦 Subsystems Only</option>
+              <option value="symbols">⚡ Symbols Only</option>
+              <option value="documents">📄 Documents & Guides</option>
+            </select>
+          </div>
+
           <!-- Density & Leaf Node Pruning Filter -->
           <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono" title="Filter nodes by connection degree (hides leaf nodes to untangle large graphs)">
             <span class="text-slate-400">Density:</span>
             <select id="select-min-degree" onchange="handleMinDegreeChange(this.value)" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
               <option value="1">All (Deg ≥ 1)</option>
               <option value="2">Clean (Deg ≥ 2)</option>
-              <option value="3">Core (Deg ≥ 3)</option>
+              <option value="3" selected>Core (Deg ≥ 3)</option>
+              <option value="4">High (Deg ≥ 4)</option>
               <option value="5">Hubs Only (Deg ≥ 5)</option>
+              <option value="8">Major Hubs (Deg ≥ 8)</option>
             </select>
           </div>
 
@@ -200,6 +214,7 @@
 
             <!-- Floating Canvas Action HUD -->
             <div class="canvas-hud-toolbar bottom-4 right-4 !top-auto !left-auto">
+              <button onclick="toggleSubsystemsArchitecture()" id="btn-hud-subsystems" class="hud-btn text-purple-400" title="Toggle Subsystems Architecture View"><i data-lucide="boxes" class="w-3.5 h-3.5"></i> Architecture</button>
               <button onclick="zoomGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
               <button onclick="zoomGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
               <button onclick="fitGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>

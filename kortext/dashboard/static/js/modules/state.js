@@ -24,6 +24,8 @@ export const state = {
     relCounts: {},
     isPhysicsFrozen: true,
     currentFocusedNodeId: null,
+    componentScope: 'all',
+    isSubsystemsView: false,
   },
 
   // Blast-Radius State

@@ -46,6 +46,8 @@ Object.assign(window, {
   isolateNeighborhood: graph.isolateNeighborhood,
   exitNeighborhoodIsolation: graph.exitNeighborhoodIsolation,
   dismissLargeGraphBanner: graph.dismissLargeGraphBanner,
+  toggleSubsystemsArchitecture: graph.toggleSubsystemsArchitecture,
+  handleComponentScopeChange: graph.handleComponentScopeChange,
 
   // Blast-Radius
   initBlastTab: blast.initBlastTab,

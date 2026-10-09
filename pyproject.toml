@@ -3,10 +3,18 @@ name = "kortext"
 version = "2.0.0"
 description = "5-Tier Dual-Memory, AST Code Intelligence & Cognitive OS for Google Antigravity CLI"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
 authors = [
   { name = "Supreme Knight", email = "realrajdeep09@gmail.com" }
+]
+classifiers = [
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 keywords = [
   "antigravity", "mcp", "fastmcp", "code-intelligence", "rag",

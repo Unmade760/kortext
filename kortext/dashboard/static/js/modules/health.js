@@ -167,14 +167,21 @@ function renderMemoryTiersUI(tiers) {
   const tierKeys = Object.keys(tiers);
   container.innerHTML = tierKeys.map(k => {
     const item = tiers[k];
+    const statusText = (item.status || 'Active').toUpperCase();
+    const isDegraded = statusText === 'DEGRADED' || statusText === 'OFFLINE';
+    const badgeStyle = isDegraded
+      ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+
     return `
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-1.5 font-mono text-xs hover:border-slate-700 transition">
         <div class="flex items-center justify-between">
           <span class="text-indigo-400 font-bold uppercase text-[11px]">${k.replace('_', ' ')}</span>
-          <span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ACTIVE</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] border ${badgeStyle}">${escapeHtml(statusText)}</span>
         </div>
         <div class="font-semibold text-white">${escapeHtml(item.name || '')}</div>
-        <div class="text-[11px] text-slate-400">${escapeHtml(item.embedder || item.type || item.status || '')}</div>
+        ${item.metrics ? `<div class="text-[11px] text-emerald-300 font-semibold tracking-wide">${escapeHtml(item.metrics)}</div>` : ''}
+        <div class="text-[11px] text-slate-400">${escapeHtml(item.embedder || item.type || '')}</div>
       </div>
     `;
   }).join('');
@@ -183,11 +190,18 @@ function renderMemoryTiersUI(tiers) {
 function renderHooksStatusUI(hooks) {
   const container = document.getElementById('hooks-status-list');
   if (!container || !hooks) return;
-  container.innerHTML = hooks.map(h => `
-    <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-mono text-xs flex items-center gap-1.5">
-      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ${escapeHtml(h)}
-    </span>
-  `).join('');
+  container.innerHTML = hooks.map(h => {
+    const name = typeof h === 'string' ? h : h.name;
+    const stage = typeof h === 'object' && h.pipeline ? h.pipeline.replace('_', ' ') : 'guard';
+    const desc = typeof h === 'object' && h.description ? h.description : '';
+    return `
+      <span class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-mono text-xs flex items-center gap-2 hover:border-slate-700 transition" title="${escapeHtml(desc)}">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span>
+        <span class="text-slate-200 font-semibold">${escapeHtml(name)}</span>
+        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold">${escapeHtml(stage)}</span>
+      </span>
+    `;
+  }).join('');
 }
 
 // Collections Manager

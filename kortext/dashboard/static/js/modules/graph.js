@@ -148,12 +148,15 @@ export async function loadGraph() {
       if (largeBanner) {
         largeBanner.classList.remove('hidden');
         const msg = document.getElementById('large-graph-msg');
-        if (msg) msg.textContent = `Large graph (${state.graph.allNodes.length} nodes). Density pruning active to prevent hairballing.`;
+        if (msg) {
+          msg.innerHTML = `Large graph (<strong>${state.graph.allNodes.length}</strong> nodes). Anti-hairball density filter active. <button onclick="toggleSubsystemsArchitecture()" class="ml-2 px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold transition">View Subsystems Architecture</button>`;
+        }
       }
       const degSelect = document.getElementById('select-min-degree');
-      if (degSelect && degSelect.value === '1') {
-        degSelect.value = '2';
-        state.graph.minDegreeFilter = 2;
+      if (degSelect && (degSelect.value === '1' || degSelect.value === '2')) {
+        const defaultDeg = state.graph.allNodes.length > 1000 ? '4' : '3';
+        degSelect.value = defaultDeg;
+        state.graph.minDegreeFilter = parseInt(defaultDeg, 10);
       }
     } else if (largeBanner) {
       largeBanner.classList.add('hidden');
@@ -177,6 +180,18 @@ export function applyGraphFilters() {
 
   let filteredNodes = state.graph.allNodes;
 
+  // Component Scope Filtering (Anti-Hairball)
+  const compScope = state.graph.componentScope || 'all';
+  if (compScope === 'subsystems') {
+    filteredNodes = filteredNodes.filter(n => n.group === 'subsystem');
+  } else if (compScope === 'architecture' || state.graph.isSubsystemsView) {
+    filteredNodes = filteredNodes.filter(n => n.group === 'subsystem' || n.group === 'file');
+  } else if (compScope === 'symbols') {
+    filteredNodes = filteredNodes.filter(n => n.group === 'symbol');
+  } else if (compScope === 'documents') {
+    filteredNodes = filteredNodes.filter(n => n.group === 'document' || n.group === 'concept');
+  }
+
   if (state.graph.isNeighborhoodIsolated && state.graph.isolatedFocalNodeId) {
     const hopRadius = document.getElementById('select-hop-radius') ? document.getElementById('select-hop-radius').value : '1';
     const neighborList = getNeighborhood(state.graph.isolatedFocalNodeId, hopRadius);
@@ -189,11 +204,12 @@ export function applyGraphFilters() {
     const hopCountEl = document.getElementById('isolation-hop-count');
     if (hopCountEl) hopCountEl.textContent = Math.max(0, filteredNodes.length - 1);
   } else {
-    if (state.graph.minDegreeFilter > 1) {
-      filteredNodes = filteredNodes.filter(n => (n.degree || 0) >= state.graph.minDegreeFilter);
-      const visNodeIds = new Set(filteredNodes.map(n => n.id));
-      filteredEdges = filteredEdges.filter(e => visNodeIds.has(e.from) && visNodeIds.has(e.to));
+    // If not in isolated mode or pure subsystems view, apply degree threshold
+    if (!state.graph.isSubsystemsView && compScope !== 'subsystems' && state.graph.minDegreeFilter > 1) {
+      filteredNodes = filteredNodes.filter(n => (n.degree || 0) >= state.graph.minDegreeFilter || n.group === 'subsystem');
     }
+    const visNodeIds = new Set(filteredNodes.map(n => n.id));
+    filteredEdges = filteredEdges.filter(e => visNodeIds.has(e.from) && visNodeIds.has(e.to));
   }
 
   const statsEl = document.getElementById('graph-stats');
@@ -260,22 +276,59 @@ export function renderGraph(nodesData, edgesData) {
   let options;
   if (state.graph.currentLayoutMode === 'hierarchical-lr') {
     options = {
-      layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed', levelSeparation: 220, nodeSpacing: 160 } },
-      physics: { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 160, springLength: 160 } },
+      layout: {
+        hierarchical: {
+          enabled: true,
+          direction: 'LR',
+          sortMethod: 'directed',
+          levelSeparation: 280,
+          nodeSpacing: 180,
+          treeSpacing: 220,
+          blockShifting: true,
+          edgeMinimization: true,
+          parentCentralization: true,
+        },
+      },
+      physics: {
+        solver: 'hierarchicalRepulsion',
+        hierarchicalRepulsion: { nodeDistance: 190, springLength: 200, damping: 0.25 },
+      },
       interaction: { hover: true, tooltipDelay: 150 },
     };
   } else if (state.graph.currentLayoutMode === 'hierarchical-ud') {
     options = {
-      layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', levelSeparation: 180, nodeSpacing: 180 } },
-      physics: { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 160, springLength: 160 } },
+      layout: {
+        hierarchical: {
+          enabled: true,
+          direction: 'UD',
+          sortMethod: 'directed',
+          levelSeparation: 240,
+          nodeSpacing: 190,
+          treeSpacing: 220,
+          blockShifting: true,
+          edgeMinimization: true,
+          parentCentralization: true,
+        },
+      },
+      physics: {
+        solver: 'hierarchicalRepulsion',
+        hierarchicalRepulsion: { nodeDistance: 190, springLength: 200, damping: 0.25 },
+      },
       interaction: { hover: true, tooltipDelay: 150 },
     };
   } else {
     options = {
       physics: {
         solver: 'barnesHut',
-        barnesHut: { gravitationalConstant: -18000, centralGravity: 0.08, springLength: 180, springConstant: 0.035, damping: 0.16, avoidOverlap: 1.0 },
-        stabilization: { enabled: true, iterations: 140 },
+        barnesHut: {
+          gravitationalConstant: -48000,
+          centralGravity: 0.012,
+          springLength: 320,
+          springConstant: 0.025,
+          damping: 0.22,
+          avoidOverlap: 1.0,
+        },
+        stabilization: { enabled: true, iterations: 160 },
       },
       interaction: { hover: true, tooltipDelay: 150 },
     };
@@ -357,7 +410,7 @@ export function clusterAllModules() {
     physics: {
       enabled: true,
       solver: 'barnesHut',
-      barnesHut: { gravitationalConstant: -35000, centralGravity: 0.05, springLength: 280, springConstant: 0.03, damping: 0.2, avoidOverlap: 1.0 },
+      barnesHut: { gravitationalConstant: -55000, centralGravity: 0.01, springLength: 380, springConstant: 0.025, damping: 0.22, avoidOverlap: 1.0 },
     },
   });
 
@@ -391,6 +444,38 @@ export function clusterAllModules() {
       setFreezeState(true);
     }
   }, 1200);
+}
+
+// Subsystems Architecture & Anti-Hairball Mode Handlers
+export function toggleSubsystemsArchitecture() {
+  state.graph.isSubsystemsView = !state.graph.isSubsystemsView;
+  const hudBtn = document.getElementById('btn-hud-subsystems');
+  const scopeSelect = document.getElementById('select-component-scope');
+
+  if (state.graph.isSubsystemsView) {
+    if (hudBtn) hudBtn.className = 'hud-btn text-purple-300 font-bold bg-purple-950/80 border border-purple-500/50 shadow-lg';
+    if (scopeSelect) scopeSelect.value = 'architecture';
+    state.graph.componentScope = 'architecture';
+    toast('Switched to Subsystems Architecture View (Clean Blueprint)', 'info');
+  } else {
+    if (hudBtn) hudBtn.className = 'hud-btn text-purple-400';
+    if (scopeSelect) scopeSelect.value = 'all';
+    state.graph.componentScope = 'all';
+    toast('Restored Full Graph View', 'info');
+  }
+  applyGraphFilters();
+}
+
+export function handleComponentScopeChange(val) {
+  state.graph.componentScope = val;
+  state.graph.isSubsystemsView = (val === 'architecture' || val === 'subsystems');
+  const hudBtn = document.getElementById('btn-hud-subsystems');
+  if (hudBtn) {
+    hudBtn.className = state.graph.isSubsystemsView
+      ? 'hud-btn text-purple-300 font-bold bg-purple-950/80 border border-purple-500/50 shadow-lg'
+      : 'hud-btn text-purple-400';
+  }
+  applyGraphFilters();
 }
 
 // Density, Layout, and Freeze Handlers

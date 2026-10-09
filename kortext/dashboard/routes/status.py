@@ -184,10 +184,116 @@ async def get_telemetry():
     embed_url = os.getenv("EMBED_BASE_URL")
     embedder_desc = f"Remote API ({embed_url})" if embed_url else "FastEmbed (Local 384d)"
 
+    # Live Tier 0 AST B-Tree Symbol Index Introspection
+    sym_count = 0
+    file_count = 0
+    sub_count = 0
+    ep_count = 0
+    rel_count = 0
+    tier0_status = "Active" if falkor_ok else "Offline"
+    tier2_status = "Active" if falkor_ok else "Offline"
+    tier4_status = "Active" if falkor_ok else "Offline"
+
+    if falkor_ok:
+        try:
+            client = get_shared_falkordb_client(host=FALKORDB_HOST, port=FALKORDB_PORT)
+            r = client.get_redis()
+            # Symbols & Files
+            s_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (s:Symbol) RETURN count(s)")
+            if s_res and len(s_res) > 1 and s_res[1]:
+                sym_count = int(s_res[1][0][0])
+            f_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (f:File) RETURN count(f)")
+            if f_res and len(f_res) > 1 and f_res[1]:
+                file_count = int(f_res[1][0][0])
+            # Subsystems
+            sub_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (sub:Subsystem) RETURN count(sub)")
+            if sub_res and len(sub_res) > 1 and sub_res[1]:
+                sub_count = int(sub_res[1][0][0])
+            # Episodic outcomes and facts
+            e_res = r.execute_command("GRAPH.QUERY", FALKORDB_DB, "MATCH (e:Episodic) RETURN count(e)")
+            if e_res and len(e_res) > 1 and e_res[1]:
+                ep_count = int(e_res[1][0][0])
+            rel_res = r.execute_command("GRAPH.QUERY", FALKORDB_DB, "MATCH ()-[r:RELATES_TO]->() RETURN count(r)")
+            if rel_res and len(rel_res) > 1 and rel_res[1]:
+                rel_count = int(rel_res[1][0][0])
+        except Exception:
+            tier0_status = "Degraded"
+            tier2_status = "Degraded"
+
+    # Live Tier 1 Qdrant Vector Points Introspection
+    collections = []
+    total_vectors = 0
+    qdrant_online = False
+    try:
+        from kortext._qdrant import is_qdrant_online
+        qdrant_online = is_qdrant_online()
+        collections = discover_vector_collections()
+        total_vectors = sum(c.get("points_count", 0) for c in collections)
+    except Exception:
+        pass
+    tier1_status = "Active" if qdrant_online else "Offline"
+    tier3_status = "Active" if (falkor_ok and qdrant_online) else "Degraded"
+
+    # Dynamic Next-Gen Hooks Introspection
+    active_hooks: List[Dict[str, str]] = []
+    try:
+        from kortext.hooks.pipelines.pre_tool import PreToolPipeline
+        from kortext.hooks.pipelines.post_tool import PostToolPipeline
+        from kortext.hooks.pipelines.pre_invoke import PreInvokePipeline
+        from kortext.hooks.pipelines.post_invoke import PostInvokePipeline
+        from kortext.hooks.pipelines.stop import StopPipeline
+
+        pipelines = [
+            ("pre_tool", PreToolPipeline()),
+            ("post_tool", PostToolPipeline()),
+            ("pre_invoke", PreInvokePipeline()),
+            ("post_invoke", PostInvokePipeline()),
+            ("stop", StopPipeline()),
+        ]
+        for stage, p in pipelines:
+            items = getattr(p, "guards", getattr(p, "interceptors", ()))
+            for item in items:
+                name = type(item).__name__
+                doc = (item.__doc__ or "").strip().split("\n")[0] if hasattr(item, "__doc__") and item.__doc__ else ""
+                active_hooks.append({
+                    "name": name,
+                    "pipeline": stage,
+                    "description": doc,
+                })
+    except Exception:
+        pass
+
+    # Dynamic Invariants Count
+    active_inv_count = 0
+    try:
+        journal_root = Path(__file__).resolve().parents[3] / "journal"
+        inv_file = journal_root / "invariants.md"
+        if inv_file.is_file():
+            inv_text = inv_file.read_text(encoding="utf-8")
+            active_inv_count += len(re.findall(r"###\s+Invariant\s+\[", inv_text))
+        grounded_file = journal_root / "grounded_invariants.json"
+        if grounded_file.is_file():
+            try:
+                g_data = json.loads(grounded_file.read_text(encoding="utf-8"))
+                if isinstance(g_data, list):
+                    active_inv_count += len(g_data)
+            except Exception:
+                pass
+    except Exception:
+        active_inv_count = 14
+
+    # Version
+    version_str = "2.0.0"
+    try:
+        import importlib.metadata
+        version_str = importlib.metadata.version("kortext")
+    except Exception:
+        pass
+
     return {
         "status": "ok",
         "telemetry": {
-            "version": "2.0.0-PROD",
+            "version": version_str,
             "substrate_ram_rss_mb": rss_mb,
             "falkordb_latency_ms": lat_ms,
             "falkordb_healthy": falkor_ok,
@@ -195,23 +301,39 @@ async def get_telemetry():
             "weibull_retention_floor": 0.05,
             "weibull_beta": 0.85,
             "weibull_lambda": 168.0,
-            "active_invariants": 14,
+            "active_invariants": max(active_inv_count, 6),
             "memory_tiers": {
-                "tier_0": {"name": "Tree-sitter AST B-Tree", "status": "Active", "type": "Deterministic AST"},
-                "tier_1": {"name": "Qdrant Vectors", "status": "Active", "embedder": embedder_desc},
-                "tier_2": {"name": "FalkorDB Episodic Graph", "status": "Active" if falkor_ok else "Degraded", "type": "Temporal & Causal"},
-                "tier_3": {"name": "Federated Hybrid Engine", "status": "Active", "type": "Dense + Sparse + Graph"},
-                "tier_4": {"name": "Cognitive Dream Mode", "status": "Active", "type": "Weibull + Louvain Subsystems"}
+                "tier_0": {
+                    "name": "Tree-sitter AST B-Tree",
+                    "status": tier0_status,
+                    "metrics": f"{sym_count:,} symbols, {file_count:,} files",
+                    "type": "Deterministic Tree-sitter AST Index",
+                },
+                "tier_1": {
+                    "name": "Qdrant Vectors",
+                    "status": tier1_status,
+                    "metrics": f"{total_vectors:,} vectors ({len(collections)} collections)",
+                    "embedder": embedder_desc,
+                },
+                "tier_2": {
+                    "name": "FalkorDB Episodic Graph",
+                    "status": tier2_status,
+                    "metrics": f"{ep_count:,} episodes, {rel_count:,} facts",
+                    "type": "Temporal & Causal Knowledge Graph",
+                },
+                "tier_3": {
+                    "name": "Federated Hybrid Engine",
+                    "status": tier3_status,
+                    "metrics": "Multi-tier RRF + HippoRAG PPR Fusion",
+                    "type": "Dense + Sparse + Graph Federation",
+                },
+                "tier_4": {
+                    "name": "Cognitive Dream Mode",
+                    "status": tier4_status,
+                    "metrics": f"{sub_count} Louvain subsystems (Weibull floor: 0.05)",
+                    "type": "Synaptic Decay & Community Clustering",
+                },
             },
-            "nextgen_hooks": [
-                "FastMCPLockGuard",
-                "AntiRipgrepGate",
-                "CommandSafetyGuard",
-                "SecretLeakGuard",
-                "IncrementalASTSync",
-                "SubstrateHealthProbe",
-                "GroundTruthTestGate",
-                "OutcomePersistenceGuard"
-            ]
-        }
+            "nextgen_hooks": active_hooks,
+        },
     }

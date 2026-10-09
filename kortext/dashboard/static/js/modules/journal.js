@@ -49,7 +49,7 @@ export function applyJournalFilters() {
 
   if (cat && cat !== 'all') {
     entries = entries.filter(e => {
-      const eCat = (e.category || '').toLowerCase();
+      const eCat = (e.category || 'implementation').toLowerCase();
       const titleLower = (e.title || '').toLowerCase();
       const tags = (e.tags || []).map(t => String(t).toLowerCase());
       return eCat === cat || titleLower.includes(cat) || tags.includes(cat);
