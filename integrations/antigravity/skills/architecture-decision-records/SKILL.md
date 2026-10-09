@@ -1,203 +1,227 @@
 ---
 name: architecture-decision-records
-description: Capture architectural decisions made during coding sessions as structured ADRs. Auto-detects decision moments, records context, alternatives considered, and rationale. Maintains an ADR log and optionally persists outcomes to Kortext episodic memory.
+description: Capture architectural decisions made during coding sessions as structured ADRs. Auto-detects decision moments, records context, alternatives considered, domain modeling, and rationale. Persists decisions to FalkorDB episodic memory and Qdrant.
 version: 2.0.0
 triggers:
   - "record adr"
   - "architectural decision"
   - "architecture decision record"
   - "why did we choose"
+  - "adr"
 metadata:
   origin: ECC
   adapted_for: Kortext
 ---
 
-# Architecture Decision Records
+# Architecture Decision Records (ADRs)
 
-Capture architectural decisions as they happen during coding sessions. Instead of decisions living only in Slack threads, PR comments, or someone's memory, this skill produces structured ADR documents that live alongside the code, and optionally registers episodic facts in Kortext memory.
+Capture significant architectural decisions as they happen during development sessions. Instead of decisions vanishing into ephemeral chat transcripts or PR threads, this skill produces structured ADR documents that live alongside code in git, aligns domain terminology with `GLOSSARY.md`, and persists `(:Episodic)-[:DECIDES]->(:ADR)` knowledge graph nodes in FalkorDB.
 
-## When to Activate
+---
 
-- User explicitly says "let's record this decision", "ADR this", or "record adr"
-- User chooses between significant alternatives (framework, library, pattern, database, API design)
-- User says "we decided to..." or "the reason we're doing X instead of Y is..."
-- User asks "why did we choose X?" (read existing ADRs or search episodic memory)
-- During planning phases when architectural trade-offs are discussed
+## When to Write an ADR
 
-## ADR Format
+Do NOT write ADRs for trivial implementation details, bug fixes, or minor styling preferences. Write an ADR whenever a decision meets one or more of these criteria:
 
-Use the lightweight ADR format proposed by Michael Nygard, adapted for AI-assisted development:
+```mermaid
+flowchart TD
+    Q[Decision Moment] --> C1{"Hard to Reverse?<br/>(High Blast Radius)"}
+    Q --> C2{"Surprising without Context?<br/>(Counter-Intuitive)"}
+    Q --> C3{"Result of a Real Trade-Off?<br/>(Distinct Pros & Cons)"}
+    
+    C1 -->|Yes| Record[Write ADR & Persist to Graph]
+    C2 -->|Yes| Record
+    C3 -->|Yes| Record
+    
+    C1 -->|No| CheckNext
+    C2 -->|No| CheckNext
+    C3 -->|No| Skip[Skip ADR: Standard Implementation]
+```
+
+### 1. Hard to Reverse
+- Foundational architectural patterns (e.g., event sourcing vs. CRUD, microservices vs. monolith)
+- Primary datastores, persistence tiers, or vector indexing engines (e.g., FalkorDB + Qdrant)
+- Core IPC / RPC communication protocols (e.g., Unix domain sockets vs. loopback TCP)
+- Invariants with massive blast radius across dozens of modules
+
+### 2. Surprising Without Context
+- Deliberate departures from common industry conventions
+- Unintuitive constraints necessary for safety or performance (e.g., FastMCP Sole Custodian model prohibiting direct embedded Qdrant instantiations to prevent SQLite file-lock deadlocks)
+- Architectural workarounds for hardware, OS, or kernel limitations
+
+### 3. Result of a Real Trade-Off
+- Choosing between two or more viable, mature technical alternatives
+- Decisions where every option has legitimate downsides (e.g., consistency vs. latency, memory footprint vs. CPU speed)
+- Never write an ADR when there was only one obvious path with no meaningful alternative
+
+---
+
+## Domain Terminology Modeling & `GLOSSARY.md` Alignment
+
+Architectural clarity requires unambiguous domain language:
+
+1. **Challenge Ambiguous Terms Early:**
+   - Probe fuzzy or overloaded terms during planning (e.g., "cache", "session", "context", "gateway").
+   - Define exact operational semantics before codifying decisions.
+2. **Align with `GLOSSARY.md`:**
+   - Every ADR must reference canonical terminology defined in `GLOSSARY.md`.
+   - If an ADR introduces a new architectural concept (e.g., "Sole Custodian", "Causal Sanitizer", "Weibull Retention Decay"), document the term directly in the ADR and add/update its definition in `GLOSSARY.md`.
+3. **Prevent Semantic Drift:**
+   - Ensure the same term is used consistently across code identifiers, test fixtures, agent instructions, and graph memory payloads.
+
+---
+
+## Standard ADR Document Structure
+
+Store ADRs in `docs/adr/NNNN-[title].md` using Michael Nygard's format, enhanced for AI-assisted systems:
 
 ```markdown
 # ADR-NNNN: [Decision Title]
 
 **Date**: YYYY-MM-DD
-**Status**: proposed | accepted | deprecated | superseded by ADR-NNNN
-**Deciders**: [who was involved]
+**Status**: proposed | accepted | deprecated | superseded by ADR-XXXX
+**Deciders**: [Engineers / Agents involved]
+**Domain Terms**: [List of canonical terms defined or aligned with GLOSSARY.md]
 
 ## Context
 
-What is the issue that we're seeing that is motivating this decision or change?
+What is the situation, technical challenge, and operational context driving this decision?
 
-[2-5 sentences describing the situation, constraints, and forces at play]
+[2-5 sentences describing the problem, constraints, latency/memory requirements, and invariants]
 
 ## Decision
 
-What is the change that we're proposing and/or doing?
+What technical approach are we committing to?
 
-[1-3 sentences stating the decision clearly]
+[1-3 sentences stating the decision clearly, using ubiquitous domain terms from GLOSSARY.md]
+
+## Domain Modeling
+
+- **[Term 1]**: [Exact definition and system boundary]
+- **[Term 2]**: [Exact definition and system boundary]
 
 ## Alternatives Considered
 
-### Alternative 1: [Name]
-- **Pros**: [benefits]
-- **Cons**: [drawbacks]
-- **Why not**: [specific reason this was rejected]
+### Alternative 1: [Name of Alternative]
+- **Pros**: [Key benefits]
+- **Cons**: [Key drawbacks]
+- **Why Not**: [Definitive reason this option was rejected]
 
-### Alternative 2: [Name]
-- **Pros**: [benefits]
-- **Cons**: [drawbacks]
-- **Why not**: [specific reason this was rejected]
+### Alternative 2: [Name of Alternative]
+- **Pros**: [Key benefits]
+- **Cons**: [Key drawbacks]
+- **Why Not**: [Definitive reason this option was rejected]
 
 ## Consequences
 
-What becomes easier or more difficult to do because of this change?
+What becomes easier or harder because of this change?
 
 ### Positive
-- [benefit 1]
-- [benefit 2]
+- [Benefit 1]
+- [Benefit 2]
 
-### Negative
-- [trade-off 1]
-- [trade-off 2]
+### Negative & Trade-offs
+- [Trade-off 1]
+- [Trade-off 2]
 
-### Risks
-- [risk and mitigation]
+### Risks & Mitigations
+- **Risk**: [Specific failure mode]
+  - **Mitigation**: [Guard, invariant, or architectural defense]
 ```
 
-## Workflow
+---
 
-### Capturing a New ADR
+## Kortext Superpower: Knowledge Graph & Episodic Persistence
 
-When a decision moment is detected:
+ADRs must not remain dead markdown files on disk. Persist accepted decisions directly into the Kortext FalkorDB graph and Qdrant vector store.
 
-1. **Initialize (first time only)** - if `docs/adr/` does not exist, ask the user for confirmation before creating the directory, a `README.md` seeded with the index table header (see ADR Index Format below), and a blank `template.md` for manual use. Do not create files without explicit consent.
-2. **Identify the decision** - extract the core architectural choice being made.
-3. **Gather context** - what problem prompted this? What constraints exist?
-4. **Document alternatives** - what other options were considered? Why were they rejected?
-5. **State consequences** - what are the trade-offs? What becomes easier/harder?
-6. **Assign a number** - scan existing ADRs in `docs/adr/` and increment.
-7. **Confirm and write** - present the draft ADR to the user for review. Only write to `docs/adr/NNNN-decision-title.md` after explicit approval. If the user declines, discard the draft without writing any files.
-8. **Update the index** - append to `docs/adr/README.md`.
-9. **Kortext Episodic Outcome Persistence (Optional / Automated)**:
-   When an ADR is marked `accepted`, record the decision in Kortext episodic memory for cross-session bi-temporal recall:
-   ```python
-   record_system_outcome(
-       decision="ADR-NNNN: [Decision Title]",
-       rationale="[Brief summary of context, chosen option, and rejected alternatives]",
-       category="architecture"
-   )
-   ```
+### 1. Dual Episodic Persistence
+When an ADR is accepted, persist it via `record_system_outcome`:
 
-### Reading Existing ADRs
-
-When a user asks "why did we choose X?":
-
-1. Check if `docs/adr/` exists - if not, search Kortext memory:
-   ```python
-   search_knowledge_and_memory(
-       query="why did we choose X architectural decision",
-       collection="kortext"
-   )
-   ```
-2. If `docs/adr/` exists, scan `docs/adr/README.md` index for relevant entries.
-3. Read matching ADR files and present the Context and Decision sections.
-4. If no match is found in files or memory, respond: "No ADR found for that decision. Would you like to record one now?"
-
-### ADR Directory Structure
-
-```
-docs/
-└── adr/
-    ├── README.md              ← index of all ADRs
-    ├── 0001-use-nextjs.md
-    ├── 0002-postgres-over-mongo.md
-    ├── 0003-rest-over-graphql.md
-    └── template.md            ← blank template for manual use
+```python
+record_system_outcome(
+    decision="ADR-0004: FastMCP Sole Custodian Model for Vector Indexing",
+    rationale=(
+        "Selected FastMCP Sole Custodian over direct embedded Qdrant clients. "
+        "Eliminates SQLite/RocksDB LOCK_EX concurrency crashes across subagents. "
+        "Aligned domain terms with GLOSSARY.md: 'Sole Custodian', 'Advisory Lock Contention'."
+    ),
+    category="decision",
+)
 ```
 
-### ADR Index Format
-
-```markdown
-# Architecture Decision Records
-
-| ADR | Title | Status | Date |
-|-----|-------|--------|------|
-| [0001](0001-use-nextjs.md) | Use Next.js as frontend framework | accepted | 2026-01-15 |
-| [0002](0002-postgres-over-mongo.md) | PostgreSQL over MongoDB for primary datastore | accepted | 2026-01-20 |
-| [0003](0003-rest-over-graphql.md) | REST API over GraphQL | accepted | 2026-02-01 |
+### 2. Graph Topology Created
+Under the hood, this creates a rich semantic subgraph in FalkorDB:
+```
+(:Episodic {id: '...', timestamp: '...'})
+    -[:DECIDES]-> (:ADR {number: 4, title: 'FastMCP Sole Custodian Model', status: 'accepted'})
+    -[:AFFECTS]-> (:CodeSymbol {name: 'QdrantCustodian'})
 ```
 
-## Decision Detection Signals
+### 3. Cross-Session Semantic Retrieval
+Future developer and agent turns can retrieve the rationale immediately via RAG without searching git log:
+```python
+search_knowledge_and_memory(
+    query="why do we prohibit direct QdrantClient instantiations?",
+    collection="kortext"
+)
+```
 
-Watch for these patterns in conversation that indicate an architectural decision:
-
-**Explicit signals**
-- "Let's go with X"
-- "We should use X instead of Y"
-- "The trade-off is worth it because..."
-- "Record this as an ADR"
-
-**Implicit signals** (suggest recording an ADR - do not auto-create without user confirmation)
-- Comparing two frameworks or libraries and reaching a conclusion
-- Making a database schema design choice with stated rationale
-- Choosing between architectural patterns (monolith vs microservices, REST vs GraphQL)
-- Deciding on authentication/authorization strategy
-- Selecting deployment infrastructure after evaluating alternatives
-
-## What Makes a Good ADR
-
-### Do
-- **Be specific** - "Use Prisma ORM" not "use an ORM"
-- **Record the why** - the rationale matters more than the what
-- **Include rejected alternatives** - future developers need to know what was considered
-- **State consequences honestly** - every decision has trade-offs
-- **Keep it short** - an ADR should be readable in 2 minutes
-- **Use present tense** - "We use X" not "We will use X"
-
-### Don't
-- Record trivial decisions - variable naming or formatting choices don't need ADRs
-- Write essays - if the context section exceeds 10 lines, it's too long
-- Omit alternatives - "we just picked it" is not a valid rationale
-- Backfill without marking it - if recording a past decision, note the original date
-- Let ADRs go stale - superseded decisions should reference their replacement
+---
 
 ## ADR Lifecycle
 
 ```
-proposed → accepted → [deprecated | superseded by ADR-NNNN]
+proposed ──► accepted ──┬──► deprecated
+                        └──► superseded by ADR-NNNN
 ```
 
-- **proposed**: decision is under discussion, not yet committed
-- **accepted**: decision is in effect and being followed
-- **deprecated**: decision is no longer relevant (e.g., feature removed)
-- **superseded**: a newer ADR replaces this one (always link the replacement)
+- **`proposed`**: Under active discussion or review. Not yet in effect.
+- **`accepted`**: Decided, approved, and actively enforced in production code.
+- **`deprecated`**: No longer applicable (e.g., deprecated subsystem decommissioned).
+- **`superseded by ADR-NNNN`**: Overridden by a subsequent ADR. Always link the successor.
 
-## Categories of Decisions Worth Recording
+---
 
-| Category | Examples |
-|----------|---------|
-| **Technology choices** | Framework, language, database, cloud provider |
-| **Architecture patterns** | Monolith vs microservices, event-driven, CQRS |
-| **API design** | REST vs GraphQL, versioning strategy, auth mechanism |
-| **Data modeling** | Schema design, normalization decisions, caching strategy |
-| **Infrastructure** | Deployment model, CI/CD pipeline, monitoring stack |
-| **Security** | Auth strategy, encryption approach, secret management |
-| **Testing** | Test framework, coverage targets, E2E vs integration balance |
-| **Process** | Branching strategy, review process, release cadence |
+## Workflow: Capturing an ADR
 
-## Integration with Other Skills & Kortext
+1. **Detect Decision Moment:**
+   - Detect explicit triggers: *"Let's record an ADR"*, *"We decided to..."*, *"The reason we chose X is..."*.
+   - Detect implicit triggers: User evaluates two architectural approaches and selects one.
+2. **Draft & Align Domain Terms:**
+   - Formulate Context, Decision, Alternatives, and Consequences.
+   - Cross-check domain terminology with `GLOSSARY.md`.
+3. **Confirm with User:**
+   - Present the draft ADR to the user for review.
+   - Do not write files to disk without explicit approval.
+4. **Write ADR & Update Index:**
+   - Determine next sequence number (e.g. `0004`).
+   - Write to `docs/adr/0004-[slug].md`.
+   - Update table in `docs/adr/README.md`.
+5. **Persist to Graph Memory:**
+   - Call `record_system_outcome(category="decision", ...)` to register the decision in FalkorDB and Qdrant.
 
-- **Planner / Architect agent**: when proposing architecture changes, suggest creating an ADR.
-- **Code reviewer agent**: flag PRs that introduce architectural changes without a corresponding ADR.
-- **Episodic Memory**: use `record_system_outcome` so future sessions retrieve rationale via RAG without needing to locate file paths manually.
+---
+
+## Anti-Patterns to Avoid
+
+| Anti-Pattern | Failure Mode | Correct Approach |
+|---|---|---|
+| **ADR for Trivial Details** | Bloats documentation with variable names and utility choices. | Only write when Hard to Reverse, Surprising, or a Real Trade-Off. |
+| **No Alternatives Listed** | Future engineers cannot tell if other options were evaluated. | Document at least 1-2 realistic alternatives with "Why Not". |
+| **Ambiguous Terminology** | Different modules use conflicting definitions for core concepts. | Align with `GLOSSARY.md` and define domain entities explicitly. |
+| **Stale ADRs** | Outdated decisions mislead developers. | Mark obsolete ADRs as `superseded by ADR-NNNN` with links. |
+| **Disconnected Markdown** | Decisions get lost in git history and forgotten by agent sessions. | Persist via `record_system_outcome(category='decision', ...)`. |
+
+---
+
+## Verification Checklist
+
+Before finalizing an ADR:
+- [ ] Decision satisfies at least one criteria (Hard to Reverse, Surprising, Real Trade-Off)
+- [ ] Context clearly describes motivating forces and operational constraints
+- [ ] Domain terminology is verified and aligned with `GLOSSARY.md`
+- [ ] At least one concrete alternative documented with specific rejection rationale
+- [ ] Consequences cover positive benefits, negative trade-offs, and risk mitigations
+- [ ] Status is set correctly (`proposed`, `accepted`, `superseded`)
+- [ ] Persisted to FalkorDB episodic memory via `record_system_outcome`
