@@ -17,20 +17,35 @@ from kortext._env import (
     get_embed_model_name,
     get_rerank_base_url,
 )
-from kortext._qdrant import (
-    get_qdrant_client,
-    get_sync_qdrant_client,
-    get_async_qdrant_client,
-    is_qdrant_online,
-)
-from kortext.embeddings import (
-    DenseEmbedder,
-    DenseEmbedderProtocol,
-    FastEmbedDenseProvider,
-    RemoteDenseProvider,
-    get_dense_embedder,
-    is_remote_embed_alive,
-)
+try:
+    from kortext._qdrant import (
+        get_qdrant_client,
+        get_sync_qdrant_client,
+        get_async_qdrant_client,
+        is_qdrant_online,
+    )
+except ImportError:
+    get_qdrant_client = None  # type: ignore
+    get_sync_qdrant_client = None  # type: ignore
+    get_async_qdrant_client = None  # type: ignore
+    is_qdrant_online = None  # type: ignore
+
+try:
+    from kortext.embeddings import (
+        DenseEmbedder,
+        DenseEmbedderProtocol,
+        FastEmbedDenseProvider,
+        RemoteDenseProvider,
+        get_dense_embedder,
+        is_remote_embed_alive,
+    )
+except ImportError:
+    DenseEmbedder = None  # type: ignore
+    DenseEmbedderProtocol = None  # type: ignore
+    FastEmbedDenseProvider = None  # type: ignore
+    RemoteDenseProvider = None  # type: ignore
+    get_dense_embedder = None  # type: ignore
+    is_remote_embed_alive = None  # type: ignore
 
 CEREBRUM_HOME = KORTEXT_HOME
 

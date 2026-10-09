@@ -279,6 +279,7 @@ def install_plugin():
         "kortext-researcher",
         "kortext-code-reviewer",
         "kortext-task-runner",
+        "kortext-security-auditor",
     ]
 
     # Clean up stale cerebrum-* agent folders and files in destination directories

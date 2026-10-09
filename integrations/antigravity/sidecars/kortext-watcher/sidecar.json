@@ -1,7 +1,7 @@
 {
   "display_name": "Kortext Real-Time File Watcher",
   "description": "Continuous AST parsing and incremental vector synchronization daemon",
-  "command": "/Users/rb/cortex/.venv/bin/python3",
+  "command": "/Users/rb/kortext/.venv/bin/python3",
   "args": [
     "-m",
     "kortext.watcher"

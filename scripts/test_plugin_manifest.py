@@ -55,6 +55,7 @@ def test_subagent_yaml():
         "kortext-code-reviewer.md",
         "kortext-researcher.md",
         "kortext-task-runner.md",
+        "kortext-security-auditor.md",
     }
     found_files = {p.name for p in agents_dir.glob("*.md")}
     assert found_files == canonical_files, f"Expected exactly {canonical_files}, got {found_files}"

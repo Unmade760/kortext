@@ -36,7 +36,7 @@ def main():
         for dangerous in DANGEROUS_COMMANDS:
             if re.search(dangerous, cmd, re.IGNORECASE):
                 emit_hook_response({
-                    "decision": "deny",
+                    "decision": "ask",
                     "reason": f"Execution blocked: Command contains forbidden dangerous pattern '{dangerous}'."
                 })
                 return

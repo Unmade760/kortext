@@ -3,7 +3,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_pre_invoke.py",
+        "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner pre_invoke",
         "timeout": 15
       }
     ]
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_pre_tool.py",
+            "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner pre_tool",
             "timeout": 5
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_post_tool.py",
+            "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner post_tool",
             "timeout": 10
           }
         ]
@@ -40,8 +40,8 @@
     "Stop": [
       {
         "type": "command",
-        "command": "/Users/rb/cortex/.venv/bin/python3 /Users/rb/cortex/scripts/hooks/hook_stop.py",
-        "timeout": 10
+        "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner stop",
+        "timeout": 15
       }
     ]
   }

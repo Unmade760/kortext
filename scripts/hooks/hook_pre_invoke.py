@@ -81,12 +81,12 @@ def main():
         emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
         return
 
-    # Turn 0: Ambient Grounding & Architectural Directives
-    if invocation_num == 0:
+    # Turn 0 and periodic refresher (turn % 10 == 0): Ambient Grounding & Architectural Directives
+    if invocation_num == 0 or (invocation_num > 0 and invocation_num % 10 == 0):
         invariants = get_active_invariants(max_count=3)
         inv_str = "\n".join(invariants) if invariants else "• Invariants synchronized."
         message = (
-            "🧠 [Kortext Cognitive OS Initialized]\n"
+            "🧠 [Kortext Cognitive OS Initialized] (Cortex)\n"
             "Active Protocols:\n"
             "1. ANTI-RIPGREP MANDATE: Do NOT run `rg` or `grep_search` to find symbols. Use `seek_symbol`.\n"
             "2. DELEGATION MANDATE: For multi-file changes (Complexity >= 4), initialize DAG via `manage_tasks`.\n"
