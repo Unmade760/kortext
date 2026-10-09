@@ -430,7 +430,11 @@ def test_runner_cli_all_events():
         out, err = p.communicate(input=json.dumps({"event": ev}))
         assert p.returncode == 0, f"Event {ev} failed"
         res = json.loads(out)
-        assert "decision" in res or "injectSteps" in res
+        assert isinstance(res, dict)
+        if ev in ("pre_tool", "stop"):
+            assert "decision" in res
+        elif ev == "pre_invoke":
+            assert "decision" in res or "injectSteps" in res
 
 
 def test_ground_truth_test_gate(tmp_path: Path):

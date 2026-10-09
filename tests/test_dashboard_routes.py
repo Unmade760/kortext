@@ -82,7 +82,7 @@ def test_collections_endpoint_point_stats():
 
 
 def test_telemetry_endpoint():
-    """Verify /api/telemetry returns system performance metrics."""
+    """Verify /api/telemetry returns system performance metrics, 5-tier memory breakdown, and nextgen hooks."""
     resp = client.get("/api/telemetry")
     assert resp.status_code == 200
     data = resp.json()
@@ -93,6 +93,22 @@ def test_telemetry_endpoint():
     assert "falkordb_latency_ms" in telem
     assert "active_invariants" in telem
     assert telem.get("token_search_savings") == "Active (AST B-Tree)"
+    # 5-tier memory status breakdown assertions
+    assert telem.get("tier_0") == {"name": "Tree-sitter AST B-Tree", "status": "Active"}
+    assert telem.get("tier_1") == {"name": "Qdrant Vectors", "embedder": "FastEmbed BAAI/bge-small-en-v1.5 (fallback)"}
+    assert telem.get("tier_2") == {"name": "FalkorDB Episodic Graph", "status": "Active"}
+    assert telem.get("tier_3") == {"name": "Federated Hybrid Query", "status": "Active"}
+    assert telem.get("tier_4") == {"name": "Cognitive Dream Mode", "status": "Active"}
+    # nextgen_hooks assertions
+    assert telem.get("nextgen_hooks") == [
+        "FastMCPLockGuard",
+        "AntiRipgrepGate",
+        "CommandSafetyGuard",
+        "SecretLeakGuard",
+        "IncrementalASTSync",
+        "SubstrateHealthProbe",
+        "GroundTruthTestGate",
+    ]
 
 
 def test_cache_and_watcher_endpoints():
@@ -336,7 +352,7 @@ def test_action_scip_and_symbols_index_alias():
 
 
 def test_action_tasks_endpoints():
-    """Verify /api/tasks GET and POST handlers."""
+    """Verify /api/tasks GET and POST handlers with project filtering and status management."""
     g_resp = client.get("/api/tasks?include_graph=true")
     assert g_resp.status_code == 200
     g_data = g_resp.json()
@@ -344,6 +360,51 @@ def test_action_tasks_endpoints():
     assert "tasks" in g_data
     assert "nodes" in g_data
     assert "edges" in g_data
+    assert "ready_tasks" in g_data
+    assert "projects" in g_data
+    assert "all" in g_data["projects"]
+    assert "kortext" in g_data["projects"]
+
+    # Filter with project_id
+    p_filter_resp = client.get("/api/tasks?include_graph=true&project_id=test_proj")
+    assert p_filter_resp.status_code == 200
+    assert p_filter_resp.json().get("status") == "ok"
+    assert "projects" in p_filter_resp.json()
+
+    # POST create task with project_id, complexity, assigned_to, depends_on
+    create_resp = client.post(
+        "/api/tasks",
+        json={
+            "action": "create",
+            "title": "Test Task 1",
+            "description": "A test task description",
+            "project_id": "kortext",
+            "complexity": 2,
+            "assigned_to": "agent_alpha",
+            "depends_on": [],
+        },
+    )
+    assert create_resp.status_code == 200
+    c_data = create_resp.json()
+    assert c_data.get("status") == "ok"
+    assert "task_id" in c_data
+    created_id = c_data["task_id"]
+
+    # POST update_status with episode_name
+    update_resp = client.post(
+        "/api/tasks",
+        json={
+            "action": "update_status",
+            "task_id": created_id,
+            "status": "completed",
+            "episode_name": "TestEpisode_001",
+        },
+    )
+    assert update_resp.status_code == 200
+    u_data = update_resp.json()
+    assert u_data.get("status") == "ok"
+    assert u_data.get("task_id") == created_id
+    assert u_data.get("updated_status") == "completed"
 
     # POST validation: missing title
     p_resp = client.post("/api/tasks", json={"action": "create", "title": ""})

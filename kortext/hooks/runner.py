@@ -22,16 +22,21 @@ logger = logging.getLogger("kortext.hooks.runner")
 
 
 def emit_response(
+    event: str = "",
     decision: str = "allow",
     reason: Optional[str] = None,
     data: Optional[Mapping[str, Any]] = None,
 ) -> None:
     """
     Serializes hook response dictionary to stdout and flushes.
+    PostToolUse and PostInvocation proto schemas do not accept 'decision' field.
     """
-    output: dict[str, Any] = {"decision": decision}
-    if reason is not None:
-        output["reason"] = reason
+    output: dict[str, Any] = {}
+    ev = event.lower().strip()
+    if ev in ("pre_tool", "stop", ""):
+        output["decision"] = decision
+        if reason is not None:
+            output["reason"] = reason
     if data:
         for k, v in data.items():
             output[k] = v
@@ -70,6 +75,7 @@ def main() -> None:
     """
     Main CLI entry point for lifecycle hooks: python3 -m kortext.hooks.runner <event>
     """
+    target_event = "pre_tool"
     try:
         event = sys.argv[1] if len(sys.argv) > 1 else ""
         context = HookContext.from_stdin(event=event)
@@ -77,6 +83,7 @@ def main() -> None:
 
         result = run_hook(target_event, context)
         emit_response(
+            event=target_event,
             decision=result.decision,
             reason=result.reason,
             data=result.data,
@@ -84,7 +91,7 @@ def main() -> None:
     except Exception as exc:
         # Failsafe: lifecycle hooks must never crash Antigravity background turns
         print(f"[KortextHooks] Runner encountered unexpected error: {exc}", file=sys.stderr)
-        emit_response(decision="allow")
+        emit_response(event=target_event, decision="allow")
 
 
 if __name__ == "__main__":

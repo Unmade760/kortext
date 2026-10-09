@@ -224,6 +224,85 @@ def test_build_graph_view_episodic():
         assert edge["color"]["color"] == REL_SPECS["SUPERSEDES"]["color"]
 
 
+def test_build_graph_view_episodic_group_mappings_and_clusters():
+    """Verify episodic graph queries, group mappings, cluster inference, and clean=True invariant."""
+    with patch("kortext.dashboard.views.get_shared_falkordb_client") as mock_client_factory:
+        mock_client = MagicMock()
+        mock_redis = MagicMock()
+        mock_client.get_redis.return_value = mock_redis
+        mock_client_factory.return_value = mock_client
+
+        executed_queries = []
+
+        def fake_execute(cmd, db, query):
+            executed_queries.append(query)
+            if "MATCH (n) RETURN coalesce" in query:
+                return ["header", [
+                    ["task_1", ["Task"], "ready"],
+                    ["proj_1", ["Project"], ""],
+                    ["adr_1", ["ADR"], "accepted"],
+                    ["mile_1", ["Milestone"], "active"],
+                    ["subsys_1", ["Subsystem"], ""],
+                    ["ep_1", ["Episodic"], "decision"],
+                    ["file_1.py", ["File"], ""],
+                    ["ent_1", ["UnknownLabel"], ""],
+                ]]
+            if "MATCH (s)-[r]->(t) RETURN coalesce" in query:
+                return ["header", [
+                    ["task_1", "DEPENDS_ON", "proj_1"],
+                ]]
+            return ["header", []]
+
+        mock_redis.execute_command.side_effect = fake_execute
+
+        # Test with clean=True: must NOT hide episodic nodes
+        res = build_graph_view("localhost", 6379, "kortext", graph_type="episodic", clean=True)
+        assert res["status"] == "ok"
+        assert len(res["nodes"]) == 8
+
+        # Verify Cypher queries used
+        assert any("MATCH (n) RETURN coalesce(n.name, n.title, n.id, n.path, 'Unnamed'), labels(n), coalesce(n.category, n.status, '')" in q for q in executed_queries)
+        assert any("MATCH (s)-[r]->(t) RETURN coalesce(s.name, s.title, s.id, s.path), type(r), coalesce(t.name, t.title, t.id, t.path)" in q for q in executed_queries)
+
+        node_map = {n["id"]: n for n in res["nodes"]}
+
+        # 1. Task: group == "task", title includes status and complexity
+        assert node_map["task_1"]["group"] == "task"
+        assert "status" in node_map["task_1"]["title"].lower()
+        assert "complexity" in node_map["task_1"]["title"].lower()
+        assert node_map["task_1"]["cluster_id"] == "tasks"
+        assert node_map["task_1"]["cluster_name"] == "📋 Task DAG"
+
+        # 2. Project: group == "project"
+        assert node_map["proj_1"]["group"] == "project"
+        assert node_map["proj_1"]["cluster_id"] == "projects"
+        assert node_map["proj_1"]["cluster_name"] == "📁 Projects"
+
+        # 3. ADR: group == "decision"
+        assert node_map["adr_1"]["group"] == "decision"
+        assert node_map["adr_1"]["cluster_id"] == "decisions"
+        assert node_map["adr_1"]["cluster_name"] == "⚖️ Decisions & ADRs"
+
+        # 4. Milestone: group == "roadmap"
+        assert node_map["mile_1"]["group"] == "roadmap"
+        assert node_map["mile_1"]["cluster_id"] == "roadmap"
+        assert node_map["mile_1"]["cluster_name"] == "🗺️ Roadmaps"
+
+        # 5. Subsystem: group == "subsystem"
+        assert node_map["subsys_1"]["group"] == "subsystem"
+        assert node_map["subsys_1"]["cluster_id"] == "subsystems"
+        assert node_map["subsys_1"]["cluster_name"] == "🧩 Louvain Subsystems"
+
+        # 6. Episodic: group == "episodic"
+        assert node_map["ep_1"]["group"] == "episodic"
+
+        # 7. File: group == "file"
+        assert node_map["file_1.py"]["group"] == "file"
+
+        # 8. Default: group == "entity"
+        assert node_map["ent_1"]["group"] == "entity"
+
+
 def test_make_vis_node_basic():
     """Verify _make_vis_node creates canonical node dict without level styling."""
     node = _make_vis_node(
