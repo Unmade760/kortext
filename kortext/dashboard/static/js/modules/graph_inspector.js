@@ -20,7 +20,7 @@ export function initRelationshipPalette(edges) {
   state.graph.activeRelFilters = new Set(uniqueRels);
 
   if (uniqueRels.length === 0) {
-    container.innerHTML = '<div class="text-slate-500 py-3 text-center text-xs">No relationships in view</div>';
+    container.innerHTML = '<div class="text-slate-400 py-3 text-center text-xs">No relationships in view</div>';
     return;
   }
 
@@ -65,7 +65,7 @@ export function applyRelPreset(preset) {
     const rel = input.id.replace('filter-rel-', '').toUpperCase();
     let shouldCheck = preset === 'all'
       || (preset === 'calls' && (rel.includes('REFERENCES') || rel.includes('CALLS')))
-      || (preset === 'structure' && (rel.includes('DEFINED_IN') || rel.includes('IMPORTS') || rel.includes('LINKS')))
+      || (preset === 'structure' && (rel.includes('DEFINED_IN') || rel.includes('IMPORTS') || rel.includes('LINKS') || rel.includes('BELONGS_TO')))
       || (preset === 'types' && (rel.includes('IMPLEMENTS') || rel.includes('TYPE')));
     input.checked = shouldCheck;
     if (shouldCheck) state.graph.activeRelFilters.add(rel);
@@ -117,11 +117,11 @@ export function openDrawer(node) {
       </div>
       <div class="space-y-1">
         <div class="text-xs font-semibold text-slate-400">Outgoing (${outgoing.length}):</div>
-        <div class="space-y-1 max-h-32 overflow-y-auto">${outgoing.length ? outgoing.map(e => renderRel(e, true)).join('') : '<span class="text-slate-600 text-[10px]">None</span>'}</div>
+        <div class="space-y-1 max-h-32 overflow-y-auto">${outgoing.length ? outgoing.map(e => renderRel(e, true)).join('') : '<span class="text-slate-400 text-[10px]">None</span>'}</div>
       </div>
       <div class="space-y-1 pt-1 border-t border-slate-800">
         <div class="text-xs font-semibold text-slate-400">Incoming (${incoming.length}):</div>
-        <div class="space-y-1 max-h-32 overflow-y-auto">${incoming.length ? incoming.map(e => renderRel(e, false)).join('') : '<span class="text-slate-600 text-[10px]">None</span>'}</div>
+        <div class="space-y-1 max-h-32 overflow-y-auto">${incoming.length ? incoming.map(e => renderRel(e, false)).join('') : '<span class="text-slate-400 text-[10px]">None</span>'}</div>
       </div>
     </div>
   `;
@@ -131,7 +131,7 @@ export function closeDrawer() {
   const content = document.getElementById('inspector-content');
   const badge = document.getElementById('inspector-badge');
   if (badge) badge.classList.add('hidden');
-  if (content) content.innerHTML = '<div class="text-slate-500 text-xs py-4 text-center font-mono">Click any node to inspect relationships.</div>';
+  if (content) content.innerHTML = '<div class="text-slate-400 text-xs py-4 text-center font-mono">Click any node to inspect relationships.</div>';
 }
 
 export function openClusterDrawer(clusterId) {

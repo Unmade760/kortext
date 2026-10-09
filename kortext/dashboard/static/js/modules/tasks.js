@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import * as api from './api.js';
 import { formatEdgesNonOverlapping } from './graph.js';
-import { toast, escapeHtml, openModal, closeModal } from './ui.js';
+import { toast, escapeHtml, openModal, closeModal, createVisTooltip } from './ui.js';
 
 export async function loadTasks() {
   const activeProj = state.activeProject !== 'all' ? state.activeProject : null;
@@ -106,7 +106,7 @@ export function renderKanbanBoard(tasks) {
     if (counts[st]) counts[st].textContent = buckets[st].length;
     if (columns[st]) {
       if (buckets[st].length === 0) {
-        columns[st].innerHTML = `<div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">No tasks</div>`;
+        columns[st].innerHTML = `<div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-800 rounded-lg">No tasks</div>`;
       } else {
         columns[st].innerHTML = buckets[st].map(t => renderKanbanCard(t)).join('');
       }
@@ -151,7 +151,7 @@ function renderKanbanCard(t) {
         </div>
       ` : ''}
       <div class="pt-1 flex items-center justify-between border-t border-slate-800/80">
-        <span class="text-[10px] font-mono text-slate-500">${escapeHtml(t.project_id || 'kortext')}</span>
+        <span class="text-[10px] font-mono text-slate-400">${escapeHtml(t.project_id || 'kortext')}</span>
         ${nextSt ? `
           <button onclick="updateTaskStatus('${t.id}', '${nextSt}')" class="px-2 py-0.5 text-[11px] font-mono rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 transition flex items-center gap-1" title="Advance to ${nextSt}">
             <span>→</span> <span>${nextSt.replace('_', ' ')}</span>
@@ -198,10 +198,15 @@ export function renderTaskGraph(nodes, edges) {
   const container = document.getElementById('task-network-graph');
   if (!container) return;
 
-  state.tasks.nodesDataSet = new vis.DataSet(nodes);
+  const formattedNodes = (nodes || []).map(n => ({
+    ...n,
+    title: createVisTooltip(n.title || `<b>${escapeHtml(n.label || n.id)}</b><br/><span style="color:#94a3b8">Status: ${escapeHtml(n.status || '')}</span>`),
+  }));
+  state.tasks.nodesDataSet = new vis.DataSet(formattedNodes);
   state.tasks.edgesDataSet = new vis.DataSet(formatEdgesNonOverlapping(edges.map(e => ({
     ...e,
     label: e.label || 'DEPENDS_ON',
+    title: createVisTooltip(e.title),
   }))));
 
   const options = {
@@ -219,7 +224,7 @@ export function renderTaskGraph(nodes, edges) {
     state.tasks.network.setOptions({ physics: { enabled: false } });
     state.tasks.isPhysicsFrozen = true;
     const st = document.getElementById('task-graph-status');
-    if (st) st.innerText = 'PHYSICS: HARD-FROZEN (60 FPS)';
+    if (st) st.innerText = 'Physics: Frozen';
   });
 
   setTimeout(() => {
@@ -227,7 +232,7 @@ export function renderTaskGraph(nodes, edges) {
       state.tasks.network.setOptions({ physics: { enabled: false } });
       state.tasks.isPhysicsFrozen = true;
       const st = document.getElementById('task-graph-status');
-      if (st) st.innerText = 'PHYSICS: HARD-FROZEN (60 FPS)';
+      if (st) st.innerText = 'Physics: Frozen';
     }
   }, 1400);
 
@@ -283,7 +288,7 @@ export function renderTasksList(tasks) {
   if (!container) return;
 
   if (!tasks || tasks.length === 0) {
-    container.innerHTML = '<div class="text-slate-500 py-12 text-center text-xs font-mono">No active tasks in Task DAG. Click "+ Create Task" above.</div>';
+    container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">No active tasks in Task DAG. Click "+ Create Task" above.</div>';
     return;
   }
 
@@ -304,9 +309,9 @@ export function renderTasksList(tasks) {
           <div class="flex items-center gap-2">
             <span class="font-mono text-xs font-semibold text-slate-400">${escapeHtml(t.id)}</span>
             <span class="text-xs font-mono px-2 py-0.5 rounded border ${badge} uppercase font-semibold">${escapeHtml(t.status)}</span>
-            <span class="text-xs font-mono text-slate-500">Complexity: ${t.complexity}/10</span>
-            <span class="text-xs font-mono text-slate-500">Assigned: ${escapeHtml(t.assigned_to)}</span>
-            <span class="text-xs font-mono text-slate-500">Project: ${escapeHtml(t.project_id || 'kortext')}</span>
+            <span class="text-xs font-mono text-slate-400">Complexity: ${t.complexity}/10</span>
+            <span class="text-xs font-mono text-slate-400">Assigned: ${escapeHtml(t.assigned_to)}</span>
+            <span class="text-xs font-mono text-slate-400">Project: ${escapeHtml(t.project_id || 'kortext')}</span>
           </div>
           <h4 class="font-medium text-white text-sm break-words">${escapeHtml(t.title)}</h4>
           ${t.description ? `<p class="text-xs text-slate-400 break-words">${escapeHtml(t.description)}</p>` : ''}

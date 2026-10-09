@@ -16,57 +16,48 @@ from kortext.dream import DreamEngine
 
 
 def cmd_status(args):
-    """Checks native substrate health across FalkorDB, Embedded Qdrant, and oMLX."""
-    import socket
-    from pathlib import Path
-
-    def check_tcp(host: str, port: int) -> bool:
-        try:
-            with socket.create_connection((host, port), timeout=0.2):
-                return True
-        except Exception:
-            return False
-
-    kortext_home = Path(os.getenv("KORTEXT_HOME", os.getenv("CEREBRUM_HOME", str(Path.home() / ".kortext" if (Path.home() / ".kortext").exists() or not (Path.home() / ".cerebrum").exists() else Path.home() / ".cerebrum"))))
-    socket_file = kortext_home / "run" / "falkordb.sock"
-    if not socket_file.exists():
-        legacy_sock = Path.home() / ".cerebrum" / "run" / "falkordb.sock"
-        if legacy_sock.exists():
-            socket_file = legacy_sock
-    falkor_sock = socket_file.is_socket()
-    falkor_tcp  = check_tcp("127.0.0.1", 6379)
-    falkor = falkor_sock or falkor_tcp
-
-    qpath = kortext_home / "qdrant"
-    if not qpath.exists() and (Path.home() / ".cerebrum" / "qdrant").exists():
-        qpath = Path.home() / ".cerebrum" / "qdrant"
-    qdrant_embedded = qpath.is_dir()
-    qdrant_remote   = check_tcp("127.0.0.1", 6333)
-
-    omlx = check_tcp("127.0.0.1", 8000)
-
+    """Checks native substrate health across FalkorDB, Qdrant, and Embedder."""
+    from kortext.setup import run_diagnostics
+    diag = run_diagnostics()
     print("=== Kortext Substrate Health (Zero-Docker) ===")
-    channel = "Unix Socket" if falkor_sock else "TCP :6379"
-    print(f"  FalkorDB (Graph Memory) [{channel}]       : {'✅ ONLINE' if falkor else '❌ OFFLINE'}")
-    if qdrant_embedded:
-        print(f"  Qdrant   (Vector Memory)[Embedded Rust]  : ✅ ONLINE ({qpath})")
-    else:
-        print(f"  Qdrant   (Vector Memory)[:6333]          : {'✅ ONLINE' if qdrant_remote else '❌ OFFLINE'}")
-    print(f"  oMLX     (Local Embedder)[:8000]         : {'✅ ONLINE' if omlx else '❌ OFFLINE'}")
+    print(f"  Platform               : {diag.os_name} ({diag.arch})")
+    print(f"  FalkorDB (Graph Memory): {'✅ ONLINE (' + diag.falkordb_channel + ')' if diag.falkordb_running else '❌ OFFLINE'}")
+    print(f"  FastEmbed (Embedder)   : {'✅ READY (BAAI/bge-small-en-v1.5)' if diag.fastembed_ready else '⚠️  NOT INSTALLED'}")
+    print(f"  Qdrant   (Vector Memory): ✅ ONLINE (FastMCP Sole Custodian)")
+    print(f"  Parsers  (Tree-sitter) : {', '.join(diag.installed_grammars) if diag.installed_grammars else 'None'}")
+    print(f"  Home Dir (KORTEXT_HOME): {diag.kortext_home}")
+
+
+def cmd_setup(args):
+    """Guided Setup Wizard for cross-platform zero-docker installation."""
+    from kortext.setup import run_guided_setup
+    run_guided_setup(non_interactive=getattr(args, "yes", False))
 
 
 def cmd_start(args):
-    """Starts native FalkorDB and embedded substrates."""
-    import subprocess
-    script = Path(__file__).resolve().parent.parent / "scripts" / "start_kortext.sh"
-    subprocess.run(["bash", str(script)], check=True)
+    """Starts native FalkorDB and embedded substrates cross-platform."""
+    import platform
+    if platform.system() == "Windows":
+        from kortext.setup import start_substrates
+        success, msg = start_substrates()
+        print(f"[{'SUCCESS' if success else 'NOTICE'}] {msg}")
+    else:
+        import subprocess
+        script = Path(__file__).resolve().parent.parent / "scripts" / "start_kortext.sh"
+        subprocess.run(["bash", str(script)], check=True)
 
 
 def cmd_stop(args):
-    """Stops native FalkorDB and embedded substrates."""
-    import subprocess
-    script = Path(__file__).resolve().parent.parent / "scripts" / "stop_kortext.sh"
-    subprocess.run(["bash", str(script)], check=True)
+    """Stops native FalkorDB and embedded substrates cross-platform."""
+    import platform
+    if platform.system() == "Windows":
+        from kortext.setup import stop_substrates
+        success, msg = stop_substrates()
+        print(f"[{'SUCCESS' if success else 'NOTICE'}] {msg}")
+    else:
+        import subprocess
+        script = Path(__file__).resolve().parent.parent / "scripts" / "stop_kortext.sh"
+        subprocess.run(["bash", str(script)], check=True)
 
 
 def cmd_install(args):
@@ -233,6 +224,11 @@ def main():
         description="Kortext Knowledge OS: Cognitive Memory Hierarchy, AST Intelligence & Anti-Ripgrep Engine",
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+
+    # setup
+    p_setup = subparsers.add_parser("setup", help="Interactive guided setup wizard for zero-docker onboarding")
+    p_setup.add_argument("--yes", "-y", action="store_true", help="Non-interactive setup with default values")
+    p_setup.set_defaults(func=cmd_setup)
 
     # start
     p_start = subparsers.add_parser("start", help="Start native substrates (FalkorDB, Embedded Qdrant)")

@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import * as api from './api.js';
 import { formatEdgesNonOverlapping } from './graph.js';
-import { toast, escapeHtml } from './ui.js';
+import { toast, escapeHtml, createVisTooltip } from './ui.js';
 
 export async function initBlastTab() {
   await loadBlastAutocomplete();
@@ -41,7 +41,7 @@ export async function executeBlastAnalysis() {
   const depth = document.getElementById('blast-depth') ? document.getElementById('blast-depth').value : '3';
   const treeContainer = document.getElementById('blast-tree-container');
   if (treeContainer) {
-    treeContainer.innerHTML = '<div class="text-slate-500 py-12 text-center font-mono text-xs">Computing blast radius & dependencies...</div>';
+    treeContainer.innerHTML = '<div class="text-slate-400 py-12 text-center font-mono text-xs">Computing blast radius & dependencies...</div>';
   }
 
   try {
@@ -112,6 +112,7 @@ export function renderBlastGraph(nodes, edges) {
     return {
       ...n,
       label,
+      title: createVisTooltip(n.title),
       shape: 'box',
       shapeProperties: { borderRadius: 6 },
       color: { background: bg, border, highlight: { background: hiBg, border: hiBorder } },
@@ -167,7 +168,7 @@ export function renderBlastTree(treeItems) {
   if (!container) return;
 
   if (!treeItems || treeItems.length === 0) {
-    container.innerHTML = '<div class="text-slate-500 py-12 text-center text-xs font-mono">No callers or dependencies found.</div>';
+    container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">No callers or dependencies found.</div>';
     return;
   }
 
@@ -186,9 +187,9 @@ export function renderBlastTree(treeItems) {
         </div>
         <div class="flex items-center justify-between text-[10px] text-slate-400">
           <span class="text-indigo-400 font-semibold">${escapeHtml(item.relation)}</span>
-          ${item.line ? `<span class="text-slate-500">Line ${item.line}</span>` : ''}
+          ${item.line ? `<span class="text-slate-400">Line ${item.line}</span>` : ''}
         </div>
-        <div class="text-[10px] text-slate-500 truncate" title="${escapeHtml(item.file_path || item.source || '')}">
+        <div class="text-[10px] text-slate-400 truncate" title="${escapeHtml(item.file_path || item.source || '')}">
           ${escapeHtml(item.file_path || item.source || '')}
         </div>
       </div>

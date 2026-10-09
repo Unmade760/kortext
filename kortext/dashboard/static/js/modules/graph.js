@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import * as api from './api.js';
-import { toast, escapeHtml } from './ui.js';
+import { toast, escapeHtml, createVisTooltip } from './ui.js';
 import {
   initRelationshipPalette,
   toggleRelFilter,
@@ -42,6 +42,9 @@ export function getEdgeStyle(label, isMention = false) {
   }
   if (lbl === 'RELATES_TO' || lbl === 'HAS_TASK' || lbl === 'PRODUCED_OUTCOME') {
     return { color: '#0ea5e9', highlight: '#38bdf8', hover: '#7dd3fc', width: 1.8, dashes: false, fontColor: '#38bdf8', badgeBg: 'rgba(8, 24, 40, 0.94)' };
+  }
+  if (lbl === 'BELONGS_TO') {
+    return { color: '#a855f7', highlight: '#c084fc', hover: '#d8b4fe', width: 2.0, dashes: [4, 4], fontColor: '#c084fc', badgeBg: 'rgba(28, 10, 42, 0.94)' };
   }
   if (lbl === 'LINKS_TO') {
     return { color: '#14b8a6', highlight: '#2dd4bf', hover: '#5eead4', width: 1.8, dashes: false, fontColor: '#2dd4bf', badgeBg: 'rgba(6, 30, 28, 0.94)' };
@@ -83,6 +86,7 @@ export function formatEdgesNonOverlapping(edgesData) {
         smooth,
         dashes: style.dashes,
         font: { size: 9, align: 'middle', color: style.fontColor, face: 'ui-monospace, monospace', background: style.badgeBg },
+        title: createVisTooltip(e.title),
       });
     });
   });
@@ -222,6 +226,8 @@ export function renderGraph(nodesData, edgesData) {
       icon = '⚡'; bg = '#022c22'; border = '#10b981'; hiBg = '#064e3b'; hiBorder = '#34d399'; fontColor = '#a7f3d0'; shadowColor = 'rgba(16, 185, 129, 0.35)';
     } else if (n.group === 'document') {
       icon = '📄'; bg = '#083344'; border = '#06b6d4'; hiBg = '#164e63'; hiBorder = '#22d3ee'; fontColor = '#cffafe'; shadowColor = 'rgba(6, 182, 212, 0.35)';
+    } else if (n.group === 'subsystem') {
+      icon = '🧩'; bg = '#2e1065'; border = '#a855f7'; hiBg = '#3b0764'; hiBorder = '#c084fc'; fontColor = '#f3e8ff'; shadowColor = 'rgba(168, 85, 247, 0.35)';
     }
 
     const labelText = n.label || n.id;
@@ -239,6 +245,7 @@ export function renderGraph(nodesData, edgesData) {
       font: { color: fontColor, face: 'ui-monospace, monospace', size: 11, bold: true },
       shape: 'box',
       shapeProperties: { borderRadius: 6 },
+      title: createVisTooltip(n.title || `<b>${escapeHtml(n.label || n.id)}</b><br/><span style="color:#94a3b8">Type: ${escapeHtml(n.group || 'entity')}</span>`),
       margin: 8,
       borderWidth: 1.6,
       borderWidthSelected: 2.6,
@@ -360,7 +367,11 @@ export function clusterAllModules() {
         joinCondition: (nodeOptions) => nodeOptions.cluster_id === cid,
         processProperties: (clusterOptions, childNodes) => {
           clusterOptions.label = `📦  ${info.name}\n[${childNodes.length} components]`;
-          clusterOptions.title = `<b>Subsystem / Module: ${info.name}</b><br/>Contains ${childNodes.length} components.<br/><i>Double-click to expand</i>`;
+          clusterOptions.title = createVisTooltip(
+            `<div style="font-weight:600;color:#c7d2fe;font-size:12px;">📦 Subsystem / Module: ${escapeHtml(info.name)}</div>` +
+            `<div style="color:#cbd5e1;font-size:11px;">Contains ${childNodes.length} components.</div>` +
+            `<div style="color:#94a3b8;font-size:10px;font-style:italic;">Double-click to expand</div>`
+          );
           clusterOptions.shape = 'box';
           clusterOptions.margin = 12;
           clusterOptions.color = { background: '#1e1b4b', border: '#818cf8', highlight: { background: '#312e81', border: '#c7d2fe' } };

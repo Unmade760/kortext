@@ -39,9 +39,9 @@ export async function executeRetrieval() {
   const t1 = document.getElementById('tier1-content');
   const t2 = document.getElementById('tier2-content');
 
-  if (t0) t0.innerHTML = '<span class="text-slate-500 font-mono text-xs">Querying Tree-sitter AST...</span>';
-  if (t1) t1.innerHTML = '<span class="text-slate-500 font-mono text-xs">Computing hybrid RRF vectors...</span>';
-  if (t2) t2.innerHTML = '<span class="text-slate-500 font-mono text-xs">Traversing episodic memory graph...</span>';
+  if (t0) t0.innerHTML = '<span class="text-slate-400 font-mono text-xs">Querying Tree-sitter AST...</span>';
+  if (t1) t1.innerHTML = '<span class="text-slate-400 font-mono text-xs">Computing hybrid RRF vectors...</span>';
+  if (t2) t2.innerHTML = '<span class="text-slate-400 font-mono text-xs">Traversing episodic memory graph...</span>';
 
   try {
     const data = await api.runRetrieval({ query, collection, budget });
@@ -75,7 +75,7 @@ export async function executeRetrieval() {
           </div>
         `).join('');
       } else {
-        t0.innerHTML = '<span class="text-slate-500 text-xs font-mono">No exact AST symbols matched.</span>';
+        t0.innerHTML = '<span class="text-slate-400 text-xs font-mono">No exact AST symbols matched.</span>';
       }
     }
 
@@ -101,7 +101,7 @@ export async function executeRetrieval() {
           `;
         }).join('');
       } else {
-        t1.innerHTML = '<span class="text-slate-500 text-xs font-mono">No code chunks retrieved.</span>';
+        t1.innerHTML = '<span class="text-slate-400 text-xs font-mono">No code chunks retrieved.</span>';
       }
     }
 
@@ -121,7 +121,7 @@ export async function executeRetrieval() {
           `;
         }).join('');
       } else {
-        t2.innerHTML = '<span class="text-slate-500 text-xs font-mono">No episodic memories matched.</span>';
+        t2.innerHTML = '<span class="text-slate-400 text-xs font-mono">No episodic memories matched.</span>';
       }
     }
   } catch (err) {

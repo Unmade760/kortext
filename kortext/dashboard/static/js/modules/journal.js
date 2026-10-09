@@ -9,7 +9,7 @@ import { toast, escapeHtml, openModal, closeModal } from './ui.js';
 
 export async function loadJournal() {
   const container = document.getElementById('journal-timeline');
-  if (container) container.innerHTML = '<div class="text-slate-500 py-12 text-center text-xs font-mono">Loading journal entries...</div>';
+  if (container) container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">Loading journal entries...</div>';
 
   try {
     const data = await api.getJournal();
@@ -73,7 +73,7 @@ export function renderJournal(entries) {
   if (!container) return;
 
   if (!entries || entries.length === 0) {
-    container.innerHTML = '<div class="text-slate-500 py-12 text-center text-xs font-mono">No journal entries match the selected filters.</div>';
+    container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">No journal entries match the selected filters.</div>';
     return;
   }
 

@@ -25,6 +25,7 @@ def test_rel_specs_structure():
         "LINKS_TO",
         "TAG",
         "RELATES_TO",
+        "BELONGS_TO",
         "SUPERSEDES",
         "MENTIONS",
     ]
@@ -107,6 +108,8 @@ def test_populate_clean_symbols_graph():
             return ["header", [["docs/spec.md", "Spec Document", "kortext/test.py", "test.py", "file", "links_to", "link"]]]
         if "-[r:HAS_TAG]->" in query:
             return ["header", [["docs/spec.md", "Spec Document", "core-arch"]]]
+        if "-[r:BELONGS_TO]->" in query:
+            return ["header", [["kortext/test.py", "sub_1", "TestSub", "Description of Subsystem"]]]
         return ["header", []]
 
     mock_redis.execute_command.side_effect = fake_execute_command
@@ -128,6 +131,8 @@ def test_populate_clean_symbols_graph():
     assert nodes_dict["docs/spec.md"]["group"] == "document"
     assert "tag:core-arch" in nodes_dict
     assert nodes_dict["tag:core-arch"]["group"] == "tag"
+    assert "sub_1" in nodes_dict
+    assert nodes_dict["sub_1"]["group"] == "subsystem"
 
     # Edge assertions
     edge_labels = [e["label"] for e in edges_list]
@@ -138,6 +143,7 @@ def test_populate_clean_symbols_graph():
     assert "TYPE_OF" in edge_labels
     assert "LINKS_TO" in edge_labels
     assert "TAG" in edge_labels
+    assert "BELONGS_TO" in edge_labels
 
 
 def test_build_graph_view_clean_symbols():

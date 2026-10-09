@@ -219,6 +219,7 @@
             <div id="legend-symbols" class="hidden flex items-center gap-4">
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 📁 File</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> ⚡ Symbol</div>
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span> 🧩 Subsystem</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Document</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]"></span> 💎 Concept</div>
             </div>
@@ -239,15 +240,15 @@
             </div>
             <div class="space-y-1.5 text-xs font-mono">
               <div class="flex justify-between text-slate-300">
-                <span class="text-slate-500">Substrate RAM:</span>
+                <span class="text-slate-400">Substrate RAM:</span>
                 <span class="text-slate-200" id="hud-rss">-- MB RSS</span>
               </div>
               <div class="flex justify-between text-slate-300">
-                <span class="text-slate-500">FalkorDB Latency:</span>
+                <span class="text-slate-400">FalkorDB Latency:</span>
                 <span class="text-slate-200" id="hud-lat">-- ms</span>
               </div>
               <div class="flex justify-between text-slate-300">
-                <span class="text-slate-500">Active Invariants:</span>
+                <span class="text-slate-400">Active Invariants:</span>
                 <span class="text-indigo-400" id="hud-invariants">14 Verified</span>
               </div>
             </div>
@@ -261,8 +262,8 @@
               </span>
               <div class="flex items-center gap-1.5 text-[10px] font-mono">
                 <button onclick="setAllRelFilters(true)" class="text-indigo-400 hover:text-indigo-300">All</button>
-                <span class="text-slate-600">•</span>
-                <button onclick="setAllRelFilters(false)" class="text-slate-500 hover:text-slate-400">None</button>
+                <span class="text-slate-500">•</span>
+                <button onclick="setAllRelFilters(false)" class="text-slate-400 hover:text-slate-200">None</button>
               </div>
             </div>
 
@@ -290,7 +291,7 @@
             </div>
 
             <div id="inspector-content" class="space-y-2 text-xs">
-              <div class="text-slate-500 text-xs py-4 text-center font-mono">
+              <div class="text-slate-400 text-xs py-4 text-center font-mono">
                 Click any node in the canvas to inspect its exact incoming and outgoing relationships.
               </div>
             </div>
@@ -364,7 +365,7 @@
             <span id="count-ready" class="text-xs font-mono bg-sky-950/80 text-sky-300 border border-sky-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
           <div id="kanban-col-ready" data-status="ready" class="kanban-cards-container kanban-column-drop">
-            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+            <div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-700 rounded-lg">Loading...</div>
           </div>
         </div>
 
@@ -378,7 +379,7 @@
             <span id="count-in_progress" class="text-xs font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
           <div id="kanban-col-in_progress" data-status="in_progress" class="kanban-cards-container kanban-column-drop">
-            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+            <div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-700 rounded-lg">Loading...</div>
           </div>
         </div>
 
@@ -392,7 +393,7 @@
             <span id="count-pending" class="text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
           <div id="kanban-col-pending" data-status="pending" class="kanban-cards-container kanban-column-drop">
-            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+            <div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-700 rounded-lg">Loading...</div>
           </div>
         </div>
 
@@ -406,7 +407,7 @@
             <span id="count-completed" class="text-xs font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
           <div id="kanban-col-completed" data-status="completed" class="kanban-cards-container kanban-column-drop">
-            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+            <div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-700 rounded-lg">Loading...</div>
           </div>
         </div>
 
@@ -420,7 +421,7 @@
             <span id="count-failed" class="text-xs font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
           <div id="kanban-col-failed" data-status="failed" class="kanban-cards-container kanban-column-drop">
-            <div class="p-4 text-center text-slate-600 text-xs font-mono border border-dashed border-slate-800 rounded-lg">Loading...</div>
+            <div class="p-4 text-center text-slate-400 text-xs font-mono border border-dashed border-slate-700 rounded-lg">Loading...</div>
           </div>
         </div>
       </div>
@@ -556,7 +557,7 @@
             <span id="blast-tree-count" class="text-[10px] font-mono text-slate-400">0 items</span>
           </div>
           <div id="blast-tree-container" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
-            <div class="text-center py-16 text-slate-500 text-xs">Select or enter a target symbol or file above and click <span class="text-rose-400 font-semibold">Trace Blast Radius</span>.</div>
+            <div class="text-center py-16 text-slate-400 text-xs">Select or enter a target symbol or file above and click <span class="text-rose-400 font-semibold">Trace Blast Radius</span>.</div>
           </div>
         </div>
       </div>
@@ -590,7 +591,7 @@
       </div>
 
       <div id="journal-timeline" class="space-y-4">
-        <div class="text-center py-12 text-slate-500">Loading journal entries...</div>
+        <div class="text-center py-12 text-slate-400">Loading journal entries...</div>
       </div>
     </div>
 
@@ -634,7 +635,7 @@
           </div>
           <p class="text-xs text-slate-400">Deterministic AST symbol declarations, signatures & callers.</p>
           <div id="tier0-content" class="text-xs text-slate-300 font-mono space-y-2 pt-2 overflow-auto max-h-96">
-            <span class="text-slate-500">Enter a query or symbol name.</span>
+            <span class="text-slate-400">Enter a query or symbol name.</span>
           </div>
         </div>
 
@@ -648,7 +649,7 @@
           </div>
           <p class="text-xs text-slate-400">Hybrid dense/sparse code retrieval with RRF fusion signals.</p>
           <div id="tier1-content" class="text-xs text-slate-300 font-mono space-y-2 pt-2 overflow-auto max-h-96">
-            <span class="text-slate-500">Submit a query to see code chunks.</span>
+            <span class="text-slate-400">Submit a query to see code chunks.</span>
           </div>
         </div>
 
@@ -662,7 +663,7 @@
           </div>
           <p class="text-xs text-slate-400">Consolidated episodic history filtered by Weibull retention decay.</p>
           <div id="tier2-content" class="text-xs text-slate-300 font-mono space-y-2 pt-2 overflow-auto max-h-96">
-            <span class="text-slate-500">Submit a query to see episodic memories.</span>
+            <span class="text-slate-400">Submit a query to see episodic memories.</span>
           </div>
         </div>
       </div>
@@ -698,7 +699,7 @@
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-300">Active Collections</h3>
         <div id="collections-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="text-slate-500 col-span-3 text-center py-8">Loading collections...</div>
+          <div class="text-slate-400 col-span-3 text-center py-8 font-mono text-xs">Loading collections...</div>
         </div>
       </div>
 
@@ -732,11 +733,11 @@
             </div>
             <p class="text-xs text-slate-400">Autonomous watchdog daemon debouncing and syncing file changes to Qdrant & FalkorDB in near real-time.</p>
             <div class="space-y-1.5 text-xs font-mono pt-1 text-slate-300">
-              <div class="flex justify-between"><span class="text-slate-500">Root:</span> <span id="watcher-root" class="text-sky-300 truncate max-w-[140px]">-</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Debounce:</span> <span id="watcher-debounce" class="text-slate-200">2.0s</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Events Synced:</span> <span id="watcher-processed" class="text-emerald-400 font-bold">0</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Pending Queue:</span> <span id="watcher-pending" class="text-amber-400 font-bold">0</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Last Synced:</span> <span id="watcher-last-file" class="text-slate-400 truncate max-w-[140px]">-</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Root:</span> <span id="watcher-root" class="text-sky-300 truncate max-w-[140px]">-</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Debounce:</span> <span id="watcher-debounce" class="text-slate-200">2.0s</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Events Synced:</span> <span id="watcher-processed" class="text-emerald-400 font-bold">0</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Pending Queue:</span> <span id="watcher-pending" class="text-amber-400 font-bold">0</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Last Synced:</span> <span id="watcher-last-file" class="text-slate-400 truncate max-w-[140px]">-</span></div>
             </div>
           </div>
 
@@ -751,9 +752,9 @@
             </div>
             <p class="text-xs text-slate-400">Content-addressable SHA-256 SQLite store mapping chunk text to packed float32 dense vectors.</p>
             <div class="space-y-1.5 text-xs font-mono pt-1 text-slate-300">
-              <div class="flex justify-between"><span class="text-slate-500">Cached Chunks:</span> <span id="cache-chunks-count" class="text-amber-400 font-bold">0</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Storage Size:</span> <span id="cache-size-mb" class="text-slate-200">0.0 MB</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Total Indexed Files:</span> <span id="cache-indexed-files" class="text-slate-200">0</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Cached Chunks:</span> <span id="cache-chunks-count" class="text-amber-400 font-bold">0</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Storage Size:</span> <span id="cache-size-mb" class="text-slate-200">0.0 MB</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Total Indexed Files:</span> <span id="cache-indexed-files" class="text-slate-200">0</span></div>
             </div>
             <div class="pt-2 border-t border-slate-800/60 flex justify-end">
               <button onclick="clearChunkCache()" class="text-[11px] font-mono text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1">
@@ -773,8 +774,8 @@
             </div>
             <p class="text-xs text-slate-400">Compiler-grade symbol indexing for multi-repo type inference, class inheritance, and interface implementations.</p>
             <div class="space-y-1.5 text-xs font-mono pt-1 text-slate-300">
-              <div class="flex justify-between"><span class="text-slate-500">Format:</span> <span class="text-slate-200">SCIP (Protobuf v1)</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Edge Types:</span> <span class="text-purple-300">IMPLEMENTS, TYPE_OF</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Format:</span> <span class="text-slate-200">SCIP (Protobuf v1)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Edge Types:</span> <span class="text-purple-300">IMPLEMENTS, TYPE_OF</span></div>
             </div>
             <div class="pt-2 border-t border-slate-800/60 flex justify-end">
               <button onclick="triggerScipIngest()" id="btn-scip-ingest" class="text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1">
@@ -842,7 +843,7 @@
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-slate-800/50 py-4 text-center text-xs text-slate-500 font-mono">
+  <footer class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-400 font-mono">
     Kortext Knowledge OS • Local Vector & Graph Substrate
   </footer>
 

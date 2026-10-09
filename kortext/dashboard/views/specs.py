@@ -276,6 +276,18 @@ REL_SPECS: Dict[str, dict] = {
         "bg": "rgba(8, 24, 40, 0.94)",
         "dashes": False,
     },
+    "BELONGS_TO": {
+        "width": 1.8,
+        "color": "#a855f7",
+        "highlight": "#c084fc",
+        "hover": "#d8b4fe",
+        "font_color": "#c084fc",
+        "font": "#c084fc",
+        "bg": "rgba(28, 10, 42, 0.94)",
+        "dashes": [4, 4],
+        "query": "MATCH (f:File)-[r:BELONGS_TO]->(sub:Subsystem) RETURN f.path, sub.id, sub.name, coalesce(sub.description, '')",
+        "handler": None,
+    },
     "SUPERSEDES": {
         "width": 2.2,
         "color": "#ef4444",

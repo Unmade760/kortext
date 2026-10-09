@@ -113,6 +113,39 @@ def _handle_tags(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], 
             edges_list.append(_make_vis_edge(src_path, tag_id, rel))
 
 
+def _handle_subsystems(
+    rows: list,
+    rel: str,
+    spec: dict,
+    nodes_dict: Dict[str, dict],
+    edges_list: List[dict],
+    sym_to_file: Dict[str, str],
+    file_to_subsystem: Optional[Dict[str, Tuple[str, str]]] = None,
+) -> None:
+    for row in rows:
+        if len(row) >= 4:
+            file_path, sub_id, sub_name, sub_desc = str(row[0]), str(row[1]), str(row[2]), str(row[3])
+            is_doc = file_path.lower().endswith((".md", ".markdown"))
+            if file_path not in nodes_dict:
+                nodes_dict[file_path] = _make_vis_node(
+                    node_id=file_path,
+                    label=Path(file_path).stem.replace("-", " ").replace("_", " ").title() if is_doc else Path(file_path).name,
+                    group="document" if is_doc else "file",
+                    title=f"<b>{'Document' if is_doc else 'File'}: {Path(file_path).name}</b><br/>{file_path}",
+                )
+            if sub_id not in nodes_dict:
+                nodes_dict[sub_id] = _make_vis_node(
+                    node_id=sub_id,
+                    label=f"🧩 {sub_name}",
+                    full_name=sub_name,
+                    group="subsystem",
+                    title=f"<b>Subsystem: {sub_name}</b><br/>{sub_desc}",
+                )
+            edges_list.append(_make_vis_edge(file_path, sub_id, rel))
+            if file_to_subsystem is not None:
+                file_to_subsystem[file_path] = (sub_id, f"🧩 {sub_name}")
+
+
 # Register handlers in declarative REL_SPECS table
 REL_SPECS["DEFINED_IN"]["handler"] = _handle_defined_in
 REL_SPECS["REFERENCES"]["handler"] = _handle_filter_existing
@@ -121,10 +154,17 @@ REL_SPECS["IMPLEMENTS"]["handler"] = _handle_symbol_hierarchy
 REL_SPECS["TYPE_OF"]["handler"] = _handle_symbol_hierarchy
 REL_SPECS["LINKS_TO"]["handler"] = _handle_doc_links
 REL_SPECS["TAG"]["handler"] = _handle_tags
+if "BELONGS_TO" in REL_SPECS:
+    REL_SPECS["BELONGS_TO"]["handler"] = _handle_subsystems
 
 
 def populate_clean_symbols_graph(
-    r, target_db: str, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]
+    r,
+    target_db: str,
+    nodes_dict: Dict[str, dict],
+    edges_list: List[dict],
+    sym_to_file: Dict[str, str],
+    file_to_subsystem: Optional[Dict[str, Tuple[str, str]]] = None,
 ) -> None:
     """Populates nodes and edges for clean symbols view via declarative REL_SPECS."""
     for rel_name, spec in REL_SPECS.items():
@@ -133,13 +173,32 @@ def populate_clean_symbols_graph(
         if query and handler:
             res = r.execute_command("GRAPH.QUERY", target_db, query)
             if res and len(res) > 1 and isinstance(res[1], list):
-                handler(res[1], rel_name, spec, nodes_dict, edges_list, sym_to_file)
+                if rel_name == "BELONGS_TO" and file_to_subsystem is not None:
+                    handler(res[1], rel_name, spec, nodes_dict, edges_list, sym_to_file, file_to_subsystem=file_to_subsystem)
+                else:
+                    handler(res[1], rel_name, spec, nodes_dict, edges_list, sym_to_file)
 
 
 def _infer_cluster(
-    node_id: str, group: str, full_name: str, sym_to_file: Dict[str, str], target_db: str
+    node_id: str,
+    group: str,
+    full_name: str,
+    sym_to_file: Dict[str, str],
+    target_db: str,
+    file_to_subsystem: Optional[Dict[str, Tuple[str, str]]] = None,
 ) -> Tuple[str, str]:
     """Deterministically assigns a node to an architectural cluster or subsystem."""
+    if group == "subsystem":
+        return node_id, full_name or f"🧩 {node_id}"
+
+    if file_to_subsystem:
+        if node_id in file_to_subsystem:
+            return file_to_subsystem[node_id]
+        if group == "symbol":
+            parent_f = sym_to_file.get(node_id)
+            if parent_f and parent_f in file_to_subsystem:
+                return file_to_subsystem[parent_f]
+
     raw_path = sym_to_file.get(node_id, full_name or node_id) if group == "symbol" else (full_name or node_id)
     if group == "tag":
         return "tags", "🏷️ Tags & Categories"
@@ -209,6 +268,7 @@ def build_graph_view(
     nodes_dict: Dict[str, dict] = {}
     edges_list: List[dict] = []
     sym_to_file: Dict[str, str] = {}
+    file_to_subsystem: Dict[str, Tuple[str, str]] = {}
 
     # Known episodic/causal memory graph names (legacy 'cerebrum' kept for backward-compat)
     EPISODIC_GRAPH_NAMES = {"kortext", "cerebrum", default_db}
@@ -230,7 +290,7 @@ def build_graph_view(
 
         if is_symbols_graph:
             if clean:
-                populate_clean_symbols_graph(r, target_db, nodes_dict, edges_list, sym_to_file)
+                populate_clean_symbols_graph(r, target_db, nodes_dict, edges_list, sym_to_file, file_to_subsystem)
             else:
                 nodes_res = r.execute_command("GRAPH.QUERY", target_db, "MATCH (n) RETURN coalesce(n.name, n.path), labels(n)")
                 if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
@@ -335,7 +395,7 @@ def build_graph_view(
         for n in nodes_dict.values():
             nid = n["id"]
             n["degree"] = degrees.get(nid, 0)
-            cid, cname = _infer_cluster(nid, n.get("group", ""), n.get("full_name", nid), sym_to_file, target_db)
+            cid, cname = _infer_cluster(nid, n.get("group", ""), n.get("full_name", nid), sym_to_file, target_db, file_to_subsystem)
             n["cluster_id"] = cid
             n["cluster_name"] = cname
 

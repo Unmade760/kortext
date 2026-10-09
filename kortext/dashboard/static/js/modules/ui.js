@@ -25,6 +25,21 @@ export function formatDate(isoStr) {
   }
 }
 
+export function createVisTooltip(titleContent) {
+  if (!titleContent) return null;
+  if (typeof Element !== 'undefined' && titleContent instanceof Element) {
+    return titleContent;
+  }
+  const el = document.createElement('div');
+  el.className = 'vis-custom-tooltip text-xs space-y-1';
+  if (typeof titleContent === 'string' && (titleContent.includes('<') || titleContent.includes('&'))) {
+    el.innerHTML = titleContent;
+  } else {
+    el.textContent = String(titleContent);
+  }
+  return el;
+}
+
 export async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);

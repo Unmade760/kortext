@@ -37,8 +37,10 @@ export async function loadHealth() {
 export function updateQuickPills(services) {
   services.forEach(s => {
     const nameLower = s.name.toLowerCase();
+    // Only match core database engines for quick pills, ignoring optional browser/dashboard UIs
+    if (nameLower.includes('browser') && nameLower.includes('falkordb')) return;
     const id = nameLower.includes('qdrant') ? 'pill-qdrant'
-             : nameLower.includes('falkordb') ? 'pill-falkordb'
+             : (nameLower.includes('falkordb') && !nameLower.includes('browser')) ? 'pill-falkordb'
              : (nameLower.includes('omlx') || nameLower.includes('inference') || nameLower.includes('embed')) ? 'pill-inference' : null;
     if (id) {
       const el = document.getElementById(id);
@@ -65,7 +67,7 @@ export function updateWatcherUI(w) {
     pill.className = isRunning
       ? 'px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 flex items-center gap-1.5'
       : 'px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
-    pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-slate-500'}"></span> Watcher: ${isRunning ? 'ON' : 'OFF'}`;
+    pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-slate-400'}"></span> Watcher: ${isRunning ? 'ON' : 'OFF'}`;
   }
 
   const badge = document.getElementById('watcher-status-badge');
@@ -191,7 +193,7 @@ function renderHooksStatusUI(hooks) {
 // Collections Manager
 export async function loadCollections() {
   const container = document.getElementById('collections-grid');
-  if (container) container.innerHTML = '<div class="text-slate-500 py-4 col-span-3 text-center text-xs font-mono">Fetching collections...</div>';
+  if (container) container.innerHTML = '<div class="text-slate-400 py-4 col-span-3 text-center text-xs font-mono">Fetching collections...</div>';
   try {
     const data = await api.getCollections();
     if (data.status !== 'ok' || !data.collections) {
@@ -200,7 +202,7 @@ export async function loadCollections() {
     }
     if (container) {
       if (data.collections.length === 0) {
-        container.innerHTML = '<div class="text-slate-500 py-4 col-span-3 text-center text-xs font-mono">No active collections found.</div>';
+        container.innerHTML = '<div class="text-slate-400 py-4 col-span-3 text-center text-xs font-mono">No active collections found.</div>';
         return;
       }
       container.innerHTML = data.collections.map(c => {
@@ -261,7 +263,7 @@ export async function loadQuarantine() {
 
     if (!container) return;
     if (!data.items || data.items.length === 0) {
-      container.innerHTML = '<div class="text-slate-500 py-12 text-center text-xs font-mono">No adversarial violations detected. Causal memory is clean.</div>';
+      container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">No adversarial violations detected. Causal memory is clean.</div>';
       return;
     }
 
@@ -269,7 +271,7 @@ export async function loadQuarantine() {
       <div class="bg-slate-950 border border-rose-500/20 rounded-xl p-3.5 space-y-2 font-mono text-xs">
         <div class="flex items-center justify-between">
           <span class="text-rose-400 font-bold">${escapeHtml(item.reason || 'Security Violation')}</span>
-          <span class="text-slate-500 text-[10px]">${escapeHtml(item.timestamp || '')}</span>
+          <span class="text-slate-400 text-[10px]">${escapeHtml(item.timestamp || '')}</span>
         </div>
         <div class="text-slate-300 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
           ${escapeHtml(item.fact || item.subject || '')}
