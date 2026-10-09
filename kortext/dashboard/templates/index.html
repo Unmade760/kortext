@@ -49,7 +49,7 @@
         <span class="text-slate-400">Services:</span>
         <span id="pill-qdrant" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Qdrant ...</span>
         <span id="pill-falkordb" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">FalkorDB ...</span>
-        <span id="pill-omlx" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">oMLX ...</span>
+        <span id="pill-inference" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Inference ...</span>
         <span id="pill-watcher" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Watcher ...</span>
         <button onclick="refreshAll()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Refresh All Data">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i>
@@ -58,35 +58,29 @@
     </div>
   </header>
 
-  <!-- Navigation Tabs -->
+  <!-- Navigation Tabs (Reorganized & Cleanly Named) -->
   <nav class="border-b border-slate-800 bg-slate-900/50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 overflow-x-auto">
       <button onclick="setTab('graph')" id="tab-btn-graph" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-indigo-500 text-indigo-400 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="share-2" class="w-4 h-4"></i> Knowledge Graph
-      </button>
-      <button onclick="setTab('blast')" id="tab-btn-blast" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="crosshair" class="w-4 h-4 text-rose-400"></i> Blast-Radius Explorer
+        <i data-lucide="share-2" class="w-4 h-4"></i> Graph Explorer
       </button>
       <button onclick="setTab('tasks')" id="tab-btn-tasks" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="check-square" class="w-4 h-4 text-emerald-400"></i> Task DAG Tracker
+        <i data-lucide="trello" class="w-4 h-4 text-emerald-400"></i> Task Board
+      </button>
+      <button onclick="setTab('blast')" id="tab-btn-blast" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i data-lucide="crosshair" class="w-4 h-4 text-rose-400"></i> Impact Analysis
       </button>
       <button onclick="setTab('journal')" id="tab-btn-journal" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
         <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i> Decision Journal
       </button>
       <button onclick="setTab('retrieval')" id="tab-btn-retrieval" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="search" class="w-4 h-4 text-sky-400"></i> Retrieval Lab
-      </button>
-      <button onclick="setTab('quarantine')" id="tab-btn-quarantine" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i> MINJA Quarantine
+        <i data-lucide="search" class="w-4 h-4 text-sky-400"></i> Search & Memory
       </button>
       <button onclick="setTab('collections')" id="tab-btn-collections" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="database" class="w-4 h-4 text-purple-400"></i> Collections
+        <i data-lucide="database" class="w-4 h-4 text-purple-400"></i> Vector Store
       </button>
       <button onclick="setTab('health')" id="tab-btn-health" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="activity" class="w-4 h-4 text-teal-400"></i> Topology & Health
-      </button>
-      <button onclick="setTab('links')" id="tab-btn-links" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="external-link" class="w-4 h-4 text-slate-400"></i> Quick Access
+        <i data-lucide="activity" class="w-4 h-4 text-teal-400"></i> System Health
       </button>
     </div>
   </nav>
@@ -94,12 +88,12 @@
   <!-- Main Content -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-    <!-- 1. Knowledge Graph Tab -->
+    <!-- 1. Graph Explorer Tab -->
     <div id="tab-content-graph" class="tab-content space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 class="text-lg font-semibold text-white">FalkorDB Temporal & Symbol Knowledge Graph</h2>
-          <p class="text-sm text-slate-400">Interactive property graph visualization for episodic memory and deterministic code symbols.</p>
+          <h2 class="text-lg font-semibold text-white">Knowledge Graph Explorer</h2>
+          <p class="text-sm text-slate-400">Interactive property graph visualization for code symbols, relationships, and episodic memory.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2.5">
           <!-- Graph Source Selector -->
@@ -125,7 +119,7 @@
             <span class="text-slate-400">Density:</span>
             <select id="select-min-degree" onchange="handleMinDegreeChange(this.value)" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
               <option value="1">All (Deg ≥ 1)</option>
-              <option value="2">Clean (Deg ≥ 2 - Hide Leaves)</option>
+              <option value="2">Clean (Deg ≥ 2)</option>
               <option value="3">Core (Deg ≥ 3)</option>
               <option value="5">Hubs Only (Deg ≥ 5)</option>
             </select>
@@ -159,10 +153,10 @@
             </select>
           </div>
 
-          <!-- Physics Hard-Freeze Badge & Toggle -->
-          <button id="btn-toggle-freeze" onclick="toggleGraphFreeze()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-900/60 transition" title="Toggle Vis.js Physics Simulation / Hard-Freeze">
-            <span id="dot-physics" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span id="label-physics-status">HARD-FROZEN (60 FPS)</span>
+          <!-- Physics Freeze Toggle -->
+          <button id="btn-toggle-freeze" onclick="toggleGraphFreeze()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-cyan-300 border border-cyan-500/40 hover:bg-slate-800 transition" title="Toggle physics simulation / freeze">
+            <span id="dot-physics" class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <span id="label-physics-status">Frozen</span>
           </button>
 
           <!-- Trigger Dream Mode Button -->
@@ -171,7 +165,7 @@
           </button>
 
           <button onclick="resetGraphFocus()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700">
-            Reset View
+            Reset
           </button>
 
           <button onclick="loadGraph()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3 py-1.5 rounded-lg transition">
@@ -199,7 +193,7 @@
             <div id="large-graph-banner" class="hidden absolute top-3 left-3 right-3 z-10 flex items-center justify-between px-3.5 py-2 rounded-lg bg-amber-950/90 backdrop-blur border border-amber-500/60 shadow-2xl text-xs font-mono text-amber-200">
               <div class="flex items-center gap-2">
                 <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
-                <span id="large-graph-msg">Large graph (>250 nodes). Macro clustering & leaf pruning active to prevent hairballing.</span>
+                <span id="large-graph-msg">Large graph (>250 nodes). Density pruning active to prevent hairballing.</span>
               </div>
               <button onclick="dismissLargeGraphBanner()" class="text-amber-400 hover:text-white text-xs underline font-sans">Dismiss</button>
             </div>
@@ -209,7 +203,7 @@
               <button onclick="zoomGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
               <button onclick="zoomGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
               <button onclick="fitGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
-              <button onclick="toggleGraphFreeze()" id="btn-hud-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
+              <button onclick="toggleGraphFreeze()" id="btn-hud-freeze" class="hud-btn text-cyan-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Freeze</button>
             </div>
 
             <!-- Network Canvas Element -->
@@ -244,10 +238,6 @@
               <span id="hud-badge-status" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ONLINE</span>
             </div>
             <div class="space-y-1.5 text-xs font-mono">
-              <div class="flex justify-between text-slate-300">
-                <span class="text-slate-500">Token Savings:</span>
-                <span class="text-emerald-400 font-semibold" id="hud-savings">Active (AST Index)</span>
-              </div>
               <div class="flex justify-between text-slate-300">
                 <span class="text-slate-500">Substrate RAM:</span>
                 <span class="text-slate-200" id="hud-rss">-- MB RSS</span>
@@ -310,124 +300,14 @@
       </div>
     </div>
 
-    <!-- 2. Blast-Radius Explorer Tab -->
-    <div id="tab-content-blast" class="tab-content hidden space-y-4">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="crosshair" class="w-5 h-5 text-rose-400"></i>
-            Interactive Blast-Radius & Impact Explorer
-          </h2>
-          <p class="text-sm text-slate-400">Multi-hop recursive call, reference, import, and type implementation impact analysis.</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Target Input with Autocomplete -->
-          <div class="relative">
-            <input type="text" id="blast-target-input" list="blast-suggestions" onkeydown="if(event.key==='Enter') executeBlastAnalysis()" placeholder="Symbol or file path..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 w-64 font-mono">
-            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
-            <datalist id="blast-suggestions"></datalist>
-          </div>
-
-          <!-- Direction Toggle -->
-          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono">
-            <span class="text-slate-400">Direction:</span>
-            <select id="blast-direction" onchange="executeBlastAnalysis()" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
-              <option value="upstream">Upstream (Callers / Breakage)</option>
-              <option value="downstream">Downstream (Callees / Dependencies)</option>
-            </select>
-          </div>
-
-          <!-- Max Depth Selector -->
-          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono">
-            <span class="text-slate-400">Max Depth:</span>
-            <select id="blast-depth" onchange="executeBlastAnalysis()" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
-              <option value="1">1 Hop (Direct)</option>
-              <option value="2">2 Hops (Transitive)</option>
-              <option value="3" selected>3 Hops (Deep)</option>
-              <option value="4">4 Hops</option>
-              <option value="5">5 Hops (Max)</option>
-            </select>
-          </div>
-
-          <button onclick="executeBlastAnalysis()" class="text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium px-3.5 py-1.5 rounded-lg shadow-md transition flex items-center gap-1.5">
-            <i data-lucide="zap" class="w-3.5 h-3.5"></i> Trace Blast Radius
-          </button>
-        </div>
-      </div>
-
-      <!-- Summary Stat Badges -->
-      <div id="blast-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase font-mono block">Target Node</span>
-            <span id="blast-stat-target" class="text-sm font-bold text-white font-mono truncate max-w-[180px] block">None</span>
-          </div>
-          <span id="blast-stat-type" class="text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 uppercase">-</span>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase font-mono block">Direct Dependents (Hop 1)</span>
-            <span id="blast-stat-direct" class="text-sm font-bold text-rose-400 font-mono">0</span>
-          </div>
-          <span class="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30">HIGH RISK</span>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase font-mono block">Transitive / Types (Hop 2+)</span>
-            <span id="blast-stat-transitive" class="text-sm font-bold text-amber-300 font-mono">0</span>
-          </div>
-          <span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/60 font-semibold">MEDIUM RISK</span>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase font-mono block">Total Impact Radius</span>
-            <span id="blast-stat-total" class="text-sm font-bold text-sky-400 font-mono">0</span>
-          </div>
-          <span id="blast-stat-risk" class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">LOW</span>
-        </div>
-      </div>
-
-      <!-- Graph & Tree Split View -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Vis Network Graph Container -->
-        <div class="lg:col-span-2 relative cyber-canvas">
-          <div class="canvas-hud-toolbar bottom-3 right-3 !top-auto !left-auto">
-            <button onclick="zoomBlastGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
-            <button onclick="zoomBlastGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
-            <button onclick="fitBlastGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
-            <button onclick="toggleBlastFreeze()" id="btn-blast-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
-          </div>
-
-          <div id="blast-network-graph"></div>
-          <div class="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 rounded-lg p-2.5 text-[10px] font-mono space-y-1.5 text-slate-300 pointer-events-none">
-            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 🎯 Target (Hop 0)</div>
-            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span> 💥 Direct Dependents (Hop 1 - High Risk)</div>
-            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span> ⚡ Transitive / Types (Hop 2 - Med Risk)</div>
-            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-sky-500 shadow-[0_0_8px_rgba(56,189,248,0.6)]"></span> 🌐 Distant Consumers (Hop 3+ - Low Risk)</div>
-          </div>
-        </div>
-
-        <!-- Impact Tree & Call Site Inspector -->
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col space-y-3" style="max-height: 580px;">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Affected Files & Call Sites</h3>
-            <span id="blast-tree-count" class="text-[10px] font-mono text-slate-400">0 items</span>
-          </div>
-          <div id="blast-tree-container" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
-            <div class="text-center py-16 text-slate-500 text-xs">Select or enter a target symbol or file above and click <span class="text-rose-400 font-semibold">Trace Blast Radius</span>.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. Task DAG Tracker Tab -->
+    <!-- 2. Task Board Tab -->
     <div id="tab-content-tasks" class="tab-content hidden space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="check-square" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG State Machine
+            <i data-lucide="trello" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG Board
           </h2>
-          <p class="text-sm text-slate-400">Graph-backed task state machine with strict dependency gating, retry loops, and Kanban flow.</p>
+          <p class="text-sm text-slate-400">Graph-backed task state machine with strict dependency gating and responsive Kanban execution.</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <!-- 3-Way View Switcher -->
@@ -549,7 +429,7 @@
       <div id="task-dag-canvas-container" class="hidden relative cyber-canvas">
         <div class="p-3 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-between text-xs font-mono text-slate-400">
           <span class="flex items-center gap-2"><i data-lucide="git-branch" class="w-4 h-4 text-indigo-400"></i> Dependency DAG Topology</span>
-          <span id="task-graph-status" class="text-emerald-400 font-semibold">PHYSICS: HARD-FROZEN</span>
+          <span id="task-graph-status" class="text-emerald-400 font-semibold">Physics: Frozen</span>
         </div>
 
         <!-- Floating Canvas Action HUD -->
@@ -572,12 +452,122 @@
       </div>
     </div>
 
+    <!-- 3. Impact Analysis Tab -->
+    <div id="tab-content-blast" class="tab-content hidden space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i data-lucide="crosshair" class="w-5 h-5 text-rose-400"></i>
+            Impact Analysis & Blast Radius
+          </h2>
+          <p class="text-sm text-slate-400">Multi-hop AST call hierarchy, type dependencies, and breaking change risk assessment.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Target Input with Autocomplete -->
+          <div class="relative">
+            <input type="text" id="blast-target-input" list="blast-suggestions" onkeydown="if(event.key==='Enter') executeBlastAnalysis()" placeholder="Symbol or file path..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 w-64 font-mono">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+            <datalist id="blast-suggestions"></datalist>
+          </div>
+
+          <!-- Direction Toggle -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono">
+            <span class="text-slate-400">Direction:</span>
+            <select id="blast-direction" onchange="executeBlastAnalysis()" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+              <option value="upstream">Upstream (Callers / Breakage)</option>
+              <option value="downstream">Downstream (Callees / Dependencies)</option>
+            </select>
+          </div>
+
+          <!-- Max Depth Selector -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-mono">
+            <span class="text-slate-400">Max Depth:</span>
+            <select id="blast-depth" onchange="executeBlastAnalysis()" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+              <option value="1">1 Hop (Direct)</option>
+              <option value="2">2 Hops (Transitive)</option>
+              <option value="3" selected>3 Hops (Deep)</option>
+              <option value="4">4 Hops</option>
+              <option value="5">5 Hops (Max)</option>
+            </select>
+          </div>
+
+          <button onclick="executeBlastAnalysis()" class="text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium px-3.5 py-1.5 rounded-lg shadow-md transition flex items-center gap-1.5">
+            <i data-lucide="zap" class="w-3.5 h-3.5"></i> Trace Blast Radius
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Stat Badges -->
+      <div id="blast-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-mono block">Target Node</span>
+            <span id="blast-stat-target" class="text-sm font-bold text-white font-mono truncate max-w-[180px] block">None</span>
+          </div>
+          <span id="blast-stat-type" class="text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 uppercase">-</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-mono block">Direct Dependents (Hop 1)</span>
+            <span id="blast-stat-direct" class="text-sm font-bold text-rose-400 font-mono">0</span>
+          </div>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30">HIGH RISK</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-mono block">Transitive / Types (Hop 2+)</span>
+            <span id="blast-stat-transitive" class="text-sm font-bold text-amber-300 font-mono">0</span>
+          </div>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-600/60 font-semibold">MEDIUM RISK</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-mono block">Total Impact Radius</span>
+            <span id="blast-stat-total" class="text-sm font-bold text-sky-400 font-mono">0</span>
+          </div>
+          <span id="blast-stat-risk" class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">LOW</span>
+        </div>
+      </div>
+
+      <!-- Graph & Tree Split View -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Vis Network Graph Container -->
+        <div class="lg:col-span-2 relative cyber-canvas">
+          <div class="canvas-hud-toolbar bottom-3 right-3 !top-auto !left-auto">
+            <button onclick="zoomBlastGraph(1.25)" class="hud-btn" title="Zoom In"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
+            <button onclick="zoomBlastGraph(0.8)" class="hud-btn" title="Zoom Out"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
+            <button onclick="fitBlastGraph()" class="hud-btn" title="Fit to Canvas"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Fit</button>
+            <button onclick="toggleBlastFreeze()" id="btn-blast-freeze" class="hud-btn text-emerald-400" title="Toggle Physics Freeze"><i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen</button>
+          </div>
+
+          <div id="blast-network-graph"></div>
+          <div class="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 rounded-lg p-2.5 text-[10px] font-mono space-y-1.5 text-slate-300 pointer-events-none">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 🎯 Target (Hop 0)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span> 💥 Direct Dependents (Hop 1 - High Risk)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span> ⚡ Transitive / Types (Hop 2 - Med Risk)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-sky-500 shadow-[0_0_8px_rgba(56,189,248,0.6)]"></span> 🌐 Distant Consumers (Hop 3+ - Low Risk)</div>
+          </div>
+        </div>
+
+        <!-- Impact Tree & Call Site Inspector -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col space-y-3" style="max-height: 580px;">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Affected Files & Call Sites</h3>
+            <span id="blast-tree-count" class="text-[10px] font-mono text-slate-400">0 items</span>
+          </div>
+          <div id="blast-tree-container" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
+            <div class="text-center py-16 text-slate-500 text-xs">Select or enter a target symbol or file above and click <span class="text-rose-400 font-semibold">Trace Blast Radius</span>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 4. Decision Journal Tab -->
     <div id="tab-content-journal" class="tab-content hidden space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold text-white">Decision Journal & Audit Trail</h2>
-          <p class="text-sm text-slate-400">Immutable markdown records persisted in <code class="text-indigo-400 font-mono">journal/</code> with 8-category taxonomy.</p>
+          <p class="text-sm text-slate-400">Immutable markdown records with 8-category taxonomy.</p>
         </div>
         <div class="relative">
           <input type="text" id="journal-search" oninput="filterJournal()" placeholder="Filter by keyword or tag..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 w-64">
@@ -604,12 +594,12 @@
       </div>
     </div>
 
-    <!-- 5. Retrieval Lab Tab -->
+    <!-- 5. Search & Memory Tab -->
     <div id="tab-content-retrieval" class="tab-content hidden space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h2 class="text-lg font-semibold text-white">Federated 3-Tier Retrieval Lab</h2>
-          <p class="text-sm text-slate-400">Concurrent AST symbol seeking, dense/sparse code reranking, and episodic memory synthesis.</p>
+          <h2 class="text-lg font-semibold text-white">Federated Search & Memory Lab</h2>
+          <p class="text-sm text-slate-400">Concurrent AST symbol seeking, dense/sparse code retrieval, and episodic memory synthesis.</p>
         </div>
         <div id="retrieval-tokens-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-950/60 border border-indigo-700/50 text-xs font-mono text-indigo-300">
           <i data-lucide="gauge" class="w-3.5 h-3.5 text-indigo-400"></i>
@@ -618,11 +608,9 @@
       </div>
 
       <div class="flex flex-col sm:flex-row gap-2">
-        <input type="text" id="retrieval-query" placeholder="Ask a question or enter a symbol (e.g. 'SymbolGraphManager', 'How does indexing work?')..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') executeRetrieval()">
+        <input type="text" id="retrieval-query" placeholder="Search codebase, symbols, or episodic facts..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') executeRetrieval()">
         <select id="retrieval-collection" class="sm:w-56 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500">
-          <option value="all">🌐 All Collections (Federated)</option>
-          <option value="kortext_codebase">kortext_codebase</option>
-          <option value="Antigravity_Docs">Antigravity_Docs</option>
+          <option value="all">🌐 All Collections</option>
         </select>
         <select id="retrieval-budget" class="sm:w-44 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500">
           <option value="500">Budget: 500 tok</option>
@@ -680,40 +668,12 @@
       </div>
     </div>
 
-    <!-- 6. MINJA Quarantine Tab -->
-    <div id="tab-content-quarantine" class="tab-content hidden space-y-4">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="shield-alert" class="w-5 h-5 text-rose-400"></i> MINJA Adversarial Injection Forensics
-          </h2>
-          <p class="text-sm text-slate-400">Real-time quarantine log of blocked prompt injection attempts and Tier 3 privilege escalations.</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="clearQuarantine()" id="clear-quarantine-btn" class="bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 text-xs font-mono px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear Quarantine</button>
-          <button onclick="loadQuarantine()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Quarantine
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-          <div class="text-sm font-semibold text-slate-300">Quarantined Injections</div>
-          <div class="text-xs font-mono text-rose-400" id="quarantine-count-label">0 Violations Detected</div>
-        </div>
-        <div id="quarantine-list" class="space-y-3 text-xs">
-          <!-- Populated by loadQuarantine() -->
-        </div>
-      </div>
-    </div>
-
-    <!-- 7. Collections Manager Tab -->
+    <!-- 6. Vector Store Tab -->
     <div id="tab-content-collections" class="tab-content hidden space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-lg font-semibold text-white">Qdrant Collections Manager</h2>
-          <p class="text-sm text-slate-400">View, create, and manage dense vector collections in Native Embedded Qdrant (WAL + SQLite Metadata + Mmap Segments).</p>
+          <h2 class="text-lg font-semibold text-white">Vector Store & Collections</h2>
+          <p class="text-sm text-slate-400">View, create, and manage dense vector collections in Native Embedded Qdrant.</p>
         </div>
         <button onclick="loadCollections()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">
           Refresh Collections
@@ -725,7 +685,7 @@
         <h3 class="font-semibold text-white text-sm flex items-center gap-2">
           <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-400"></i> Create New Collection
         </h3>
-        <p class="text-xs text-slate-400">Collections are configured automatically with 4096 dimensions and Cosine distance for Qwen3-Embedding-8B.</p>
+        <p class="text-xs text-slate-400">Collections store dense vectors with cosine distance matching your configured embedding provider.</p>
         <div class="flex flex-col sm:flex-row gap-3">
           <input type="text" id="new-collection-name" placeholder="e.g. project_alpha, backend_docs..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono">
           <button onclick="createNewCollection()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-lg transition whitespace-nowrap">
@@ -747,15 +707,15 @@
         <span class="text-slate-300 font-semibold flex items-center gap-2">
           <i data-lucide="terminal" class="w-4 h-4 text-indigo-400"></i> Ingesting into a specific collection:
         </span>
-        <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-indigo-300 overflow-x-auto">uv run kortext-ingest --root /path/to/my_project --collection my_collection</pre>
+        <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-indigo-300 overflow-x-auto">kortext index --collection &lt;collection_name&gt;</pre>
       </div>
     </div>
 
-    <!-- 8. Topology & Health Tab -->
+    <!-- 7. System Health Tab -->
     <div id="tab-content-health" class="tab-content hidden space-y-4">
       <div>
-        <h2 class="text-lg font-semibold text-white">Autonomous Subsystems & Health</h2>
-        <p class="text-sm text-slate-400">Real-time status of Kortext file watcher, chunk embedding cache, 5-tier memory, and next-gen hooks.</p>
+        <h2 class="text-lg font-semibold text-white">System Health & Substrates</h2>
+        <p class="text-sm text-slate-400">Real-time status of Kortext file watcher, chunk embedding cache, 5-tier memory, and interceptor hooks.</p>
       </div>
 
       <!-- Autonomous Subsystems (Watcher, Cache, SCIP) -->
@@ -844,38 +804,35 @@
           <!-- Populated by health.js renderHooksStatusUI -->
         </div>
       </div>
-    </div>
 
-    <!-- 9. Quick Access Tab -->
-    <div id="tab-content-links" class="tab-content hidden space-y-4">
-      <div>
-        <h2 class="text-lg font-semibold text-white">Quick Access Portals</h2>
-        <p class="text-sm text-slate-400">Direct service portals to FalkorDB, Qdrant, and oMLX browser consoles.</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-        <a href="http://localhost:8000/admin/dashboard" target="_blank" class="block p-5 bg-slate-900 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition space-y-2">
-          <div class="text-2xl">⚡</div>
-          <h3 class="font-semibold text-white">oMLX Admin Dashboard (:8000)</h3>
-          <p class="text-xs text-slate-400">Manage active models, monitor memory ceilings, check context quotas, and inspect server metrics live.</p>
-          <span class="text-xs text-indigo-400 font-mono flex items-center gap-1 pt-2">Open Admin Dashboard →</span>
-        </a>
-
-        <div class="p-5 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="text-2xl">📦</div>
-            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">ACTIVE (:6333)</span>
-          </div>
-          <div>
-            <h3 class="font-semibold text-white">Qdrant Vector Studio</h3>
-            <p class="text-xs text-slate-400 mt-1">Direct REST/gRPC vector store with native web console, collections inspector, and payload viewer.</p>
-          </div>
-          <div class="pt-2 flex flex-col gap-2">
-            <a href="http://localhost:6333/dashboard" target="_blank" class="block text-center py-2 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs text-indigo-300 font-mono transition">
-              Open Qdrant Web UI (:6333/dashboard) ↗
+      <!-- External Service Consoles -->
+      <div class="pt-3 space-y-2">
+        <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="external-link" class="w-4 h-4 text-cyan-400"></i> External Service Consoles
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-white text-xs font-mono flex items-center gap-1.5">
+                <span>📦</span> Qdrant Web UI
+              </span>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PORT 6333</span>
+            </div>
+            <p class="text-xs text-slate-400">Native browser vector dashboard, collections inspector, and payload viewer.</p>
+            <a href="http://localhost:6333/dashboard" target="_blank" class="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-mono pt-1">
+              Open Qdrant Console ↗
             </a>
-            <a href="#collections" onclick="setTab('collections')" class="block text-center py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 font-mono transition">
-              In-Dashboard Collections Manager (#collections) →
+          </div>
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-white text-xs font-mono flex items-center gap-1.5">
+                <span>🌐</span> FalkorDB Browser
+              </span>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PORT 3000</span>
+            </div>
+            <p class="text-xs text-slate-400">Official GraphBLAS Cypher query visualizer and graph schema explorer.</p>
+            <a href="http://localhost:3000" target="_blank" class="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-mono pt-1">
+              Open FalkorDB Browser ↗
             </a>
           </div>
         </div>

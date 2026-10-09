@@ -261,10 +261,16 @@ export function fitTaskGraph() {
 export function toggleTaskFreeze() {
   if (!state.tasks.network) return;
   state.tasks.isPhysicsFrozen = !state.tasks.isPhysicsFrozen;
-  state.tasks.network.setOptions({ physics: { enabled: !state.tasks.isPhysicsFrozen } });
+  if (state.tasks.isPhysicsFrozen) {
+    state.tasks.network.setOptions({ physics: { enabled: false } });
+    state.tasks.network.stopSimulation();
+  } else {
+    state.tasks.network.setOptions({ physics: { enabled: true } });
+    state.tasks.network.startSimulation();
+  }
   const st = document.getElementById('task-graph-status');
   const btn = document.getElementById('btn-task-freeze');
-  if (st) st.innerText = state.tasks.isPhysicsFrozen ? 'PHYSICS: HARD-FROZEN (60 FPS)' : 'PHYSICS: SIMULATING...';
+  if (st) st.innerText = state.tasks.isPhysicsFrozen ? 'Physics: Frozen' : 'Physics: Simulating';
   if (btn) {
     btn.innerHTML = state.tasks.isPhysicsFrozen ? '<i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen' : '<i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i> Simulating';
     if (window.lucide) window.lucide.createIcons();

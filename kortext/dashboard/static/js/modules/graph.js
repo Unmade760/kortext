@@ -6,6 +6,15 @@
 import { state } from './state.js';
 import * as api from './api.js';
 import { toast, escapeHtml } from './ui.js';
+import {
+  initRelationshipPalette,
+  toggleRelFilter,
+  setAllRelFilters,
+  applyRelPreset,
+  openDrawer,
+  closeDrawer,
+  openClusterDrawer,
+} from './graph_inspector.js';
 
 export function getEdgeStyle(label, isMention = false) {
   const lbl = (label || '').toUpperCase().trim();
@@ -391,7 +400,15 @@ export function handleToggleClean() {
 export function toggleGraphFreeze() {
   if (!state.graph.network) return;
   state.graph.isPhysicsFrozen = !state.graph.isPhysicsFrozen;
-  state.graph.network.setOptions({ physics: { enabled: !state.graph.isPhysicsFrozen } });
+  if (state.graph.isPhysicsFrozen) {
+    state.graph.network.setOptions({ physics: { enabled: false } });
+    state.graph.network.stopSimulation();
+    toast('Graph physics frozen', 'info');
+  } else {
+    state.graph.network.setOptions({ physics: { enabled: true } });
+    state.graph.network.startSimulation();
+    toast('Graph physics simulating', 'info');
+  }
   setFreezeState(state.graph.isPhysicsFrozen);
 }
 
@@ -403,14 +420,14 @@ export function setFreezeState(frozen) {
   const hudBtn = document.getElementById('btn-hud-freeze');
 
   if (frozen) {
-    if (label) label.innerText = 'HARD-FROZEN (60 FPS)';
-    if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
-    if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-900/60 transition';
-    if (hudBtn) hudBtn.innerHTML = '<i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen';
+    if (label) label.innerText = 'Frozen';
+    if (dot) dot.className = 'w-2 h-2 rounded-full bg-cyan-400';
+    if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-cyan-300 border border-cyan-500/40 hover:bg-slate-800 transition';
+    if (hudBtn) hudBtn.innerHTML = '<i data-lucide="snowflake" class="w-3.5 h-3.5 text-cyan-400"></i> Freeze';
   } else {
-    if (label) label.innerText = 'SIMULATING...';
+    if (label) label.innerText = 'Simulating';
     if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
-    if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-amber-950/60 text-amber-400 border border-amber-500/40 hover:bg-amber-900/60 transition';
+    if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/40 hover:bg-amber-900/60 transition';
     if (hudBtn) hudBtn.innerHTML = '<i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i> Simulating';
   }
   if (window.lucide) window.lucide.createIcons();

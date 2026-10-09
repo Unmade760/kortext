@@ -92,7 +92,7 @@ def test_telemetry_endpoint():
     assert "version" in telem
     assert "falkordb_latency_ms" in telem
     assert "active_invariants" in telem
-    assert telem.get("token_search_savings") == "Active (AST B-Tree)"
+    assert "substrate_ram_rss_mb" in telem
 
 
 def test_cache_and_watcher_endpoints():
@@ -440,20 +440,22 @@ def test_modular_frontend_assets_and_template_structure():
     # ES modules script entry
     assert '<script type="module" src="/static/js/main.js"></script>' in html
 
-    # All 9 Navigation Tabs preserved
+    # 7 Reorganized Navigation Tabs
     expected_tabs = [
         "tab-btn-graph",
-        "tab-btn-blast",
         "tab-btn-tasks",
+        "tab-btn-blast",
         "tab-btn-journal",
         "tab-btn-retrieval",
-        "tab-btn-quarantine",
         "tab-btn-collections",
         "tab-btn-health",
-        "tab-btn-links",
     ]
     for tab_id in expected_tabs:
         assert f'id="{tab_id}"' in html, f"Missing tab button: {tab_id}"
+
+    # Verify redundant / quarantine tabs are removed
+    assert 'id="tab-btn-quarantine"' not in html
+    assert 'id="tab-btn-links"' not in html
 
     # Companion panel preserved
     assert 'id="rel-filter-list"' in html

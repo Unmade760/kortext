@@ -141,7 +141,6 @@ export function setTab(tab) {
   if (tab === 'blast' && window.initBlastTab) window.initBlastTab();
   if (tab === 'tasks' && window.loadTasks) window.loadTasks();
   if (tab === 'journal' && window.loadJournal) window.loadJournal();
-  if (tab === 'quarantine' && window.loadQuarantine) window.loadQuarantine();
   if (tab === 'health' && window.loadHealth) window.loadHealth();
   if (tab === 'collections' && window.loadCollections) window.loadCollections();
   if (tab === 'retrieval' && window.populateRetrievalCollections) window.populateRetrievalCollections();

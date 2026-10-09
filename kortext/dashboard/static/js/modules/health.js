@@ -38,15 +38,21 @@ export function updateQuickPills(services) {
   services.forEach(s => {
     const nameLower = s.name.toLowerCase();
     const id = nameLower.includes('qdrant') ? 'pill-qdrant'
-             : nameLower.includes('falkordb graph') || nameLower.includes('falkordb') ? 'pill-falkordb'
-             : nameLower.includes('omlx') ? 'pill-omlx' : null;
+             : nameLower.includes('falkordb') ? 'pill-falkordb'
+             : (nameLower.includes('omlx') || nameLower.includes('inference') || nameLower.includes('embed')) ? 'pill-inference' : null;
     if (id) {
       const el = document.getElementById(id);
       if (el) {
-        el.className = s.healthy
+        const isEmbed = id === 'pill-inference';
+        const isHealthy = s.healthy || isEmbed;
+        const label = isEmbed
+          ? (s.healthy ? 'Inference: Active' : 'Embed: FastEmbed')
+          : escapeHtml(s.name.split(' ')[0]);
+
+        el.className = isHealthy
           ? 'px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 flex items-center gap-1.5'
           : 'px-2 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800/50 flex items-center gap-1.5';
-        el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${s.healthy ? 'bg-emerald-400' : 'bg-rose-400'}"></span> ${escapeHtml(s.name.split(' ')[0])}`;
+        el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${isHealthy ? 'bg-emerald-400' : 'bg-rose-400'}"></span> ${label}`;
       }
     }
   });
@@ -137,11 +143,9 @@ export async function loadTelemetry() {
     const data = await api.getTelemetry();
     if (data.status === 'ok' && data.telemetry) {
       const t = data.telemetry;
-      const savEl = document.getElementById('hud-savings');
       const rssEl = document.getElementById('hud-rss');
       const latEl = document.getElementById('hud-lat');
       const invEl = document.getElementById('hud-invariants');
-      if (savEl) savEl.innerText = t.token_search_savings || 'Active (AST B-Tree)';
       if (rssEl) rssEl.innerText = `${t.substrate_ram_rss_mb} MB RSS`;
       if (latEl) latEl.innerText = `${t.falkordb_latency_ms} ms`;
       if (invEl && t.active_invariants !== undefined) invEl.innerText = `${t.active_invariants} Verified`;

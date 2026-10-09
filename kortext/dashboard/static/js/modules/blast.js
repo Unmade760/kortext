@@ -217,7 +217,13 @@ export function fitBlastGraph() {
 export function toggleBlastFreeze() {
   if (!state.blast.network) return;
   state.blast.isPhysicsFrozen = !state.blast.isPhysicsFrozen;
-  state.blast.network.setOptions({ physics: { enabled: !state.blast.isPhysicsFrozen } });
+  if (state.blast.isPhysicsFrozen) {
+    state.blast.network.setOptions({ physics: { enabled: false } });
+    state.blast.network.stopSimulation();
+  } else {
+    state.blast.network.setOptions({ physics: { enabled: true } });
+    state.blast.network.startSimulation();
+  }
   const btn = document.getElementById('btn-blast-freeze');
   if (btn) {
     btn.innerHTML = state.blast.isPhysicsFrozen ? '<i data-lucide="snowflake" class="w-3.5 h-3.5"></i> Frozen' : '<i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i> Simulating';

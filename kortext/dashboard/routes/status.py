@@ -181,11 +181,13 @@ async def get_telemetry():
     except Exception:
         pass
 
+    embed_url = os.getenv("EMBED_BASE_URL")
+    embedder_desc = f"Remote API ({embed_url})" if embed_url else "FastEmbed (Local 384d)"
+
     return {
         "status": "ok",
         "telemetry": {
             "version": "2.0.0-PROD",
-            "token_search_savings": "Active (AST B-Tree)",
             "substrate_ram_rss_mb": rss_mb,
             "falkordb_latency_ms": lat_ms,
             "falkordb_healthy": falkor_ok,
@@ -196,7 +198,7 @@ async def get_telemetry():
             "active_invariants": 14,
             "memory_tiers": {
                 "tier_0": {"name": "Tree-sitter AST B-Tree", "status": "Active", "type": "Deterministic AST"},
-                "tier_1": {"name": "Qdrant Vectors", "status": "Active", "embedder": "FastEmbed BAAI/bge-small-en-v1.5 (fallback)"},
+                "tier_1": {"name": "Qdrant Vectors", "status": "Active", "embedder": embedder_desc},
                 "tier_2": {"name": "FalkorDB Episodic Graph", "status": "Active" if falkor_ok else "Degraded", "type": "Temporal & Causal"},
                 "tier_3": {"name": "Federated Hybrid Engine", "status": "Active", "type": "Dense + Sparse + Graph"},
                 "tier_4": {"name": "Cognitive Dream Mode", "status": "Active", "type": "Weibull + Louvain Subsystems"}

@@ -229,8 +229,8 @@ async def _probe_inference(client: httpx.AsyncClient) -> Dict[str, Any]:
             "status_display": status_display,
             "service_status": service_status,
             "port": 8000,
-            "url": "http://localhost:8000/admin/dashboard",
-            "description": "oMLX web console & model management dashboard",
+            "url": base_host,
+            "description": "Inference & embedding endpoint",
             "meta": omlx_data,
         }
     except Exception as e:
@@ -239,8 +239,8 @@ async def _probe_inference(client: httpx.AsyncClient) -> Dict[str, Any]:
             "status_display": f"❌ DOWN ({type(e).__name__})",
             "service_status": "DOWN",
             "port": 8000,
-            "url": "http://localhost:8000/admin/dashboard",
-            "description": "oMLX web console & model management dashboard",
+            "url": base_host,
+            "description": "Inference & embedding endpoint",
             "meta": None,
         }
 
