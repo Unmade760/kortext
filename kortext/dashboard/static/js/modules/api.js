@@ -1,6 +1,6 @@
 /**
  * Kortext Dashboard - Centralized Async API Client
- * Wraps all dashboard backend endpoints with timeout and error handling.
+ * Wraps all dashboard backend endpoints with timeout, CSRF header, and error handling.
  */
 
 export async function fetchJson(url, options = {}) {
@@ -14,6 +14,7 @@ export async function fetchJson(url, options = {}) {
       signal: controller.signal,
       headers: {
         'Accept': 'application/json',
+        'X-Kortext-Client': 'dashboard',
         ...(options.headers || {}),
       },
     });
@@ -48,14 +49,20 @@ export const triggerScip = () => fetchJson('/api/scip/auto', { method: 'POST' })
 
 // 2. Knowledge Graph
 export const getGraphs = () => fetchJson('/api/graphs');
-export const getGraph = (graphName, clean = true) =>
-  fetchJson(`/api/graph?graph_name=${encodeURIComponent(graphName)}&clean=${clean}`);
+export const getGraph = (graphName, clean = true, project = null) => {
+  const params = new URLSearchParams({ graph_name: graphName, clean: String(clean) });
+  if (project && project !== 'all') params.append('project', project);
+  return fetchJson(`/api/graph?${params.toString()}`);
+};
 
 // 3. Blast-Radius
 export const getSymbolsAutocomplete = (limit = 150) =>
   fetchJson(`/api/symbols/autocomplete?limit=${limit}`);
-export const getSymbolImpact = (target, direction = 'upstream', maxDepth = 3) =>
-  fetchJson(`/api/symbols/impact?target=${encodeURIComponent(target)}&direction=${direction}&max_depth=${maxDepth}`);
+export const getSymbolImpact = (target, direction = 'upstream', maxDepth = 3, project = null) => {
+  const params = new URLSearchParams({ target, direction, max_depth: String(maxDepth) });
+  if (project && project !== 'all') params.append('project', project);
+  return fetchJson(`/api/symbols/impact?${params.toString()}`);
+};
 
 // 4. Tasks DAG
 export const getTasks = (includeGraph = true, projectId = null) => {
@@ -101,3 +108,19 @@ export const runDream = (project = 'kortext', purgeStale = false) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ project, purge_stale: purgeStale }),
   });
+
+// 10. Continuous Learning (InstinctStore), Grounded Invariants & Context Telemetry
+export const getInstincts = (project = null) => {
+  const params = new URLSearchParams();
+  if (project && project !== 'all') params.append('project', project);
+  const qs = params.toString();
+  return fetchJson(qs ? `/api/instincts?${qs}` : '/api/instincts');
+};
+export const promoteInstinct = (id) =>
+  fetchJson('/api/instincts/promote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+export const getGroundedInvariants = () => fetchJson('/api/invariants/grounded');
+export const getContextTelemetry = () => fetchJson('/api/context/telemetry');

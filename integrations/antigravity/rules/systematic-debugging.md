@@ -1,7 +1,6 @@
 ---
-trigger: always_on
-description: "Mandatory systematic debugging protocol: root cause investigation before fixes, feedback loops, falsifiable hypotheses, and 3-fix circuit breaker."
-globs: "**/*"
+trigger: model_decision
+description: "Activate when diagnosing test failures, runtime bugs, exceptions, or unexpected system behavior."
 ---
 
 # Systematic Debugging

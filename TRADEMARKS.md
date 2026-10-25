@@ -8,7 +8,7 @@ This document outlines the trademark policy and branding guidelines for the **Ko
 
 ## 1. The Kortext Trademark
 
-The names **Kortext**, the Kortext wordmark, and the official Kortext logos (including all stylized variations in `assets/logo.svg` and `assets/logo.png`) are trademarks of Supreme Knight and the Kortext maintainers.
+The names **Kortext**, the Kortext wordmark, and the official Kortext logos (including all stylized variations in `assets/logo.svg` and `assets/logo.png`) are trademarks of the Kortext Maintainers.
 
 While the software itself is licensed under the copyleft terms of the **GNU General Public License v3.0 (GPL-3.0)**, trademark rights are distinct from copyright licenses. The GPL-3.0 gives you the right to modify and distribute the source code, but does not grant rights to use the trademarks, logos, or brand identifiers in a manner that creates confusion about the origin of software or services.
 
@@ -34,7 +34,7 @@ You may use the wordmark to truthfully and accurately describe software, tools, 
 You may use the name in technical articles, tutorials, books, research papers, and academic presentations analyzing or explaining Kortext architecture (such as the 5-tier memory model, Tree-sitter AST extraction, or Task DAG execution).
 
 ### C. Linking and Distribution
-You may link to the official repository (`https://github.com/bravest-cat/cortex`) and mention that your project depends on or communicates with Kortext.
+You may link to the official repository (`https://github.com/kortext/kortext`) and mention that your project depends on or communicates with Kortext.
 
 ---
 
@@ -70,4 +70,4 @@ When using official Kortext brand assets:
 
 ## 6. Questions & Inquiries
 
-For questions regarding these guidelines, requests for commercial trademark licensing, or permissions beyond the scope of this policy, please open an issue on GitHub or contact the maintainers at `realrajdeep09@gmail.com`.
+For questions regarding these guidelines, requests for commercial trademark licensing, or permissions beyond the scope of this policy, please open an issue or security advisory on the official GitHub repository (`https://github.com/kortext/kortext`).

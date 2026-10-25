@@ -1,7 +1,7 @@
 ---
-trigger: always_on
-description: "Mandatory testing standards: 80%+ test coverage, strict TDD workflow (RED-GREEN-REFACTOR), and test structure."
-globs: "**/*"
+trigger: glob
+description: "Testing standards: 80%+ test coverage, strict TDD workflow (RED-GREEN-REFACTOR), and test structure."
+globs: "**/{test_*,*_test,tests}/**/*.py"
 ---
 
 # Testing Requirements
@@ -59,22 +59,23 @@ Structure all test functions using the **Arrange-Act-Assert** pattern:
 ```python
 def test_weibull_decay_computes_retention_accurately():
     # Arrange
-    initial_strength = 1.0
-    elapsed_seconds = 3600.0
-    shape_parameter = 0.5
-    scale_parameter = 7200.0
+    elapsed_hours = 72.0
+    importance = 5
+    lambda_h = 72.0
+    beta = 0.65
+    floor = 0.05
 
     # Act
     retention = compute_weibull_retention(
-        strength=initial_strength,
-        delta_t=elapsed_seconds,
-        k=shape_parameter,
-        lam=scale_parameter,
+        delta_hours=elapsed_hours,
+        importance=importance,
+        lambda_h=lambda_h,
+        beta=beta,
+        floor=floor,
     )
 
     # Assert
-    assert 0.0 < retention < 1.0
-    assert round(retention, 4) == 0.4931
+    assert floor <= retention <= 1.0
 ```
 
 ### Test Naming Conventions

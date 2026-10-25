@@ -1,313 +1,71 @@
 ---
 name: subagent-driven-development
-description: Multi-agent execution loop with Task DAG decomposition, isolated worker briefs, branch execution, reviewer dispatch, 5-round fix loop with model escalation, progress ledger, and FalkorDB task-outcome linking.
-version: 2.0.0
-triggers:
-  - "subagent driven development"
-  - "sdd"
-  - "multi-agent execution"
-  - "task dag decomposition"
-  - "fix loop escalation"
-  - "progress ledger"
-  - "worker brief"
-  - "reviewer dispatch"
-license: MIT
-metadata:
-  origin: Obra + Jose Parreño Garcia
-  adapted_for: Kortext
+description: Use when orchestrating multi-agent tasks, dispatching parallel subagents, executing implementation plans across a Task DAG, running autonomous loops with de-sloppify passes, or managing session token budgets.
 ---
 
-# Subagent-Driven Development (SDD) Protocol
+# Subagent-Driven Development (SDD) & Multi-Agent Orchestration
 
-An enterprise multi-agent execution framework combining Obra and Jose Parreño Garcia multi-agent patterns with Kortext's graph-backed Task DAG, isolated execution workers, automated code review gates, and causal episodic memory linking.
+Unifies multi-agent Task DAG execution, parallel worker dispatch, author-blind review gates, 5-round fix escalation, autonomous loop patterns (`de-sloppify`), and session token-budget discipline.
 
----
+## 1. Orchestrator-Worker Architecture & 4-Pattern Routing
 
-## Operating Principles: The Orchestrator-Worker Architecture
+1. **Context Guardian Invariant**: When complexity $C \ge 7$ (or $\ge 4$ files across disjoint subsystems), the parent orchestrator never writes sprawling implementation diffs or runs noisy debug loops inline. It decomposes the DAG, dispatches isolated workers, and audits handoffs. For simple edits ($\le 3$ files, $C < 4$), execute inline (`single_agent`) without subagent overhead.
+2. **Exclusive File Ownership (`detect_file_overlaps`)**: Never dispatch two parallel workers that modify the same file or 1-hop AST-coupled files in a shared working tree. Either sequence them via `depends_on` or isolate them on separate git branches (`recommended_workspace_mode="branch"`).
+3. **15-Minute Lease & Heartbeat Defense**: Workers claim tasks via `manage_tasks(action="claim", task_id=..., agent_id=...)` (acquiring a 15-minute lease), send heartbeats on long tasks (`action="heartbeat"`), and expired leases are reclaimed via `action="reclaim_leases"`.
 
-SDD splits software engineering into distinct, specialized agent roles to prevent context pollution, eliminate hallucination loops, and enforce deterministic quality gates:
+## 2. The SDD Execution Loop per Task Node
 
-```mermaid
-flowchart TD
-    subgraph Orchestrator["Parent Orchestrator Session (Context Guardian)"]
-        Spec[Feature Spec / PRD] --> Decompose[Task DAG Decomposition]
-        Decompose --> Register["Register in FalkorDB (manage_tasks: action='create')"]
-        Register --> Ledger[Initialize Progress Ledger]
-        Ledger --> DispatchLoop{Unblocked Tasks Ready?}
-        DispatchLoop -->|Yes| Anchor[Record BASE_COMMIT SHA]
-        Anchor --> Brief[Generate task-brief.md]
-        Brief --> DispatchWorker["Dispatch Worker (kortext-task-runner)"]
-        CollectHandoff["Collect Structured JSON Handoff"] --> DiffPkg[Assemble Git Diff Package]
-        DiffPkg --> DispatchReviewer["Dispatch Reviewer (kortext-code-reviewer)"]
-        ReviewGate{Review Verdict?}
-        ReviewGate -->|APPROVE| CompleteTask["manage_tasks: status='completed'"]
-        ReviewGate -->|BLOCK / WARN| FixLoop["5-Round Fix Loop with Model Escalation"]
-        FixLoop -->|Passed| CompleteTask
-        FixLoop -->|Failed Round 5| CircuitBreaker["Trip Circuit Breaker & Alert Human"]
-        CompleteTask --> LinkOutcome["FalkorDB: [:PRODUCED_OUTCOME] via record_system_outcome"]
-        LinkOutcome --> DispatchLoop
-        DispatchLoop -->|All Tasks Done| FinalMerge[Consolidate & Finalize]
-    end
+1. **Anchor Base Commit & Claim Ready Task**:
+   ```python
+   ready = manage_tasks(action="get_ready", limit=5)
+   manage_tasks(action="claim", task_id=task_id, agent_id="kortext-task-runner")
+   ```
+   Record `BASE_COMMIT=$(git rev-parse HEAD)` and provide a self-contained task brief (`target_files`, AST signatures from `seek_symbol`, invariants, and exact `test_command`).
+2. **Execute in Leaf Worker (`kortext-task-runner`)**:
+   Worker implements via strict RED-GREEN-REFACTOR TDD and completes the node via:
+   ```python
+   manage_tasks(
+       action="complete_task",
+       task_id=task_id,
+       modified_files=[...],
+       test_command="uv run pytest tests/test_target.py -q",
+       tests_passed=True,
+       description="<150-token summary>",
+   )
+   ```
+   This writes the full verification payload to `~/.kortext/handoffs/<task_id>.json` and returns only a `<150`-token `handoff:<task_id>` pointer to the parent session.
+3. **Optional De-Sloppify Pass (Autonomous Loop Cleanup)**:
+   After thorough TDD implementation on complex features, run a focused cleanup pass to strip redundant framework-type tests, dead branches, or unnecessary defensive wrappers while keeping 100% of business-logic tests green.
+4. **Independent Author-Blind Review (`kortext-code-reviewer`)**:
+   Dispatch `kortext-code-reviewer` with **only** the task brief, `git diff $BASE_COMMIT...HEAD`, and fresh `pytest` output (never the worker's self-reported prose).
+5. **Persist Outcome on `APPROVE`**:
+   ```python
+   record_system_outcome(
+       episode_name=f"Completed {task_id}: {title}",
+       content="<concise verified outcome>",
+       category="implementation",
+   )
+   ```
 
-    subgraph Workers["Leaf Workers & Reviewers (Ephemeral Contexts)"]
-        DispatchWorker --> W1["kortext-task-runner\n(TDD Red-Green-Refactor)"]
-        W1 --> CollectHandoff
-        DispatchReviewer --> R1["kortext-code-reviewer\n(6-Axis Quality Audit)"]
-        R1 --> ReviewGate
-    end
-```
+## 3. The 5-Round Fix Loop & Model Escalation Matrix
 
-### Core Architecture Rules
+When `kortext-code-reviewer` returns `BLOCK` or `WARN`:
 
-1. **Context Protection Invariant:** The orchestrator never edits production files, executes multi-page test suites inline, or engages in raw debugging. It coordinates, delegates, and audits.
-2. **Ephemeral Leaf Isolation:** Workers execute in fresh, isolated context windows bounded by a single atomic task brief (`task-brief.md`).
-3. **Deterministic Review Gate:** No worker's changes merge into the active branch without independent audit and approval by `kortext-code-reviewer`.
-4. **Episodic Outcome Persistence:** Every completed DAG node is permanently anchored to Kortext graph and vector memory (`:Task`-[:PRODUCED_OUTCOME]->`:Outcome`).
-
----
-
-## Task DAG State Machine via `manage_tasks`
-
-All tasks, dependencies, and execution lifecycles are durably persisted in FalkorDB via the `manage_tasks` tool.
-
-```
-[ pending ] ──(dependencies satisfied)──> [ ready ] ──(worker dispatched)──> [ in_progress ]
-                                                                                   │
-                                            ┌──────────────────────────────────────┴────────┐
-                                            ▼                                               ▼
-                                      [ completed ]                                     [ failed ]
-                                            │                                               │
-                               (unlocks dependent nodes)                             (blocks dependents)
-```
-
-### 1. Registering Tasks in the DAG
-
-```python
-# Create root task
-manage_tasks(
-    action="create",
-    task_id="task_ast_parser_01",
-    title="Implement Rust Tree-sitter Parser Binding",
-    description="Add Tree-sitter query bindings for extracting Rust struct declarations and impl blocks.",
-    dependencies=[],
-    complexity=3,
-    assigned_to="kortext-task-runner"
-)
-
-# Create dependent task
-manage_tasks(
-    action="create",
-    task_id="task_ast_store_02",
-    title="Persist Rust AST Nodes in FalkorDB",
-    description="Implement Cypher node writer for Rust AST symbols with bitemporal timestamps.",
-    dependencies=["task_ast_parser_01"],
-    complexity=2,
-    assigned_to="kortext-task-runner"
-)
-```
-
-### 2. The 15-Minute Atomic Task Unit Rule
-
-Every task registered in the DAG must satisfy three criteria to prevent worker drift:
-
-1. **Single Dominant Risk:** Focuses on exactly one architectural concern (e.g., Schema model, IPC socket client, or Service logic).
-2. **Explicit Target Boundary:** Explicitly identifies files and symbols to touch (`seek_symbol`).
-3. **Executable Done Condition:** Contains a deterministic command (e.g., `uv run pytest tests/test_rust_parser.py`) asserting 100% pass rate.
-
----
-
-## Isolated Task Brief Generation (`task-brief.md`) & Base Commit Anchoring
-
-Before dispatching `kortext-task-runner`, the orchestrator records the current Git state and writes a self-contained execution contract.
-
-### 1. Anchor Base Commit
-
-```bash
-BASE_COMMIT=$(git rev-parse HEAD)
-```
-*Rationale:* Recording the exact base commit SHA ensures the subsequent code review diff package isolates only the changes authored during this specific task turn.
-
-### 2. Task Brief Schema (`task-brief.md`)
-
-```markdown
-# Task Brief: task_ast_parser_01
-
-## Metadata
-- **Task ID:** task_ast_parser_01
-- **Base Commit:** a1b2c3d4e5f67890123456789abcdef012345678
-- **Assigned Worker:** kortext-task-runner
-- **Model Tier:** Balanced (Flash/Sonnet)
-
-## Objective
-Implement Tree-sitter Rust AST query bindings to locate struct definitions and method signatures.
-
-## Target Symbols & Files
-- Target file: `src/kortext/ast/parsers/rust.py`
-- Test file: `tests/unit/test_rust_parser.py`
-- Reference symbols (inspect via seek_symbol):
-  - `seek_symbol(symbol_name="BaseAstParser")`
-  - `seek_symbol(symbol_name="AstNodeRecord")`
-
-## Invariants & Constraints
-- Immutability: AstNodeRecord must be a frozen dataclass.
-- Error handling: Raise UnsupportedGrammarError on syntax errors; never swallow exceptions.
-- Anti-Ripgrep Mandate: Do not use regex or ripgrep for symbol location.
-
-## Done Condition & Verification
-Run the targeted test suite:
-`uv run pytest tests/unit/test_rust_parser.py -q`
-Verification criteria: 100% passing tests with >=80% branch coverage.
-```
-
----
-
-## Code Review Dispatch (`kortext-code-reviewer`) on Diff Package
-
-When the leaf worker completes its implementation and reports 100% test passes, the orchestrator packages the diff and dispatches `kortext-code-reviewer`.
-
-### 1. Assembling the Diff Package
-
-```bash
-# Capture full unified diff against the recorded base commit
-git diff $BASE_COMMIT...HEAD
-```
-
-### 2. Dispatching the Reviewer
-
-The orchestrator invokes `kortext-code-reviewer` with:
-- The original `task-brief.md`.
-- The unified `git diff`.
-- The worker's test execution summary and logs.
-
-### 3. The 6-Axis Review Audit
-
-`kortext-code-reviewer` audits the diff against six rigorous axes:
-
-1. **Specification Compliance:** Does the diff satisfy all acceptance criteria in the task brief?
-2. **Cognitive Complexity & Structure:** Are functions <50 lines? Files <400 lines? Nesting <=3 levels?
-3. **Kortext Invariants:** Are socket IPC patterns followed? AST symbol lookups used instead of ripgrep? FastMCP Sole Custodian respected?
-4. **Test Coverage & TDD Evidence:** Minimum 80% coverage? Boundary conditions and error paths tested?
-5. **Security Hygiene:** Zero hardcoded secrets? Inputs validated at boundaries? No Cypher/SQL injection?
-6. **Blast Radius Analysis:** Did the author run `trace_symbol_impact` on modified public symbols?
-
-### 4. Review Verdicts
-
-- **`APPROVE`:** Diff meets all criteria. Unlocks task completion.
-- **`WARN`:** Non-blocking minor polish (e.g., naming improvement, docstring formatting). Worker may proceed.
-- **`BLOCK`:** Critical flaw, invariant breach, or missing tests. Initiates the Fix Loop.
-
----
-
-## The 5-Round Fix Loop with Model Escalation
-
-When `kortext-code-reviewer` issues a `BLOCK` or significant `WARN`, SDD enters a structured fix loop with progressive model escalation:
-
-| Round | Assigned Agent & Model Tier | Scope & Strategy | Escalation Trigger |
+| Round | Assigned Agent & Tier | Strategy | Escalation Trigger |
 |---|---|---|---|
-| **Round 1** | `kortext-task-runner`<br>*(Fast / Balanced Tier)* | Worker addresses specific reviewer findings using TDD. | Reviewer re-evaluates diff.<br>If still `BLOCK` ➔ Round 2. |
-| **Round 2** | `kortext-task-runner`<br>*(Fast / Balanced Tier)* | Worker addresses secondary edge cases, test gaps, or typing errors. | Reviewer re-evaluates diff.<br>If still `BLOCK` ➔ Round 3. |
-| **Round 3** | `kortext-task-runner`<br>*(Fast / Balanced Tier)* | Final attempt on baseline model tier with tightened instructions. | Reviewer re-evaluates diff.<br>If still `BLOCK` ➔ **Escalate to Pro**. |
-| **Round 4** | `kortext-task-runner`<br>*(High-Reasoning `pro` Tier)* | **Model Escalation:** High-reasoning model ingests full diff history, reviewer critique, and substrate invariants. Resolves subtle architectural mismatches. | Reviewer re-evaluates diff.<br>If still `BLOCK` ➔ Round 5. |
-| **Round 5** | `kortext-task-runner`<br>*(High-Reasoning `pro` Tier)* | Final resolution attempt on high-reasoning model tier. | If still `BLOCK` ➔ **TRIP CIRCUIT BREAKER**. |
+| **Rounds 1–3** | `kortext-task-runner` (`flash` / Balanced) | Address specific reviewer findings with targeted TDD regression tests | Still `BLOCK` after Round 3 $\rightarrow$ **Escalate to `pro` tier** |
+| **Rounds 4–5** | `kortext-task-runner` (`pro` / High-Reasoning) | Ingest full diff history, AST blast radius (`trace_symbol_impact`), and reviewer critique | Still `BLOCK` after Round 5 $\rightarrow$ **Trip Circuit Breaker** |
+| **Circuit Breaker** | Orchestrator + Human | `git checkout $BASE_COMMIT`, mark `manage_tasks(action="update", status="failed")`, halt loop, and escalate root-cause report to human | Never run Round 6 autonomously |
 
-### Round 5 Circuit Breaker
+## 4. Token Budget & Response Depth Discipline
 
-If the fix loop reaches Round 5 without achieving `APPROVE`:
+When the user asks to control response depth/token budget (`"short version"`, `"25% depth"`, `"exhaustive"`, `"token budget"`) or when managing context window economics:
 
-1. **HALT EXECUTION:** Terminate autonomous retry loops immediately.
-2. **Freeze & Revert:** Revert the branch back to `$BASE_COMMIT` to prevent polluting the codebase with unstable code.
-3. **Mark Task Failed:** Update DAG state: `manage_tasks(action="update", task_id="...", status="failed")`.
-4. **Generate Escalation Report:** Document all 5 rounds, reviewer feedback, and root cause hypotheses in the progress ledger.
-5. **Alert Human Partner:** Present clear findings and request architectural review.
+| Depth Level | Shortcut Triggers | Target Output Scope |
+|---|---|---|
+| **[1] 25% Essential** | `"1"`, `"25%"`, `"tldr"`, `"short version"`, `"brief"` | 2–4 sentences max; direct answer and conclusion only |
+| **[2] 50% Moderate** | `"2"`, `"50%"`, `"moderate"`, `"balanced"` | 1–3 paragraphs; core answer + key context + 1 concise example |
+| **[3] 75% Detailed** | `"3"`, `"75%"`, `"detailed"`, `"thorough"` | Structured tables, trade-offs, alternatives, and implementation steps |
+| **[4] 100% Exhaustive** | `"4"`, `"100%"`, `"exhaustive"`, `"full deep dive"` | Complete analysis, edge cases, full code listings, and verification |
 
----
-
-## Progress Ledger & Structured Handoff Contract
-
-### 1. Living Progress Ledger
-
-The orchestrator maintains a progress ledger throughout the initiative:
-
-```markdown
-# SDD Progress Ledger: Initiative-TreeSitter-Ingestion
-
-| Task ID | Title | Status | Worker | Rounds | Tests | Review Verdict |
-|---|---|---|---|---|---|---|
-| `task_01` | Tree-sitter Rust Query Bindings | `completed` | `task-runner` | 1 | 14/14 Pass | `APPROVE` |
-| `task_02` | FalkorDB Rust Node Persistence | `completed` | `task-runner` | 2 | 22/22 Pass | `APPROVE` |
-| `task_03` | FastMCP AST Tool Ingestion Route | `in_progress`| `task-runner` | 1 | Pending | Pending |
-```
-
-### 2. Structured Worker Handoff Contract
-
-Every worker subagent MUST conclude by calling `send_message` to the parent orchestrator with a standardized JSON payload:
-
-```json
-{
-  "task_id": "task_ast_parser_01",
-  "status": "completed",
-  "modified_files": [
-    "/Users/rb/kortext/src/kortext/ast/parsers/rust.py",
-    "/Users/rb/kortext/tests/unit/test_rust_parser.py"
-  ],
-  "tests_passed": true,
-  "test_summary": "14 passed, 0 failed in 1.42s (88% coverage)",
-  "evidence": "Implemented Tree-sitter Rust bindings. Verified struct and impl queries against sample Rust AST fixtures with 100% test pass rate."
-}
-```
-
----
-
-## Delegation Completion Contract
-
-To ensure predictable execution and zero lost context:
-
-1. **Primary Context Ownership:** The parent orchestrator owns task collection and consolidation. No leaf worker may perform global orchestration or invoke other workers recursively unless explicitly delegated as a sub-orchestrator.
-2. **Zero Orphaned Turns:** A task is never considered finished until the parent receives and validates the structured JSON handoff. Background tasks must terminate cleanly or be explicitly managed.
-3. **Branch & Commit Cleanliness:**
-   - Tasks execute on dedicated task branches or clean working tree checkpoints.
-   - Merging occurs only after both test suite pass (100%) and reviewer `APPROVE`.
-
----
-
-## Kortext Superpower: Graph-Backed Task DAG & FalkorDB Outcome Linking
-
-Kortext bridges project orchestration and semantic memory by linking the execution graph directly into the FalkorDB knowledge graph and Qdrant vector memory.
-
-```mermaid
-flowchart LR
-    Proj[":Project\n(id='proj_ast')"] -->|:HAS_TASK| T1[":Task\n(id='task_01')"]
-    Proj -->|:HAS_TASK| T2[":Task\n(id='task_02')"]
-    T2 -->|:DEPENDS_ON| T1
-    T1 -->|:TOUCHES_SYMBOL| Sym1[":Symbol\n(name='RustParser')"]
-    T1 -->|:PRODUCED_OUTCOME| Out1[":Outcome\n(FalkorDB + Qdrant)"]
-```
-
-### 1. Linking Completed Tasks to Episodic Memory
-
-When a task achieves `completed` status, the orchestrator persists the achievement using `record_system_outcome`:
-
-```python
-record_system_outcome(
-    title="Completed task_ast_parser_01: Tree-sitter Rust Bindings",
-    narrative="Added Tree-sitter query bindings for extracting Rust struct declarations and impl blocks. Validated AST queries across 14 unit test fixtures.",
-    evidence="14 passed in 1.42s, 88% coverage. Zero regressions.",
-    tags=["ast", "tree-sitter", "rust", "task-dag"]
-)
-```
-
-### 2. FalkorDB Cypher Edge Creation
-
-Kortext automatically generates the graph relationship:
-```cypher
-MATCH (t:Task {id: $task_id}), (o:Outcome {title: $outcome_title})
-CREATE (t)-[:PRODUCED_OUTCOME]->(o)
-```
-
-### 3. Causal Historical Retrieval
-
-When future agents execute similar tasks, they invoke `search_knowledge_and_memory`:
-```python
-search_knowledge_and_memory(query="tree-sitter query parser implementation")
-```
-This returns the exact design decisions, pitfalls, and code solutions recorded in prior SDD cycles, providing immediate contextual recall without exploratory token waste.
+When transcripts approach 40,000+ tokens or at major phase transitions (Spec $\rightarrow$ DAG Execution), call `memory_session_handoff` to checkpoint DAG state and continue in a clean session.

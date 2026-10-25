@@ -33,7 +33,10 @@ logger = logging.getLogger("kortext.symbols.graph")
 SYMBOLS_GRAPH_NAME = os.getenv("KORTEXT_SYMBOLS_GRAPH", os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"))
 
 
-class SymbolGraphManager:
+from kortext.symbols.graph_traversal import SymbolGraphTraversalMixin
+
+
+class SymbolGraphManager(SymbolGraphTraversalMixin):
     """Manages symbol declarations, cross-file imports, and usages in FalkorDB."""
 
     def __init__(
@@ -52,11 +55,13 @@ class SymbolGraphManager:
         self._indexes_ensured = False
 
     def _ensure_indexes(self):
-        """Ensures B-tree schema indexes on :Symbol(name), :File(path), :Document(path), :Tag(name), :Concept(name)."""
+        """Ensures B-tree schema indexes on :Symbol(name), :Symbol(qualified_name), :File(path), :Document(path), :Tag(name), :Concept(name)."""
         self.client.ensure_indexes(
             self.graph_name,
             [
                 ("Symbol", "name"),
+                ("Symbol", "qualified_name"),
+                ("Symbol", "file_path"),
                 ("File", "path"),
                 ("Document", "path"),
                 ("Tag", "name"),
@@ -80,8 +85,9 @@ class SymbolGraphManager:
     ) -> None:
         """
         Atomically saves a file's declarations, imports, and references using batch UNWIND queries.
-        Reduces Redis roundtrips by 60x compared to per-node insertion.
+        Uses qualified_name identity for declarations so identically named functions/methods across files never collide.
         """
+        file_path = str(file_path).replace("\\", "/")
         # Collect candidate symbols defined in this file before detaching definitions
         candidate_syms = set()
         res_defs = self._query(
@@ -106,30 +112,43 @@ class SymbolGraphManager:
         self._query(
             "MERGE (f:File {path: $path}) "
             "WITH f "
+            "OPTIONAL MATCH (f)<-[:DEFINED_IN]-(c:Symbol)-[r4:CALLS]->() DELETE r4 "
+            "WITH f "
+            "OPTIONAL MATCH ()-[r5:CALLS {file_path: $path}]->() DELETE r5 "
+            "WITH f "
             "OPTIONAL MATCH (f)<-[r1:DEFINED_IN]-() DELETE r1 "
             "WITH f "
             "OPTIONAL MATCH (f)-[r2:IMPORTS]->() DELETE r2 "
             "WITH f "
-            "OPTIONAL MATCH (f)-[r3:REFERENCES]->() DELETE r3 "
-            "WITH f "
-            "OPTIONAL MATCH ()-[r4:CALLS {file_path: $path}]->() DELETE r4",
+            "OPTIONAL MATCH (f)-[r3:REFERENCES]->() DELETE r3",
             {"path": file_path},
         )
 
-        # 2. Batch add declarations
+        # 2. Batch add declarations keyed by deterministic qualified_name
         clean_decls = []
+        decl_qname_by_short: Dict[str, str] = {}
         for decl in declarations:
             name = decl.get("name")
             if not name or name == "anonymous":
                 continue
+            name_str = str(name)
+            parent_str = str(decl.get("parent") or "")
+            qname = str(
+                decl.get("qualified_name")
+                or f"{file_path}::{parent_str + '.' if parent_str else ''}{name_str}"
+            ).replace("\\", "/")
+            decl_qname_by_short.setdefault(name_str, qname)
+            if parent_str:
+                decl_qname_by_short.setdefault(f"{parent_str}.{name_str}", qname)
             clean_decls.append({
-                "name": str(name),
+                "name": name_str,
+                "qualified_name": qname,
                 "kind": str(decl.get("kind", "symbol")),
                 "line": int(decl.get("line", 1)),
                 "end_line": int(decl.get("end_line", decl.get("line", 1))),
                 "signature": str(decl.get("signature") or "")[:200],
                 "docstring": str(decl.get("docstring") or "")[:200],
-                "parent": str(decl.get("parent") or ""),
+                "parent": parent_str,
             })
 
         if clean_decls:
@@ -137,21 +156,68 @@ class SymbolGraphManager:
                 "MATCH (f:File {path: $path}) "
                 "WITH f "
                 "UNWIND $declarations AS d "
-                "MERGE (s:Symbol {name: d.name}) "
-                "SET s.kind = d.kind, s.file_path = $path "
+                "MERGE (s:Symbol {qualified_name: d.qualified_name}) "
+                "SET s.name = d.name, s.kind = d.kind, s.file_path = $path, s.parent = d.parent "
                 "MERGE (s)-[:DEFINED_IN {kind: d.kind, line: d.line, end_line: d.end_line, signature: d.signature, docstring: d.docstring, parent: d.parent}]->(f)"
             )
             self._query(decl_cypher, {"path": file_path, "declarations": clean_decls})
 
-        # 3. Batch add imports
+            # Reconcile pre-existing unresolved or module-scoped stubs matching this declaration
+            reconcile_cypher = (
+                "UNWIND $declarations AS d "
+                "MATCH (s:Symbol {qualified_name: d.qualified_name}) "
+                "MATCH (stub:Symbol {name: d.name}) "
+                "WHERE id(stub) <> id(s) AND ("
+                "  stub.qualified_name IS NULL "
+                "  OR stub.qualified_name = d.name "
+                "  OR stub.qualified_name STARTS WITH 'unresolved::' "
+                "  OR (NOT stub.qualified_name CONTAINS '/' AND NOT stub.qualified_name CONTAINS '\\\\' AND stub.qualified_name ENDS WITH ('::' + d.name))"
+                ") "
+                "OPTIONAL MATCH (in_f:File)-[imp:IMPORTS]->(stub) "
+                "FOREACH (_ IN CASE WHEN in_f IS NOT NULL THEN [1] ELSE [] END | "
+                "  MERGE (in_f)-[:IMPORTS {module: coalesce(imp.module, ''), line: coalesce(imp.line, 1)}]->(s) "
+                "  DELETE imp"
+                ") "
+                "WITH s, stub "
+                "OPTIONAL MATCH (ref_f:File)-[ref:REFERENCES]->(stub) "
+                "FOREACH (_ IN CASE WHEN ref_f IS NOT NULL THEN [1] ELSE [] END | "
+                "  MERGE (ref_f)-[:REFERENCES {line: coalesce(ref.line, 1), kind: coalesce(ref.kind, 'call'), caller: coalesce(ref.caller, '')}]->(s) "
+                "  DELETE ref"
+                ") "
+                "WITH s, stub "
+                "OPTIONAL MATCH (caller_sym:Symbol)-[call_rel:CALLS]->(stub) "
+                "FOREACH (_ IN CASE WHEN caller_sym IS NOT NULL THEN [1] ELSE [] END | "
+                "  MERGE (caller_sym)-[:CALLS {line: coalesce(call_rel.line, 1), file_path: coalesce(call_rel.file_path, '')}]->(s) "
+                "  DELETE call_rel"
+                ") "
+                "WITH stub "
+                "OPTIONAL MATCH (stub)-[def_rel:DEFINED_IN]->() "
+                "WITH stub, count(def_rel) AS def_cnt "
+                "WHERE def_cnt = 0 "
+                "DETACH DELETE stub"
+            )
+            self._query(reconcile_cypher, {"declarations": clean_decls})
+
+        # 3. Batch add imports (resolve against existing defined symbols or module-qualified stubs)
         clean_imps = []
+        imp_qname_by_short: Dict[str, str] = {}
         for imp in imports:
-            sym = imp.get("symbol")
+            sym = imp.get("symbol") or imp.get("imported_name")
             if not sym:
                 continue
+            sym_str = str(sym)
+            mod_str = str(imp.get("module") or "")
+            mod_suffix = mod_str.replace(".", "/").lstrip("/") if mod_str else ""
+            imp_qname = decl_qname_by_short.get(
+                sym_str,
+                f"{mod_str}::{sym_str}" if mod_str else f"unresolved::{file_path}::{sym_str}",
+            )
+            imp_qname_by_short.setdefault(sym_str, imp_qname)
             clean_imps.append({
-                "name": str(sym),
-                "module": str(imp.get("module") or ""),
+                "name": sym_str,
+                "qualified_name": imp_qname,
+                "module": mod_str,
+                "mod_suffix": mod_suffix,
                 "line": int(imp.get("line", 1)),
             })
 
@@ -160,7 +226,11 @@ class SymbolGraphManager:
                 "MATCH (f:File {path: $path}) "
                 "WITH f "
                 "UNWIND $imports AS i "
-                "MERGE (s:Symbol {name: i.name}) "
+                "OPTIONAL MATCH (existing:Symbol {name: i.name})-[:DEFINED_IN]->(ef:File) "
+                "WHERE i.mod_suffix <> '' AND (ef.path CONTAINS i.mod_suffix) "
+                "WITH f, i, coalesce(existing.qualified_name, i.qualified_name) AS resolved_qname "
+                "MERGE (s:Symbol {qualified_name: resolved_qname}) "
+                "SET s.name = coalesce(s.name, i.name) "
                 "MERGE (f)-[:IMPORTS {module: i.module, line: i.line}]->(s)"
             )
             self._query(imp_cypher, {"path": file_path, "imports": clean_imps})
@@ -169,17 +239,30 @@ class SymbolGraphManager:
         seen_refs = set()
         clean_refs = []
         for ref in references:
-            sym = ref.get("symbol")
+            sym = ref.get("symbol") or ref.get("name")
             line = int(ref.get("line", 1))
-            caller = ref.get("caller") or ""
+            caller = str(ref.get("caller") or "")
             if not sym or (sym, line, caller) in seen_refs:
                 continue
             seen_refs.add((sym, line, caller))
+            sym_str = str(sym)
+            caller_qname = decl_qname_by_short.get(caller, f"{file_path}::{caller}") if caller else ""
+            caller_short = caller.split(".")[-1] if caller else ""
+            target_qname = (
+                decl_qname_by_short.get(sym_str)
+                or imp_qname_by_short.get(sym_str)
+                or f"unresolved::{file_path}::{sym_str}"
+            )
+            is_local_or_imp = sym_str in decl_qname_by_short or sym_str in imp_qname_by_short
             clean_refs.append({
-                "name": str(sym),
+                "name": sym_str,
+                "target_qualified": target_qname,
+                "is_local_or_imp": is_local_or_imp,
                 "kind": str(ref.get("kind", "call")),
                 "line": line,
-                "caller": str(caller),
+                "caller": caller_short,
+                "caller_full": caller,
+                "caller_qualified": caller_qname,
             })
 
         if clean_refs:
@@ -187,21 +270,31 @@ class SymbolGraphManager:
                 "MATCH (f:File {path: $path}) "
                 "WITH f "
                 "UNWIND $references AS r "
-                "MERGE (s:Symbol {name: r.name}) "
-                "MERGE (f)-[:REFERENCES {line: r.line, kind: r.kind}]->(s) "
+                "OPTIONAL MATCH (existing:Symbol {name: r.name})-[:DEFINED_IN]->() "
+                "WITH f, r, CASE "
+                "  WHEN r.is_local_or_imp THEN r.target_qualified "
+                "  ELSE coalesce(existing.qualified_name, r.target_qualified) "
+                "END AS final_qname "
+                "MERGE (s:Symbol {qualified_name: final_qname}) "
+                "SET s.name = coalesce(s.name, r.name) "
+                "MERGE (f)-[:REFERENCES {line: r.line, kind: r.kind, caller: r.caller}]->(s) "
                 "FOREACH (_ IN CASE WHEN r.caller <> '' THEN [1] ELSE [] END | "
-                "  MERGE (c:Symbol {name: r.caller}) "
+                "  MERGE (c:Symbol {qualified_name: r.caller_qualified}) "
+                "  SET c.name = r.caller, c.file_path = $path "
                 "  MERGE (c)-[:CALLS {line: r.line, file_path: $path}]->(s)"
                 ")"
             )
-            self._query(ref_cypher, {"path": file_path, "references": clean_refs})
+            batch_size = 100
+            for i in range(0, len(clean_refs), batch_size):
+                batch = clean_refs[i:i + batch_size]
+                self._query(ref_cypher, {"path": file_path, "references": batch})
 
-        # 5. Remove orphaned Symbol nodes whose definitions were removed
+        # 5. Remove orphaned Symbol nodes whose definitions and active references were removed
         if candidate_syms:
             self._query(
                 "UNWIND $names AS name "
                 "MATCH (s:Symbol {name: name}) "
-                "WHERE NOT (s)-[:DEFINED_IN]->(:File) "
+                "WHERE NOT (s)-[:DEFINED_IN]->(:File) AND NOT ()-[:IMPORTS|REFERENCES|CALLS]->(s) "
                 "DETACH DELETE s",
                 {"names": list(candidate_syms)},
             )
@@ -217,9 +310,10 @@ class SymbolGraphManager:
         tags: List[str],
     ) -> None:
         """
-        Atomically saves a Markdown document's structural sections, headings (as symbols),
+        Atomically saves a Markdown document's structural sections, headings (as Section nodes),
         inter-document wiki-links, standard markdown links, and tags into FalkorDB.
         """
+        file_path = str(file_path).replace("\\", "/")
         safe_title = str(title or Path(file_path).stem)
 
         # 1. Ensure File:Document node and purge previous markdown relationships
@@ -227,9 +321,9 @@ class SymbolGraphManager:
             "MERGE (f:File {path: $path}) "
             "SET f:Document, f.title = $title, f.is_markdown = true "
             "WITH f "
-            "OPTIONAL MATCH (f)<-[r1:DEFINED_IN]-() DELETE r1 "
+            "OPTIONAL MATCH (f)<-[r1:DEFINED_IN]-(old_s:Symbol) DELETE r1 "
             "WITH f "
-            "OPTIONAL MATCH (f)-[r2:CONTAINS_SECTION]->() DELETE r2 "
+            "OPTIONAL MATCH (f)-[r2:CONTAINS_SECTION]->(sec:Section) DETACH DELETE sec "
             "WITH f "
             "OPTIONAL MATCH (f)-[r3:LINKS_TO]->() DELETE r3 "
             "WITH f "
@@ -237,18 +331,24 @@ class SymbolGraphManager:
             {"path": file_path, "title": safe_title},
         )
 
-        # 2. Batch add sections
+        # 2. Batch add sections (deduplicated against declarations)
+        seen_section_keys = set()
         if sections:
-            sec_items = [
-                {
-                    "id": str(s.get("id", "")),
-                    "name": str(s.get("name", "")),
+            sec_items = []
+            for s in sections:
+                sec_id = str(s.get("id", "")).replace("\\", "/")
+                sec_name = str(s.get("name", ""))
+                sec_line = int(s.get("line", 1))
+                seen_section_keys.add((sec_name, sec_line))
+                if sec_id:
+                    seen_section_keys.add((sec_id, 0))
+                sec_items.append({
+                    "id": sec_id or f"{file_path}#{sec_name}",
+                    "name": sec_name,
                     "level": int(s.get("level", 1)),
-                    "line": int(s.get("line", 1)),
+                    "line": sec_line,
                     "heading_path": str(s.get("heading_path", "")),
-                }
-                for s in sections
-            ]
+                })
             self._query(
                 "MATCH (f:File {path: $path}) "
                 "WITH f "
@@ -259,17 +359,22 @@ class SymbolGraphManager:
                 {"path": file_path, "sections": sec_items},
             )
 
-        # 3. Batch add declarations (headings as Symbol nodes for Tier 0 resolution)
+        # 3. Batch add any non-duplicate declarations as Section nodes (isolating code Symbol graph from markdown documents)
         if declarations:
             clean_decls = []
             for decl in declarations:
                 name = decl.get("name")
                 if not name:
                     continue
+                name_str = str(name)
+                line_num = int(decl.get("line", 1))
+                if (name_str, line_num) in seen_section_keys:
+                    continue
+                seen_section_keys.add((name_str, line_num))
                 clean_decls.append({
-                    "name": str(name),
+                    "name": name_str,
                     "kind": str(decl.get("kind", "section")),
-                    "line": int(decl.get("line", 1)),
+                    "line": line_num,
                     "signature": str(decl.get("signature") or "")[:200],
                     "docstring": str(decl.get("docstring") or "")[:200],
                     "parent": str(decl.get("parent") or ""),
@@ -279,8 +384,9 @@ class SymbolGraphManager:
                     "MATCH (f:File {path: $path}) "
                     "WITH f "
                     "UNWIND $declarations AS d "
-                    "MERGE (s:Symbol {name: d.name}) "
-                    "MERGE (s)-[:DEFINED_IN {kind: d.kind, line: d.line, signature: d.signature, docstring: d.docstring, parent: d.parent}]->(f)",
+                    "MERGE (sec:Section {id: $path + '#' + d.name}) "
+                    "SET sec.name = d.name, sec.kind = d.kind, sec.line = d.line, sec.signature = d.signature, sec.docstring = d.docstring, sec.parent = d.parent "
+                    "MERGE (f)-[:CONTAINS_SECTION]->(sec)",
                     {"path": file_path, "declarations": clean_decls},
                 )
 
@@ -291,7 +397,7 @@ class SymbolGraphManager:
             for l in links:
                 if l.get("is_resolved") and l.get("target_path"):
                     resolved_links.append({
-                        "path": str(l["target_path"]),
+                        "path": str(l["target_path"]).replace("\\", "/"),
                         "label": str(l.get("label", "")),
                         "line": int(l.get("line", 1)),
                         "type": str(l.get("link_type", "markdown_link")),
@@ -349,6 +455,7 @@ class SymbolGraphManager:
         - Removes ghost CALLS edges originating from this file
         - Removes orphaned Symbol nodes whose only definition was in this file
         """
+        file_path = str(file_path).replace("\\", "/")
         # 1. Identify candidate symbols defined in this file (or with s.file_path = $path)
         # before relationships to the File node are removed
         candidate_syms = set()
@@ -393,7 +500,7 @@ class SymbolGraphManager:
             self._query(
                 "UNWIND $names AS name "
                 "MATCH (s:Symbol {name: name}) "
-                "WHERE NOT (s)-[:DEFINED_IN]->(:File) "
+                "WHERE NOT (s)-[:DEFINED_IN]->(:File) AND NOT ()-[:IMPORTS|REFERENCES|CALLS]->(s) "
                 "DETACH DELETE s",
                 {"names": list(candidate_syms)},
             )
@@ -535,6 +642,7 @@ class SymbolGraphManager:
         Returns all downstream files that import or reference any symbol defined in file_path.
         (Impact analysis for refactoring).
         """
+        file_path = str(file_path).replace("\\", "/")
         res = self._query(
             "MATCH (f_src:File {path: $path})<-[:DEFINED_IN]-(s:Symbol)<-[r]-(f_dep:File) "
             "WHERE f_dep.path <> $path "
@@ -565,7 +673,7 @@ class SymbolGraphManager:
             "imports": 0,
             "references": 0,
         }
-        
+
         sym_res = self._query("MATCH (s:Symbol) RETURN count(s)")
         if sym_res and len(sym_res) > 1 and sym_res[1]:
             counts["symbols"] = int(sym_res[1][0][0])
@@ -599,322 +707,3 @@ class SymbolGraphManager:
             counts["references"] = int(ref_res[1][0][0])
 
         return counts
-
-    def trace_symbol_impact(
-        self,
-        symbol_name: str,
-        direction: str = "upstream",
-        max_depth: int = 3,
-        token_budget: Optional[int] = 1500,
-    ) -> Dict[str, Any]:
-        """
-        Traces recursive call, reference, import, type implementation, and note link blast radius.
-        Applies dynamic token budgeting and progressive level-of-detail (0/1 Knapsack style):
-          - 1-hop callers / definitions: Full signature and file path (L1 detail)
-          - 2-hop callers: Compact path:line (L0 detail)
-          - 3+ hop or budget overflow: Compressed count summary with impacted file list
-        Args:
-            symbol_name: Target symbol or document.
-            direction: 'upstream' (dependents/callers/backlinks) or 'downstream' (callees/dependencies/outlinks).
-            max_depth: Traversal depth hops (1-5).
-            token_budget: Max approximate tokens for the returned impact trace (default 1500).
-        Returns:
-            Structured dict with definitions, direct call sites/imports/links, type hierarchies,
-            progressive degradation statistics, and formatted markdown summary.
-        """
-        clean_name = symbol_name.strip()
-        depth = max(1, min(max_depth, 5))
-        definitions = self.find_definition(clean_name)
-
-        impact_nodes: List[Dict[str, Any]] = []
-        transitive_paths: List[Dict[str, Any]] = []
-        transitive_nodes: List[Dict[str, Any]] = []
-
-        exact_match = bool(definitions)
-
-        if direction.lower() == "upstream":
-            # 1. Direct incoming references and imports (1-hop)
-            if exact_match:
-                direct_res = self._query(
-                    "MATCH (f:File)-[r:REFERENCES|IMPORTS]->(s:Symbol) "
-                    "WHERE s.name = $name "
-                    "RETURN DISTINCT f.path, type(r), r.line",
-                    {"name": clean_name},
-                )
-            else:
-                direct_res = self._query(
-                    "MATCH (f:File)-[r:REFERENCES|IMPORTS]->(s:Symbol) "
-                    "WHERE toLower(s.name) = toLower($name) "
-                    "RETURN DISTINCT f.path, type(r), r.line",
-                    {"name": clean_name},
-                )
-            if direct_res and len(direct_res) > 1 and isinstance(direct_res[1], list):
-                for row in direct_res[1]:
-                    if len(row) >= 3:
-                        impact_nodes.append({
-                            "source_file": str(row[0]),
-                            "relation": str(row[1]),
-                            "line": int(row[2]) if str(row[2]).isdigit() else 1,
-                            "target_symbol": clean_name,
-                            "depth": 1,
-                        })
-
-            # 2. Incoming note links (backlinks)
-            if exact_match:
-                link_res = self._query(
-                    "MATCH (d:Document)-[r:LINKS_TO]->(target) "
-                    "WHERE (target:File AND target.path ENDS WITH $name) "
-                    "   OR (target:Document AND target.title = $name) "
-                    "   OR (target:Concept AND target.name = $name) "
-                    "   OR (target:Symbol AND target.name = $name) "
-                    "RETURN DISTINCT d.path, coalesce(r.link_type, 'LINKS_TO'), r.line",
-                    {"name": clean_name},
-                )
-            else:
-                link_res = self._query(
-                    "MATCH (d:Document)-[r:LINKS_TO]->(target) "
-                    "WHERE (target:File AND toLower(target.path) ENDS WITH toLower($name)) "
-                    "   OR (target:Document AND toLower(target.title) = toLower($name)) "
-                    "   OR (target:Concept AND toLower(target.name) = toLower($name)) "
-                    "   OR (target:Symbol AND toLower(target.name) = toLower($name)) "
-                    "RETURN DISTINCT d.path, coalesce(r.link_type, 'LINKS_TO'), r.line",
-                    {"name": clean_name},
-                )
-            if link_res and len(link_res) > 1 and isinstance(link_res[1], list):
-                for row in link_res[1]:
-                    if len(row) >= 3:
-                        impact_nodes.append({
-                            "source_file": str(row[0]),
-                            "relation": str(row[1]),
-                            "line": int(row[2]) if str(row[2]).isdigit() else 1,
-                            "target_symbol": clean_name,
-                            "depth": 1,
-                        })
-
-            # 3. Transitive symbol-to-symbol relationships (IMPLEMENTS, TYPE_OF)
-            if exact_match:
-                trans_res = self._query(
-                    "MATCH (caller:Symbol)-[r:IMPLEMENTS|TYPE_OF]->(target:Symbol) "
-                    "WHERE target.name = $name "
-                    "OPTIONAL MATCH (caller)-[:DEFINED_IN]->(f:File) "
-                    "RETURN caller.name, type(r), coalesce(f.path, 'unknown')",
-                    {"name": clean_name},
-                )
-            else:
-                trans_res = self._query(
-                    "MATCH (caller:Symbol)-[r:IMPLEMENTS|TYPE_OF]->(target:Symbol) "
-                    "WHERE toLower(target.name) = toLower($name) "
-                    "OPTIONAL MATCH (caller)-[:DEFINED_IN]->(f:File) "
-                    "RETURN caller.name, type(r), coalesce(f.path, 'unknown')",
-                    {"name": clean_name},
-                )
-            if trans_res and len(trans_res) > 1 and isinstance(trans_res[1], list):
-                for row in trans_res[1]:
-                    if len(row) >= 3:
-                        transitive_paths.append({
-                            "symbol": str(row[0]),
-                            "relation": str(row[1]),
-                            "file_path": str(row[2]),
-                            "depth": 1,
-                        })
-
-            # 4. Multi-hop transitive callers if depth > 1
-            if depth > 1:
-                if exact_match:
-                    cypher_trans = (
-                        f"MATCH path = (caller:Symbol)-[:CALLS|REFERENCES*2..{depth}]->(target:Symbol) "
-                        "WHERE target.name = $name "
-                        "OPTIONAL MATCH (caller)-[:DEFINED_IN]->(f:File) "
-                        "RETURN DISTINCT caller.name, length(path), coalesce(f.path, 'unknown')"
-                    )
-                else:
-                    cypher_trans = (
-                        f"MATCH path = (caller:Symbol)-[:CALLS|REFERENCES*2..{depth}]->(target:Symbol) "
-                        "WHERE toLower(target.name) = toLower($name) "
-                        "OPTIONAL MATCH (caller)-[:DEFINED_IN]->(f:File) "
-                        "RETURN DISTINCT caller.name, length(path), coalesce(f.path, 'unknown')"
-                    )
-                multi_res = self._query(cypher_trans, {"name": clean_name})
-                if multi_res and len(multi_res) > 1 and isinstance(multi_res[1], list):
-                    for row in multi_res[1]:
-                        if len(row) >= 3:
-                            transitive_nodes.append({
-                                "symbol": str(row[0]),
-                                "depth": int(row[1]),
-                                "source_file": str(row[2]),
-                                "relation": "TRANSITIVE_CALLER",
-                            })
-
-        else:  # downstream
-            # 1. Outgoing dependencies for files defining this symbol
-            down_res = self._query(
-                "MATCH (s:Symbol)-[:DEFINED_IN]->(f:File)-[r:IMPORTS|REFERENCES]->(target:Symbol) "
-                "WHERE toLower(s.name) = toLower($name) "
-                "RETURN DISTINCT target.name, type(r), r.line, f.path",
-                {"name": clean_name},
-            )
-            if down_res and len(down_res) > 1 and isinstance(down_res[1], list):
-                for row in down_res[1]:
-                    if len(row) >= 4:
-                        impact_nodes.append({
-                            "source_file": str(row[3]),
-                            "relation": str(row[1]),
-                            "line": int(row[2]) if str(row[2]).isdigit() else 1,
-                            "target_symbol": str(row[0]),
-                            "depth": 1,
-                        })
-
-            # 2. Outgoing note links from this document
-            out_link_res = self._query(
-                "MATCH (d:Document)-[r:LINKS_TO]->(target) "
-                "WHERE toLower(d.title) = toLower($name) OR toLower(d.path) ENDS WITH toLower($name) "
-                "RETURN DISTINCT coalesce(target.title, target.name, target.path), coalesce(r.link_type, 'LINKS_TO'), r.line, d.path",
-                {"name": clean_name},
-            )
-            if out_link_res and len(out_link_res) > 1 and isinstance(out_link_res[1], list):
-                for row in out_link_res[1]:
-                    if len(row) >= 4:
-                        impact_nodes.append({
-                            "source_file": str(row[3]),
-                            "relation": str(row[1]),
-                            "line": int(row[2]) if str(row[2]).isdigit() else 1,
-                            "target_symbol": str(row[0]),
-                            "depth": 1,
-                        })
-
-            # 3. Type relations (what does this symbol implement or extend?)
-            trans_res = self._query(
-                "MATCH (s:Symbol)-[r:IMPLEMENTS|TYPE_OF]->(target:Symbol) "
-                "WHERE toLower(s.name) = toLower($name) "
-                "OPTIONAL MATCH (target)-[:DEFINED_IN]->(f:File) "
-                "RETURN target.name, type(r), coalesce(f.path, 'unknown')",
-                {"name": clean_name},
-            )
-            if trans_res and len(trans_res) > 1 and isinstance(trans_res[1], list):
-                for row in trans_res[1]:
-                    if len(row) >= 3:
-                        transitive_paths.append({
-                            "symbol": str(row[0]),
-                            "relation": str(row[1]),
-                            "file_path": str(row[2]),
-                            "depth": 1,
-                        })
-
-            # 4. Multi-hop transitive dependencies if depth > 1
-            if depth > 1:
-                cypher_down_trans = (
-                    f"MATCH path = (s:Symbol)-[:CALLS|REFERENCES*2..{depth}]->(target:Symbol) "
-                    "WHERE toLower(s.name) = toLower($name) "
-                    "OPTIONAL MATCH (target)-[:DEFINED_IN]->(f:File) "
-                    "RETURN DISTINCT target.name, length(path), coalesce(f.path, 'unknown')"
-                )
-                multi_down = self._query(cypher_down_trans, {"name": clean_name})
-                if multi_down and len(multi_down) > 1 and isinstance(multi_down[1], list):
-                    for row in multi_down[1]:
-                        if len(row) >= 3:
-                            transitive_nodes.append({
-                                "symbol": str(row[0]),
-                                "depth": int(row[1]),
-                                "source_file": str(row[2]),
-                                "relation": "TRANSITIVE_CALLEE",
-                            })
-
-        return format_impact_report(
-            clean_name=clean_name,
-            direction=direction,
-            depth=depth,
-            definitions=definitions,
-            direct_impacts=impact_nodes,
-            type_hierarchies=transitive_paths,
-            transitive_impacts=transitive_nodes,
-            token_budget=token_budget,
-        )
-
-    def get_companion_symbols(self, symbol_name: str) -> List[str]:
-        """
-        Returns companion symbols defined in the same file as the given symbol.
-        """
-        clean_name = symbol_name.strip()
-        cypher = (
-            "MATCH (s:Symbol)-[:DEFINED_IN]->(f:File)<-[:DEFINED_IN]-(companion:Symbol) "
-            "WHERE toLower(s.name) = toLower($name) AND toLower(companion.name) <> toLower($name) "
-            "RETURN DISTINCT companion.name"
-        )
-        try:
-            res = self._query(cypher, {"name": clean_name})
-            companions: List[str] = []
-            if res and len(res) > 1 and isinstance(res[1], list):
-                for row in res[1]:
-                    if row and row[0]:
-                        companions.append(str(row[0]))
-            return companions
-        except Exception as e:
-            logger.debug(f"Failed to fetch companion symbols for '{clean_name}': {e}")
-            return []
-
-    def get_hop_symbols(self, symbol_name: str) -> List[str]:
-        """
-        Returns direct 1-hop callees and callers of the given symbol.
-        """
-        clean_name = symbol_name.strip()
-        cypher = (
-            "MATCH (s:Symbol)-[:CALLS]-(hop:Symbol) "
-            "WHERE toLower(s.name) = toLower($name) AND toLower(hop.name) <> toLower($name) "
-            "RETURN DISTINCT hop.name"
-        )
-        try:
-            res = self._query(cypher, {"name": clean_name})
-            hops: List[str] = []
-            if res and len(res) > 1 and isinstance(res[1], list):
-                for row in res[1]:
-                    if row and row[0]:
-                        hops.append(str(row[0]))
-            return hops
-        except Exception as e:
-            logger.debug(f"Failed to fetch hop symbols for '{clean_name}': {e}")
-            return []
-
-    def apply_scope_affinity(
-        self,
-        candidates: List[Dict[str, Any]],
-        confidence_threshold: float = 0.85,
-        companion_boost: float = 0.15,
-        hop_boost: float = 0.10,
-    ) -> List[Dict[str, Any]]:
-        """
-        Applies Bidirectional AST Scope Affinity re-ranking.
-        When a Rank-1 symbol is found with high confidence (>0.85),
-        boosts companion symbols defined in the same file by +0.15,
-        and direct 1-hop callees/callers by +0.10.
-        """
-        if not candidates:
-            return []
-
-        # Identify Rank-1 candidate
-        rank_1 = max(candidates, key=lambda x: x.get("score", 0.0))
-        rank_1_score = rank_1.get("score", 0.0)
-        rank_1_symbol = rank_1.get("symbol")
-
-        if rank_1_score <= confidence_threshold or not rank_1_symbol:
-            return [dict(c) for c in candidates]
-
-        companion_symbols = set(self.get_companion_symbols(rank_1_symbol))
-        hop_symbols = set(self.get_hop_symbols(rank_1_symbol))
-
-        reranked: List[Dict[str, Any]] = []
-        for c in candidates:
-            item = dict(c)
-            sym = item.get("symbol")
-            if sym and sym != rank_1_symbol:
-                boost = 0.0
-                if sym in companion_symbols:
-                    boost += companion_boost
-                if sym in hop_symbols:
-                    boost += hop_boost
-                item["score"] = round(item.get("score", 0.0) + boost, 4)
-            reranked.append(item)
-
-        reranked.sort(key=lambda x: x.get("score", 0.0), reverse=True)
-        return reranked
-
-

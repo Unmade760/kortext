@@ -1,4 +1,4 @@
-name: Cortex CI
+name: Kortext CI
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  test-linux-substrates:
+    name: Linux Full Substrate Suite (FalkorDB + Qdrant)
     runs-on: ubuntu-latest
 
     services:
@@ -56,25 +57,11 @@ jobs:
         run: |
           uv sync --extra tier2-languages --extra dev
 
-      - name: Run Dynamic OpenViking Test Suite
+      - name: Run Kortext Test Suite
+        env:
+          CI: "1"
         run: |
-          uv run python3 scripts/test_dynamic_viking.py
-
-      - name: Run Ultimate Chunking Test Suite
-        run: |
-          uv run python3 scripts/test_ultimate_chunking.py
-
-      - name: Run Tree-sitter Language Support Test Suite
-        run: |
-          uv run python3 scripts/test_tier2_languages.py
-
-      - name: Run Markdown Vault Ingestion Test Suite
-        run: |
-          uv run python3 scripts/test_markdown_vault_ingestion.py
-
-      - name: Run SCIP Code Intelligence Test Suite
-        run: |
-          uv run python3 scripts/test_scip_ingest.py
+          uv run pytest -q
 
       - name: Run Antigravity Lifecycle Hooks Test Suite
         run: |
@@ -83,3 +70,40 @@ jobs:
       - name: Run Plugin Manifest Validation
         run: |
           uv run python3 scripts/test_plugin_manifest.py
+
+  test-cross-platform:
+    name: Cross-Platform Matrix (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Install Dependencies
+        run: |
+          uv sync --extra tier2-languages --extra dev
+
+      - name: Run Plugin Manifest & Hooks Suite
+        run: |
+          uv run python3 scripts/test_plugin_manifest.py
+          uv run python3 scripts/test_antigravity_hooks.py
+
+      - name: Run Cross-Platform Unit & Regression Suites
+        env:
+          CI: "1"
+        run: |
+          uv run pytest -q tests/test_cli_commands.py tests/test_binaries.py tests/test_retrieval_pipeline.py tests/test_dashboard_routes.py tests/test_graph_views.py tests/test_audit_regressions.py tests/test_audit_fixes.py tests/test_deep_audit_remediations.py tests/test_complete_audit_verification.py

@@ -1,188 +1,130 @@
 #!/usr/bin/env python3
 """
-Kortext Stop Hook: Prevents premature termination if uncompleted ready tasks remain in DAG
-or if files were modified without recording an outcome.
+Antigravity Stop Hook (thin wrapper delegating to kortext.hooks.runner).
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+for p in (str(SCRIPT_DIR), str(REPO_ROOT)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 from common import (
     analyze_transcript_modifications,
     emit_hook_response,
     get_hook_payload,
     read_transcript_steps,
 )
-from typing import Any, Dict, List, Optional
+from kortext.hooks.context import HookContext
+from kortext.hooks.runner import emit_response, run_hook
+from kortext.trust.sanitizer import CausalSanitizer, SecurityViolation
+
+
+def record_learned_facts(
+    facts: List[Dict[str, Any]],
+    episode_name: str = "stop_hook_episode",
+    driver: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
+    """Sanitizes and persists learned facts via CausalSanitizer and EpisodicDriver."""
+    if not facts:
+        return []
+
+    sanitizer = CausalSanitizer()
+    if driver is None:
+        from kortext.episodic.driver import AgentNativeEpisodicDriver
+
+        driver = AgentNativeEpisodicDriver()
+
+    recorded: List[Dict[str, Any]] = []
+    for item in facts:
+        if not isinstance(item, dict):
+            continue
+        subj = str(item.get("subject", "")).strip()
+        rel = str(item.get("relation", "RELATES_TO")).strip()
+        fact = str(item.get("fact", "")).strip()
+        tier = int(item.get("source_tier", 2))
+        if not subj or not fact:
+            continue
+        try:
+            sanitizer.sanitize(subj, rel, fact, source_tier=tier)
+            try:
+                driver.record_fact(
+                    subject=subj,
+                    relation=rel,
+                    fact=fact,
+                    source_session=episode_name,
+                    source_tier=tier,
+                )
+            except TypeError:
+                driver.record_fact(
+                    subject=subj,
+                    relation=rel,
+                    fact=fact,
+                    episode_name=episode_name,
+                )
+            recorded.append(item)
+        except SecurityViolation:
+            continue
+        except Exception:
+            continue
+
+    return recorded
 
 
 def extract_learned_facts_from_transcript(transcript_path: str) -> List[Dict[str, Any]]:
-    """Extracts facts from transcript steps and tool calls."""
+    """Extracts learned_facts from transcript steps and record_system_outcome tool calls."""
     steps = read_transcript_steps(transcript_path)
     facts: List[Dict[str, Any]] = []
     for step in steps:
         if not isinstance(step, dict):
             continue
-        if "learned_facts" in step and isinstance(step["learned_facts"], list):
-            facts.extend(step["learned_facts"])
-        if "facts" in step and isinstance(step["facts"], list):
-            facts.extend(step["facts"])
+        step_facts = step.get("learned_facts")
+        if isinstance(step_facts, list):
+            for f in step_facts:
+                if isinstance(f, dict):
+                    facts.append(f)
+
         tool_calls = step.get("tool_calls", [])
         if isinstance(tool_calls, list):
             for tc in tool_calls:
-                if isinstance(tc, dict):
-                    args = tc.get("args", {})
-                    if isinstance(args, dict):
-                        tc_facts = args.get("facts")
-                        if isinstance(tc_facts, list):
-                            facts.extend(tc_facts)
+                if not isinstance(tc, dict):
+                    continue
+                name = str(tc.get("name") or tc.get("tool_name") or "")
+                args = tc.get("args", {}) or {}
+                if not isinstance(args, dict):
+                    continue
+                target_tool = str(args.get("ToolName", ""))
+                if "record_system_outcome" in name or target_tool == "record_system_outcome":
+                    tc_facts = args.get("facts")
+                    if isinstance(tc_facts, list):
+                        for f in tc_facts:
+                            if isinstance(f, dict):
+                                facts.append(f)
     return facts
 
 
-def record_learned_facts(
-    facts: List[Dict[str, Any]] | List[str],
-    episode_name: str = "session_learned_facts",
-    sanitizer: Any = None,
-    driver: Any = None,
-) -> List[Dict[str, Any]]:
-    """
-    Passes learned facts through CausalSanitizer before recording to episodic graph.
-    Returns list of successfully sanitized and recorded facts.
-    """
-    if not facts:
-        return []
-
-    if sanitizer is None:
-        try:
-            from kortext.trust.sanitizer import CausalSanitizer
-            sanitizer = CausalSanitizer()
-        except ImportError:
-            try:
-                from cerebrum.trust.sanitizer import CausalSanitizer
-                sanitizer = CausalSanitizer()
-            except ImportError:
-                sanitizer = None
-
-    sanitized_facts: List[Dict[str, Any]] = []
-    for item in facts:
-        if isinstance(item, str):
-            fact_dict = {"subject": "Session", "relation": "LEARNED", "fact": item, "source_tier": 2}
-        elif isinstance(item, dict):
-            fact_dict = dict(item)
-        else:
-            continue
-
-        sub = fact_dict.get("subject") or fact_dict.get("source") or "Session"
-        rel = fact_dict.get("relation") or "LEARNED"
-        fact_text = fact_dict.get("fact") or fact_dict.get("target") or str(fact_dict)
-        tier = fact_dict.get("source_tier", 2)
-
-        if sanitizer:
-            try:
-                sanitizer.sanitize(subject=sub, relation=rel, fact=fact_text, source_tier=tier)
-                sanitized_facts.append(fact_dict)
-            except Exception as e:
-                print(f"[KortextStopHook] Learned fact blocked by CausalSanitizer: {e}", file=sys.stderr)
-                continue
-        else:
-            sanitized_facts.append(fact_dict)
-
-    if sanitized_facts:
-        if driver is None:
-            try:
-                from kortext.episodic.driver import AgentNativeEpisodicDriver
-                driver = AgentNativeEpisodicDriver()
-            except ImportError:
-                try:
-                    from cerebrum.episodic.driver import AgentNativeEpisodicDriver
-                    driver = AgentNativeEpisodicDriver()
-                except ImportError:
-                    driver = None
-
-        if driver is not None:
-            for sf in sanitized_facts:
-                sub = sf.get("subject") or sf.get("source") or "Session"
-                rel = sf.get("relation") or "LEARNED"
-                obj = sf.get("target") or sf.get("object") or rel
-                fact_text = sf.get("fact") or str(sf)
-                tier = sf.get("source_tier", 2)
-                try:
-                    driver.record_fact(
-                        subject=sub,
-                        relation=rel,
-                        fact=fact_text,
-                        object_name=obj,
-                        source_session=episode_name,
-                        source_tier=tier,
-                    )
-                except Exception as e:
-                    print(f"[KortextStopHook] Error persisting fact: {e}", file=sys.stderr)
-
-    return sanitized_facts
-
-
-def main():
+def main() -> None:
     payload = get_hook_payload()
-
-    execution_num = payload.get("executionNum", 0)
-    termination_reason = payload.get("terminationReason", "")
-    transcript_path = payload.get("transcriptPath", "")
-    fully_idle = payload.get("fullyIdle", True)
-
-    # Only intervene on the first natural model stop
-    if execution_num != 1 or termination_reason != "model_stop":
-        emit_hook_response({"decision": "stop"})
-        return
-
-    # Don't block if background tasks are still running
-    if not fully_idle:
-        emit_hook_response({"decision": "stop"})
-        return
-
-    # 1. Verify Task DAG state
-    try:
-        try:
-            from kortext.tasks.tracker import TaskDAGTracker
-        except ImportError:
-            from cerebrum.tasks.tracker import TaskDAGTracker
-        tracker = TaskDAGTracker()
-        ready_tasks = tracker.get_ready_tasks()
-        if ready_tasks:
-            task_list = ", ".join([f"{t['id']} ({t['title']})" for t in ready_tasks[:3]])
-            reason = (
-                f"🛑 [Kortext DAG Gate] Execution cannot stop: Uncompleted ready tasks remain in DAG: {task_list}. "
-                "Please delegate or complete these tasks before terminating."
-            )
-            emit_hook_response({"decision": "continue", "reason": reason})
-            return
-    except Exception:
-        pass
-
-    # 2. Extract and record any learned facts (sanitized via CausalSanitizer)
-    learned_facts = payload.get("learned_facts") or payload.get("facts") or []
+    transcript_path = str(payload.get("transcriptPath", "") or "")
+    facts_recorded = False
     if transcript_path:
-        learned_facts = list(learned_facts) + extract_learned_facts_from_transcript(transcript_path)
-    if learned_facts:
-        record_learned_facts(learned_facts)
-
-    # 3. Verify Outcome Persistence if files were modified
-    modified_files, recorded_outcome = analyze_transcript_modifications(transcript_path)
-    if modified_files and not recorded_outcome:
-        emit_hook_response({
-            "decision": "continue",
-            "reason": (
-                "🧠 [Kortext Stop Guard] Codebase files were modified in this session without "
-                "recording an outcome. Please call `record_system_outcome` to persist your decisions, "
-                "changes, and verified behavior into Kortext memory before finishing."
-            )
-        })
-        return
-
-    emit_hook_response({"decision": "stop"})
+        extracted = extract_learned_facts_from_transcript(transcript_path)
+        if extracted:
+            try:
+                record_learned_facts(extracted)
+                facts_recorded = True
+            except Exception:
+                pass
+    ctx_payload = {**payload, "_facts_already_recorded": True} if facts_recorded else payload
+    ctx = HookContext.from_stdin(raw_text=json.dumps(ctx_payload), event="stop")
+    res = run_hook("stop", ctx)
+    emit_response(event="stop", decision=res.decision, reason=res.reason, data=res.data)
 
 
 if __name__ == "__main__":

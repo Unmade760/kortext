@@ -1,7 +1,6 @@
 ---
-trigger: always_on
-description: "Git commit conventions, branch management, pull request standards, and pre-commit verification."
-globs: "**/*"
+trigger: model_decision
+description: "Activate when committing code, managing git branches, running pre-commit checks, or preparing pull requests."
 ---
 
 # Git Workflow

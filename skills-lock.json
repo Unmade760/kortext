@@ -1,11 +1,77 @@
 {
   "version": 1,
   "skills": {
-    "thermo-nuclear-code-quality-review": {
-      "source": "cursor/plugins",
-      "sourceType": "github",
-      "skillPath": "cursor-team-kit/skills/thermo-nuclear-code-quality-review/SKILL.md",
-      "computedHash": "9052b01b46b1d8dbf94c45f9313ec1983443f9a460e83d49cdc7fe0f640ca476"
+    "anti-ripgrep-seek": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/anti-ripgrep-seek/SKILL.md",
+      "computedHash": "715afafc80fbacd63399b25b2ab57c83c8c213894c3ebcb557a50aef2602f0b4"
+    },
+    "code-review": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/code-review/SKILL.md",
+      "computedHash": "17b141388a025398823b0fac6262f67edf368d9e3db7e36de24432a6f72d268b"
+    },
+    "expand-contract-refactor": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/expand-contract-refactor/SKILL.md",
+      "computedHash": "59763dadec2197f822523f375a33e161be8dd1c715e78e8170290e89cf579ca4"
+    },
+    "kortext-boost": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/kortext-boost/SKILL.md",
+      "computedHash": "9a69eeaadb028816e00fd6ea91274dddb9079b74d4709ac858784d9c12d5bced"
+    },
+    "kortext-rag": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/kortext-rag/SKILL.md",
+      "computedHash": "6636057c917cdcda5ccfd0057d74d151510e9512fb94b38b0a7a8a3da459a960"
+    },
+    "security-review": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/security-review/SKILL.md",
+      "computedHash": "594d1d70ba58172065ca3cacb4c3f2cfc979e9746163d3cb34ea1907f534c727"
+    },
+    "subagent-driven-development": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/subagent-driven-development/SKILL.md",
+      "computedHash": "87c2c922e142ba0765ab02fb6db01e46f4fd5d33d78cc2b8fe80365517493834"
+    },
+    "systematic-debugging": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/systematic-debugging/SKILL.md",
+      "computedHash": "8eedd0b13e787402f3fde8afd613d7260cd6c7c2f3d074e7ab8fec55fd144a7e"
+    },
+    "tdd-workflow": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/tdd-workflow/SKILL.md",
+      "computedHash": "da05c2a6b15cfa53396bcc7d6d136279522691239ec80e9171d2426b5f2d63c2"
+    },
+    "to-spec": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/to-spec/SKILL.md",
+      "computedHash": "fcff4ab283556866a392887f610b52426da5ad27a01c851cfe35a8121fc68142"
+    },
+    "to-tickets": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/to-tickets/SKILL.md",
+      "computedHash": "8e4ab140b099e452d72adacd47d08a04542dcd7f4fa10867f3342f7e3d88f930"
+    },
+    "verification-before-completion": {
+      "source": "kortext/integrations",
+      "sourceType": "local",
+      "skillPath": "integrations/antigravity/skills/verification-before-completion/SKILL.md",
+      "computedHash": "02e2ee1fc7d0d529fdf493d92ee7a46e6a9bc77c6d2b4302f55a6ae578c77e9d"
     }
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea or architectural improvement for Cortex
+about: Suggest an idea or architectural improvement for Kortext
 title: '[FEAT] '
 labels: ['enhancement']
 assignees: ''

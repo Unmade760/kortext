@@ -209,7 +209,18 @@ export function renderTaskGraph(nodes, edges) {
     title: createVisTooltip(e.title),
   }))));
 
+  const TASK_GROUPS_SPEC = {
+    useDefaultGroups: false,
+    completed: { color: { background: '#0a0f1d', border: '#10b981', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    ready: { color: { background: '#0a0f1d', border: '#38bdf8', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    in_progress: { color: { background: '#0a0f1d', border: '#f59e0b', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    pending: { color: { background: '#0a0f1d', border: '#64748b', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    failed: { color: { background: '#0a0f1d', border: '#f87171', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    blocked: { color: { background: '#0a0f1d', border: '#e11d48', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+  };
+
   const options = {
+    groups: TASK_GROUPS_SPEC,
     physics: {
       solver: 'barnesHut',
       barnesHut: { gravitationalConstant: -14000, centralGravity: 0.1, springLength: 160, springConstant: 0.04, damping: 0.15, avoidOverlap: 1.0 },
@@ -218,6 +229,9 @@ export function renderTaskGraph(nodes, edges) {
     interaction: { hover: true, tooltipDelay: 150 },
   };
 
+  if (state.tasks.network && typeof state.tasks.network.destroy === 'function') {
+    state.tasks.network.destroy();
+  }
   state.tasks.network = new vis.Network(container, { nodes: state.tasks.nodesDataSet, edges: state.tasks.edgesDataSet }, options);
 
   state.tasks.network.on('stabilizationIterationsDone', () => {
@@ -246,9 +260,10 @@ export function renderTaskGraph(nodes, edges) {
       state.tasks.nodesDataSet.update(state.tasks.nodesDataSet.get().map(n => ({
         id: n.id,
         opacity: connectedSet.has(n.id) ? 1.0 : 0.15,
+        color: n.color,
       })));
     } else {
-      state.tasks.nodesDataSet.update(state.tasks.nodesDataSet.get().map(n => ({ id: n.id, opacity: 1.0 })));
+      state.tasks.nodesDataSet.update(state.tasks.nodesDataSet.get().map(n => ({ id: n.id, opacity: 1.0, color: n.color })));
     }
   });
 }
@@ -411,5 +426,16 @@ function updateProjectFilterDropdown(projects) {
 
 export function setActiveProject(proj) {
   state.activeProject = proj;
+  import('./state.js').then(m => {
+    if (m.emit) m.emit('project:changed', proj);
+  }).catch(() => {});
   loadTasks();
+  if (window.loadGraph && state.activeTab === 'graph') window.loadGraph();
+  if (window.loadJournal && state.activeTab === 'journal') window.loadJournal();
+  if (window.executeBlastAnalysis && state.activeTab === 'blast') window.executeBlastAnalysis();
+  if (window.executeRetrieval && state.activeTab === 'retrieval') {
+    const q = document.getElementById('retrieval-query');
+    if (q && q.value.trim()) window.executeRetrieval();
+  }
+  if (window.loadTelemetry && state.activeTab === 'health') window.loadTelemetry();
 }

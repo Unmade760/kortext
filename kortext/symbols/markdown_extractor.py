@@ -10,6 +10,8 @@ Extracts structured knowledge from Markdown documents and Knowledge Vaults (Obsi
 6. Fenced code blocks with language metadata
 """
 from __future__ import annotations
+import logging
+logger = logging.getLogger(__name__)
 
 import os
 import re
@@ -119,7 +121,7 @@ class MarkdownSymbolExtractor:
                 if isinstance(data, dict):
                     parsed = data
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
         else:
             # Fallback key-value parser if PyYAML unavailable
             for line in fm_text.splitlines():
@@ -305,7 +307,7 @@ class MarkdownSymbolExtractor:
                 if c.is_file():
                     return str(c.resolve()), True
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
 
         # 3. If workspace_root is present, search for matching filename
         if self.workspace_root and not ("/" in target or "\\" in target):
@@ -315,7 +317,7 @@ class MarkdownSymbolExtractor:
                     if match_file.stem.lower() == target_stem:
                         return str(match_file.resolve()), True
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
 
         return None, False
 

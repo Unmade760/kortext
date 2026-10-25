@@ -30,10 +30,7 @@ logger = logging.getLogger("kortext.qdrant")
 
 from kortext._home import KORTEXT_HOME
 
-CEREBRUM_HOME = KORTEXT_HOME
 DEFAULT_QDRANT_PATH = KORTEXT_HOME / "qdrant"
-if not (os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")) and not DEFAULT_QDRANT_PATH.exists() and (Path.home() / ".cerebrum" / "qdrant").exists():
-    DEFAULT_QDRANT_PATH = Path.home() / ".cerebrum" / "qdrant"
 
 
 from kortext._qdrant import get_qdrant_client
@@ -47,24 +44,35 @@ class EmbeddedQdrantEngine:
         storage_path: Optional[Path] = None,
         url: Optional[str] = None,
     ):
-        self.client = get_qdrant_client(url=url, storage_path=storage_path)
+        effective_storage = storage_path
+        if url is None and effective_storage is None:
+            import socket
+
+            try:
+                with socket.create_connection(("127.0.0.1", 6333), timeout=0.05):
+                    pass
+            except OSError:
+                effective_storage = DEFAULT_QDRANT_PATH
+        self.client = get_qdrant_client(url=url, storage_path=effective_storage)
+        if effective_storage == DEFAULT_QDRANT_PATH and url is None:
+            try:
+                if not self.client.collection_exists("Antigravity_Docs"):
+                    from kortext._env import get_embed_dimension
+
+                    default_dim = int(os.getenv("EMBED_DIMENSIONS") or get_embed_dimension())
+                    self.ensure_collection("Antigravity_Docs", embed_dim=default_dim)
+            except Exception:
+                pass
 
     def resolve_collection_name(self, collection_name: str) -> str:
-        """Accept both 'kortext' and 'cerebrum' names for seamless backward-compatibility."""
-        try:
-            cols = [c.name for c in self.client.get_collections().collections]
-            if collection_name in cols:
-                return collection_name
-            if collection_name in ("kortext_codebase", "kortext") and "cerebrum_codebase" in cols:
-                return "cerebrum_codebase"
-            if collection_name in ("cerebrum_codebase", "cerebrum") and "kortext_codebase" in cols:
-                return "kortext_codebase"
-        except Exception:
-            pass
+        """Returns the canonical collection name."""
         return collection_name
 
-    def ensure_collection(self, collection_name: str, embed_dim: int = 2048):
+    def ensure_collection(self, collection_name: str, embed_dim: Optional[int] = None):
         """Ensures dual-vector schema with dense MRL and sparse BM25 configurations."""
+        if embed_dim is None:
+            from kortext._env import get_embed_dimension
+            embed_dim = get_embed_dimension()
         resolved = self.resolve_collection_name(collection_name)
         if self.client.collection_exists(resolved):
             return

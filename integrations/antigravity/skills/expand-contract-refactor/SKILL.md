@@ -1,254 +1,49 @@
 ---
 name: expand-contract-refactor
-description: Safe multi-stage refactoring protocol (Expand, Migrate, Contract) for modifying shared interfaces, database schemas, and core symbols with zero-downtime and green CI at every step.
-version: 2.0.0
-triggers:
-  - "expand-contract"
-  - "expand contract"
-  - "refactor interface"
-  - "safe refactor"
-  - "zero downtime refactoring"
-  - "migrate callers"
-metadata:
-  origin: ECC
-  adapted_for: Kortext
+description: Use when refactoring shared interfaces, renaming or moving core symbols across callers, auditing architecture and blast radius, or executing zero-downtime database, FalkorDB graph, or Qdrant vector migrations.
 ---
 
-# Expand-Contract Refactoring Protocol
+# Expand-Contract Refactoring, Architecture & Schema Migration Protocol
 
-A compiler-grade, zero-downtime refactoring protocol for mutating shared interfaces, database schemas, API routes, and core codebase symbols without breaking downstream consumers or triggering CI regressions.
+Unifies zero-downtime interface refactoring (`Expand -> Migrate -> Contract`), AST blast-radius architecture reviews (`kortext-architect`), and relational/graph/vector database migrations (`database-migrations`).
 
-## When to Activate
+## 1. Stage 0: Architectural Blast-Radius Audit (`trace_symbol_impact`)
 
-- Modifying function/method signatures used across multiple modules ($N \ge 3$ call sites)
-- Renaming or restructuring public interfaces, classes, types, or protocols
-- Migrating database tables, columns, or vector store payload schemas
-- Evolving REST endpoints, FastMCP tool definitions, or IPC socket protocols
-- Breaking architectural changes where instant "big-bang" edits risk cascading failures
+Before modifying any shared symbol, class, MCP tool, or schema, map its exact caller topology in FalkorDB (`<10ms`, zero `rg`):
 
----
-
-## The 3-Phase Lifecycle
-
-```mermaid
-flowchart TD
-    subgraph Phase1["Phase 1: EXPAND"]
-        E1[Introduce new symbol / schema / endpoint]
-        E2[Add backwards compatibility shim / dual-write]
-        E3[Add comprehensive unit tests for new symbol]
-        E4[Verify existing test suite passes 100%]
-        E1 --> E2 --> E3 --> E4
-    end
-
-    subgraph Phase2["Phase 2: MIGRATE"]
-        M1["trace_symbol_impact: map upstream callers"]
-        M2[Partition callers into small, isolated batches]
-        M3[Migrate batch 1 → verify tests green → commit]
-        M4[Migrate batch N → verify tests green → commit]
-        M1 --> M2 --> M3 --> M4
-    end
-
-    subgraph Phase3["Phase 3: CONTRACT"]
-        C1["trace_symbol_impact: verify 0 callers remain"]
-        C2[Remove legacy shim, adapters, and old symbol]
-        C3[Run full test suite & lint gates]
-        C4[Commit contraction checkpoint]
-        C1 --> C2 --> C3 --> C4
-    end
-
-    Phase1 --> Phase2 --> Phase3
-```
-
----
-
-## Kortext Superpower: AST Graph Traversal
-
-Never rely on brute-force text search (`grep`, `ripgrep`) to find callers or gauge blast radius. Grep matches comments, strings, and variable name collisions while missing dynamic imports.
-
-Use the Kortext AST B-Tree index and FalkorDB symbol graph:
-
-### 1. Map Complete Caller Graph
 ```python
-# Discover all upstream callers and blast radius (<5ms)
-trace_symbol_impact(symbol="OldRepository", direction="upstream")
-```
-This returns:
-- Exact file paths and line ranges for every call site
-- Caller hierarchy and package boundaries
-- In-degree centrality (how heavily used the symbol is)
-
-### 2. Inspect Target Symbols Deterministically
-```python
-# Direct Tree-sitter AST point lookup (<2ms, ~120 tokens)
-seek_symbol(symbol_name="OldRepository")
+decl = seek_symbol(symbol_name="TargetSymbol", detail_level="skeleton")
+upstream = trace_symbol_impact(symbol="TargetSymbol", direction="upstream", max_depth=3, token_budget=1500)
+downstream = trace_symbol_impact(symbol="TargetSymbol", direction="downstream", max_depth=2)
 ```
 
-### 3. Partition Callers by Graph Clusters
-Partition migration batches based on graph clusters:
-- **Batch 1 (Leaf callers):** Independent utility functions or leaf nodes with zero downstream dependents.
-- **Batch 2 (Internal callers):** Sibling domain modules within the same package.
-- **Batch 3 (External callers):** Cross-subsystem integrations, API routes, and handlers.
-
----
-
-## Phase-by-Phase Execution Guide
-
-### Phase 1: Expand
-
-Goal: Introduce the new capability alongside the old one while keeping existing code 100% operational.
-
-1. **Author the New Abstraction:**
-   - Define the new symbol with desired typing, parameter layout, and immutability.
-   - Do NOT modify or delete the existing symbol yet.
-2. **Implement Backwards-Compatible Forwarding:**
-   - Wire the legacy symbol to delegate to the new implementation, or wrap the new implementation in a legacy adapter.
-   - For database schemas: Add new nullable/defaulted columns or dual-write triggers.
-3. **Write Unit Tests for the New Symbol:**
-   - Write tests exercising all new interfaces and edge cases.
-   - Run the test suite:
-     ```bash
-     uv run pytest -q
-     ```
-   - Both old tests and new tests MUST pass cleanly.
-4. **Checkpoint Commit:**
-   ```bash
-   git commit -m "feat: expand <symbol> with backwards-compatible interface"
-   ```
-
-#### Example: Python Function Signature Expand
-```python
-# BEFORE (Legacy)
-def calculate_retention(strength: float, elapsed: float) -> float:
-    return strength * (0.5 ** (elapsed / 86400.0))
-
-# AFTER EXPAND (Phase 1)
-from dataclasses import dataclass
-
-@dataclass(frozen=True)
-class DecayParameters:
-    strength: float
-    elapsed_seconds: float
-    shape_k: float = 0.5
-    scale_lambda: float = 86400.0
-
-def compute_retention_v2(params: DecayParameters) -> float:
-    """New canonical implementation using Weibull parameters."""
-    return params.strength * (params.shape_k ** (params.elapsed_seconds / params.scale_lambda))
-
-def calculate_retention(strength: float, elapsed: float) -> float:
-    """DEPRECATED: Legacy shim forwarding to compute_retention_v2."""
-    import warnings
-    warnings.warn(
-        "calculate_retention is deprecated; use compute_retention_v2 with DecayParameters",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return compute_retention_v2(
-        DecayParameters(strength=strength, elapsed_seconds=elapsed)
-    )
-```
-
----
-
-### Phase 2: Migrate
-
-Goal: Incrementally update callers in small, testable batches without long-lived broken branches.
-
-1. **Inspect Upstream Call Sites:**
-   Call `trace_symbol_impact(symbol="<old_symbol>", direction="upstream")`.
-2. **Sort and Batch Call Sites:**
-   - Group call sites into batches of 3–5 callers maximum.
-   - Batch by module cohesion (e.g., all test callers first, or all repository callers first).
-3. **Migrate Batch $N$:**
-   - Update call sites within Batch $N$ to invoke the new symbol.
-   - Run verification immediately:
-     ```bash
-     uv run pytest path/to/affected_module_test.py
-     uv run pytest -q
-     ```
-4. **Checkpoint Commit per Batch:**
-   ```bash
-   git commit -m "refactor: migrate batch $N$ callers of <old_symbol> to <new_symbol>"
-   ```
-5. **Repeat until all batches are migrated.**
-
----
-
-### Phase 3: Contract
-
-Goal: Safely eliminate dead code, legacy adapters, and technical debt once all consumers have migrated.
-
-1. **Verify Zero Callers Remain:**
-   Execute `trace_symbol_impact(symbol="<old_symbol>", direction="upstream")`.
-   Confirm that the upstream caller list is strictly empty:
-   ```
-   upstream_callers: []
-   ```
-2. **Remove the Deprecated Symbol:**
-   - Delete the legacy function, adapter shim, or deprecated route.
-   - Remove any temporary deprecation warning handlers or compatibility flags.
-3. **Clean Up Database / Storage (if applicable):**
-   - For database columns: Issue migration dropping the old column after backfill verification.
-   - For vector stores: Prune deprecated payload keys.
-4. **Final Verification Gate:**
-   - Run the complete project test suite:
-     ```bash
-     uv run pytest -q
-     ```
-   - Run manifest and lint checks:
-     ```bash
-     python3 scripts/test_plugin_manifest.py
-     uv run ruff check .
-     ```
-5. **Contract Checkpoint Commit:**
-   ```bash
-   git commit -m "refactor: contract <old_symbol>, remove deprecated implementation"
-   ```
-6. **Persist Refactoring Outcome in Episodic Memory:**
-   ```python
-   record_system_outcome(
-       decision="Contracted <old_symbol> in favor of <new_symbol>",
-       rationale="Completed 3-phase expand-contract refactoring across N call sites with zero downtime.",
-       category="refactor",
-   )
-   ```
-
----
-
-## Domain Patterns
-
-### 1. Database Schema Migrations
-- **Expand:** Add new column `user_id_v2` with `NULL` permitted or default value. Application dual-writes to both `user_id` and `user_id_v2`.
-- **Migrate:** Backfill historical rows from `user_id` to `user_id_v2`. Switch application reads to `user_id_v2`.
-- **Contract:** Remove dual-writing code. Drop `user_id` column.
-
-### 2. FastMCP Tool / API Route Migrations
-- **Expand:** Expose new tool `search_knowledge_and_memory` alongside deprecated `query_memory`. Deprecated tool wraps new tool internally.
-- **Migrate:** Update client agents and caller prompts to invoke `search_knowledge_and_memory`.
-- **Contract:** Remove `query_memory` definition from MCP server tool registration.
-
----
-
-## Anti-Patterns to Avoid
-
-| Anti-Pattern | Why It Fails | Correct Approach |
+| Blast Tier | Files / Callers Affected | Required Execution Strategy |
 |---|---|---|
-| **Big-Bang Rename** | Renaming across 40 files in 1 commit breaks CI, creates merge conflicts, and obscures regressions. | Expand with shim, migrate in batches of 3-5, contract cleanly. |
-| **Grep Hunting** | Ripgrep misses aliased imports, matches comments/strings, and bleeds context tokens. | Use `trace_symbol_impact(symbol, direction='upstream')`. |
-| **Premature Contraction** | Deleting the old symbol while lingering dynamic callers or tests still reference it causes runtime crashes. | Verify `upstream_callers == []` via AST graph before removing. |
-| **Unversioned Dual-Write** | Dual-writing without idempotency or reconciliation causes silent state drift. | Use immutable data structures and explicit verification assertions. |
-| **Skipping Inter-Batch Tests** | Migrating multiple batches without running tests between them makes diagnosing failure points difficult. | Run `uv run pytest -q` after every single batch commit. |
+| **Tier 1: Isolated** | `1` file, `0` external callers | Direct atomic edit via `replace_file_content` + unit test (`single_agent`). |
+| **Tier 2: Local** | `1–3` files, `1–5` callers | Coordinated inline update + targeted `pytest` run in a single commit. |
+| **Tier 3: Subsystem** | `4–10` files, `6–20` callers ($C \ge 7$) | Decompose into Task DAG (`manage_tasks`) + 3-Phase **Expand-Contract** with backwards-compatible shim. |
+| **Tier 4: Core / Schema** | `>10` files, `>20` callers, or persistent DB/Graph/Vector schema | Record ADR (`to-spec`) + 3-Phase **Expand-Contract** across batched commits + `trigger_dream_mode` community audit. |
 
----
+## 2. The 3-Phase Expand-Contract Lifecycle
 
-## Verification Checklist
+Never perform "big-bang" renames or breaking signature changes across $\ge 4$ files in a single commit. Keep CI 100% green at every step:
 
-Before declaring an expand-contract refactor complete:
-- [ ] Phase 1 (Expand): New symbol introduced with backwards-compatible shim
-- [ ] Phase 1 (Expand): Unit tests cover new symbol with 100% green pass rate
-- [ ] Phase 2 (Migrate): Callers mapped via `trace_symbol_impact`
-- [ ] Phase 2 (Migrate): Call sites migrated incrementally in batches
-- [ ] Phase 2 (Migrate): Tests pass after every batch migration
-- [ ] Phase 3 (Contract): `trace_symbol_impact` confirms 0 callers remain
-- [ ] Phase 3 (Contract): Legacy shim removed and full test suite passes 100%
-- [ ] Phase 3 (Contract): Refactoring outcome persisted via `record_system_outcome`
+| Phase | Code / Interface Refactoring | Relational DB (Postgres/ORM) | FalkorDB Graph & Qdrant Vector Substrate |
+|---|---|---|---|
+| **1. EXPAND** | Introduce `new_symbol` with frozen typed contracts. Keep `old_symbol` alive as a thin deprecation shim forwarding to `new_symbol`. Write unit tests for `new_symbol`. | Add nullable column or column with default (`ALTER TABLE ... ADD COLUMN`). Create indexes non-blockingly (`CREATE INDEX CONCURRENTLY`). Dual-write to old and new. | **FalkorDB**: Create idempotent B-Tree index (`CREATE INDEX FOR (n:Label) ON (n.prop)`), dual-write new edge/property, read with `coalesce(n.new, n.old)`. **Qdrant**: Create payload index with `wait=False` or build new Blue-Green collection. |
+| **2. MIGRATE** | Partition callers from `trace_symbol_impact` into cohesive batches of `3–5` files (leaf callers $\rightarrow$ domain modules $\rightarrow$ routes). Run `uv run pytest -q` and commit after each batch. | Backfill historical rows in bounded batches (`LIMIT 10000 FOR UPDATE SKIP LOCKED`) in a separate data migration (never mix DDL + large DML in one transaction). Switch reads to new column. | **FalkorDB**: Backfill node properties or copy edges in `LIMIT 1000` loops so the Redis single thread never blocks. **Qdrant**: Backfill vectors into new collection and atomically swap collection alias (`update_collection_aliases`). |
+| **3. CONTRACT** | Re-run `trace_symbol_impact(symbol="old_symbol", direction="upstream")` and confirm `0` callers remain. Delete legacy shim, run full `pytest` + `ruff`, and persist via `record_system_outcome(category="refactor")`. | Remove old column references in app code, deploy, then drop legacy column (`ALTER TABLE ... DROP COLUMN`) in a forward migration. | **FalkorDB**: Delete legacy edges/properties in `LIMIT 1000` batches. Run `trigger_dream_mode(project="kortext")` to recompute Louvain community modularity and verify zero orphaned symbols. |
+
+## 3. Architectural Hygiene & Anti-Patterns
+
+| Anti-Pattern | Why It Fails | Mandated Protocol Action |
+|---|---|---|
+| **Big-Bang Rename across 20+ Files** | Breaks in-flight branches, hides regressions in noisy diffs, and fails mid-migration. | Use Phase 1 shim + Phase 2 batched caller migration (`3–5` files per commit). |
+| **Premature Contraction** | Deleting `old_symbol` before checking `trace_symbol_impact` breaks dynamic/test callers. | Require `trace_symbol_impact` upstream caller count `== 0` before deleting the shim. |
+| **`NOT NULL` Column Without Default** | Triggers full table rewrite and exclusive write lock in production. | Add nullable column $\rightarrow$ batched backfill $\rightarrow$ add constraint (`NOT VALID` then `VALIDATE`). |
+| **Unbounded Cypher `MATCH (n) SET ...`** | Blocks FalkorDB/Redis event loop and spikes memory on large graphs. | Always paginate graph mutations with `WITH n LIMIT 1000`. |
+| **Editing Deployed Migration Files** | Causes irreversible checksum and schema drift across environments. | Migrations are immutable once applied; always author a new forward migration. |
+
+## 4. Deep-Module Architecture Survey (`detect_shallow_modules`)
+
+When surveying a codebase for architectural deepening opportunities (John Ousterhout's *A Philosophy of Software Design*), run the bundled blast-radius classifier (`python3 ~/.gemini/config/plugins/kortext/skills/expand-contract-refactor/scripts/check_blast_radius.py <Symbol>`) or query `SubsystemClusterer.detect_shallow_modules()` to identify shallow pass-through modules ($\ge 3$ exported symbols averaging $\le 12$ lines each) and consolidate them behind a single deep facade.

@@ -1,7 +1,6 @@
 ---
-trigger: always_on
-description: "Mandatory rule guaranteeing embedded substrate resilience, Sole Custodian access, and socket connectivity."
-globs: "**/*"
+trigger: model_decision
+description: "Activate when interacting with Qdrant, FalkorDB, Unix domain sockets, or debugging substrate connectivity."
 ---
 
 # Invariant [Substrate-Resilience-Mandate]

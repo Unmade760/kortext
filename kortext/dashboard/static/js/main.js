@@ -17,6 +17,7 @@ import * as dream from './modules/dream.js';
 Object.assign(window, {
   // State
   dashboardState: state,
+  state: state,
 
   // UI & Routing
   setTab: ui.setTab,
@@ -75,6 +76,8 @@ Object.assign(window, {
   loadJournal: journal.loadJournal,
   filterJournal: journal.filterJournal,
   filterJournalByCategory: journal.filterJournalByCategory,
+  filterJournalByTag: journal.filterJournalByTag,
+  clearJournalTagFilter: journal.clearJournalTagFilter,
   viewJournalMarkdown: journal.viewJournalMarkdown,
 
   // Retrieval Lab
@@ -90,6 +93,9 @@ Object.assign(window, {
   createNewCollection: health.createNewCollection,
   loadQuarantine: health.loadQuarantine,
   clearQuarantine: health.clearQuarantine,
+  loadContextTelemetry: health.loadContextTelemetry,
+  loadInstinctsAndInvariants: health.loadInstinctsAndInvariants,
+  promoteInstinctById: health.promoteInstinctById,
   refreshAll: health.refreshAll,
 
   // Dream Mode
@@ -99,7 +105,7 @@ Object.assign(window, {
 });
 
 // Application Initialization
-document.addEventListener('DOMContentLoaded', () => {
+function init() {
   if (window.lucide) window.lucide.createIcons();
 
   // Load health and telemetry on startup
@@ -118,4 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(() => {
     health.loadHealth();
   }, 15000);
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -7,8 +7,8 @@
     <string>ai.kortext.falkordb</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/redis-server</string>
-        <string>/Users/rb/.kortext/config/falkordb.conf</string>
+        <string>{{REDIS_BIN}}</string>
+        <string>{{HOME}}/.kortext/config/falkordb.conf</string>
         <string>--daemonize</string>
         <string>no</string>
     </array>
@@ -20,10 +20,10 @@
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/rb/.kortext/logs/falkordb_stdout.log</string>
+    <string>{{HOME}}/.kortext/logs/falkordb_stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/rb/.kortext/logs/falkordb_stderr.log</string>
+    <string>{{HOME}}/.kortext/logs/falkordb_stderr.log</string>
     <key>WorkingDirectory</key>
-    <string>/Users/rb/.kortext</string>
+    <string>{{HOME}}/.kortext</string>
 </dict>
 </plist>

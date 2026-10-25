@@ -16,7 +16,7 @@ from kortext.retrieval.discovery import discover_vector_collections
 
 def test_discover_embedded_with_sqlite(tmp_path, monkeypatch):
     """Test embedded discovery inspecting meta.json and collection storage.sqlite."""
-    qpath = tmp_path / ".cerebrum" / "qdrant"
+    qpath = tmp_path / ".kortext" / "qdrant"
     col_dir = qpath / "collection" / "test_docs"
     col_dir.mkdir(parents=True, exist_ok=True)
 
@@ -41,7 +41,7 @@ def test_discover_embedded_with_sqlite(tmp_path, monkeypatch):
     conn.close()
 
     monkeypatch.delenv("QDRANT_URL", raising=False)
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path / ".cerebrum"))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path / ".kortext"))
 
     cols = discover_vector_collections()
     assert len(cols) == 1
@@ -56,7 +56,7 @@ def test_discover_embedded_with_sqlite(tmp_path, monkeypatch):
 def test_discover_embedded_missing_meta(tmp_path, monkeypatch):
     """Test embedded discovery returns empty list when meta.json does not exist."""
     monkeypatch.delenv("QDRANT_URL", raising=False)
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path / "nonexistent"))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path / "nonexistent"))
 
     cols = discover_vector_collections()
     assert cols == []
@@ -64,7 +64,7 @@ def test_discover_embedded_missing_meta(tmp_path, monkeypatch):
 
 def test_discover_embedded_fallback_metadata_count(tmp_path, monkeypatch):
     """Test embedded discovery falls back to meta.json points_count when sqlite is absent."""
-    qpath = tmp_path / ".cerebrum" / "qdrant"
+    qpath = tmp_path / ".kortext" / "qdrant"
     qpath.mkdir(parents=True, exist_ok=True)
     meta_file = qpath / "meta.json"
     meta_file.write_text(
@@ -79,7 +79,7 @@ def test_discover_embedded_fallback_metadata_count(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.delenv("QDRANT_URL", raising=False)
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path / ".cerebrum"))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path / ".kortext"))
 
     cols = discover_vector_collections()
     assert len(cols) == 1

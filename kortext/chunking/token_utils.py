@@ -14,32 +14,140 @@ try:
 except ImportError:
     TSNode = None
 
+_CODE_SYNTAX_CHARS = frozenset("{}[]();:=<>+-*/%&|^~@#\\")
+
+
+def _is_cjk_char(ch: str) -> bool:
+    cp = ord(ch)
+    return (
+        0x4E00 <= cp <= 0x9FFF
+        or 0x3400 <= cp <= 0x4DBF
+        or 0x3040 <= cp <= 0x30FF
+        or 0xAC00 <= cp <= 0xD7AF
+    )
+
 
 def count_tokens(text: str) -> int:
-    """Accurately counts tokens via fast ~4 chars/token heuristic without network blocking."""
+    """
+    Fast token estimator calibrated for code, CJK, and prose density without network blocking.
+    - CJK characters are counted at ~1.5 tokens per character.
+    - Syntax-dense code (where >=14% of characters are programming syntax punctuation and not a raw JSON dict)
+      is estimated at ~3.4 characters per token.
+    - Standard prose is estimated at 4 characters per token.
+    """
     if not text:
         return 0
-    return max(1, len(text) // 4)
+    n = len(text)
+    sample = text[:2048]
+    s_len = len(sample)
+    cjk_sample = sum(1 for ch in sample if _is_cjk_char(ch))
+    cjk_ratio = cjk_sample / s_len if s_len else 0.0
+    if cjk_ratio >= 0.05:
+        est_cjk_chars = int(n * cjk_ratio)
+        est_non_cjk_chars = n - est_cjk_chars
+        return max(1, int(est_cjk_chars * 1.5) + max(0, est_non_cjk_chars // 4))
+    if n >= 16 and not text.lstrip().startswith("{"):
+        syntax_count = sum(1 for ch in sample if ch in _CODE_SYNTAX_CHARS)
+        if syntax_count / s_len >= 0.14:
+            return max(1, int(n / 3.4))
+    return max(1, n // 4)
 
 
-_GIT_TEMPORAL_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
+estimate_tokens = count_tokens
+
+
+def truncate_to_tokens(text: str, max_tokens: int) -> str:
+    """Truncates text to approximately max_tokens."""
+    if not text or max_tokens <= 0:
+        return ""
+    max_chars = max_tokens * 4
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
+
+_GIT_TEMPORAL_CACHE: Dict[str, tuple[float, Optional[Dict[str, str]]]] = {}
+
+
+def prefetch_git_temporal_info_batch(root_dir: str | Path) -> int:
+    """
+    Pre-populates _GIT_TEMPORAL_CACHE for a git repository in a single `git log` pass,
+    eliminating per-file subprocess spawn overhead when KORTEXT_VERBOSE_PREAMBLE=1.
+    """
+    root_path = Path(root_dir).resolve()
+    if not root_path.is_dir():
+        return 0
+    try:
+        res = subprocess.run(
+            ["git", "log", "-n", "200", "--name-only", "--format=COMMIT|%h|%as|%s"],
+            cwd=str(root_path),
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+            check=False,
+        )
+        if res.returncode != 0 or not res.stdout.strip():
+            return 0
+        populated = 0
+        current_info: Optional[Dict[str, str]] = None
+        seen_files: set[str] = set()
+        for raw_line in res.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("COMMIT|"):
+                parts = line.split("|", 3)
+                if len(parts) == 4:
+                    current_info = {
+                        "commit_hash": parts[1],
+                        "commit_date": parts[2],
+                        "commit_msg": parts[3],
+                    }
+            elif current_info is not None and line not in seen_files:
+                seen_files.add(line)
+                fp = (root_path / line).resolve()
+                if fp.is_file():
+                    try:
+                        mtime = fp.stat().st_mtime
+                        _GIT_TEMPORAL_CACHE[str(fp)] = (mtime, dict(current_info))
+                        populated += 1
+                    except OSError:
+                        continue
+        return populated
+    except Exception:
+        return 0
 
 
 def get_file_temporal_info(file_path: str) -> Optional[Dict[str, str]]:
     """
     Extracts commit hash, commit date, and commit message for a file.
     If not in a git repository or untracked, falls back to filesystem mtime.
-    Cached in-memory per file path.
+    Cached in-memory per (file_path, mtime) so modified files invalidate stale cache entries.
     """
     if not file_path:
         return None
-    if file_path in _GIT_TEMPORAL_CACHE:
-        return _GIT_TEMPORAL_CACHE[file_path]
 
     p = Path(file_path)
+    current_mtime = 0.0
+    exists = p.exists()
+    if exists:
+        try:
+            current_mtime = p.stat().st_mtime
+        except OSError:
+            current_mtime = 0.0
+
+    cached_entry = _GIT_TEMPORAL_CACHE.get(file_path)
+    if cached_entry is not None:
+        if isinstance(cached_entry, tuple) and len(cached_entry) == 2:
+            cached_mtime, cached_val = cached_entry
+            if cached_mtime == current_mtime:
+                return cached_val
+        elif isinstance(cached_entry, dict) and current_mtime == 0.0:
+            return cached_entry
+
     res_dict: Optional[Dict[str, str]] = None
 
-    if p.exists():
+    if exists:
         # 1. Try git log
         try:
             cwd_dir = str(p.parent) if p.parent.exists() else None
@@ -64,7 +172,7 @@ def get_file_temporal_info(file_path: str) -> Optional[Dict[str, str]]:
         # 2. Fallback to filesystem mtime
         if not res_dict:
             try:
-                mtime = os.path.getmtime(file_path)
+                mtime = current_mtime or os.path.getmtime(file_path)
                 mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
                 res_dict = {
                     "commit_hash": "local",
@@ -81,7 +189,7 @@ def get_file_temporal_info(file_path: str) -> Optional[Dict[str, str]]:
             "commit_msg": "Working tree modification",
         }
 
-    _GIT_TEMPORAL_CACHE[file_path] = res_dict
+    _GIT_TEMPORAL_CACHE[file_path] = (current_mtime, res_dict)
     return res_dict
 
 

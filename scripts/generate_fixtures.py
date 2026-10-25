@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Generate benchmark fixtures for Cortex test suite:
+Generate benchmark fixtures for Kortext test suite:
 1. tests/fixtures/hotpotqa_sample.json (50 items)
 2. tests/fixtures/longmemeval_sample.json (50 items across 5 abilities)
-3. tests/fixtures/cerebrum_golden_set.json (20 real codebase questions)
+3. tests/fixtures/kortext_golden_set.json (20 real codebase questions)
 """
 
 import json
 from pathlib import Path
 
-FIXTURES_DIR = Path("/Users/rb/cortex/tests/fixtures")
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------
@@ -1488,9 +1488,9 @@ longmemeval_data = [
 ]
 
 # ---------------------------------------------------------
-# 3. Cerebrum Golden Set (20 real codebase questions)
+# 3. Kortext Golden Set (20 real codebase questions)
 # ---------------------------------------------------------
-cerebrum_golden_data = [
+kortext_golden_data = [
     {
         "id": "cg_001",
         "query": "Where is RetrievalEngine defined and what signals does it use?",
@@ -1508,7 +1508,7 @@ cerebrum_golden_data = [
         "gold_passages": [
             "SymbolSeekEngine",
             "extract_symbol_candidates",
-            "cerebrum_symbols",
+            "kortext_symbols",
             "STOP_WORDS"
         ],
         "notes": "Tests deterministic symbol seek mechanism and candidate extraction"
@@ -1520,7 +1520,7 @@ cerebrum_golden_data = [
             "HippoRAGPPR",
             "retrieve_associative_subgraph",
             "damping",
-            "cerebrum_symbols"
+            "kortext_symbols"
         ],
         "notes": "Tests HippoRAG PPR power iteration and graph traversal"
     },
@@ -1553,7 +1553,7 @@ cerebrum_golden_data = [
             "TaskDAGTracker",
             "get_ready_tasks",
             "update_task_status",
-            "cerebrum_tasks"
+            "kortext_tasks"
         ],
         "notes": "Tests Task DAG dependency resolution and state retention"
     },
@@ -1592,7 +1592,7 @@ cerebrum_golden_data = [
     },
     {
         "id": "cg_010",
-        "query": "What occurs during Cognitive Dream Mode consolidation in cerebrum.dream?",
+        "query": "What occurs during Cognitive Dream Mode consolidation in kortext.dream?",
         "gold_passages": [
             "DreamConsolidator",
             "trigger_dream_mode",
@@ -1614,10 +1614,10 @@ cerebrum_golden_data = [
     },
     {
         "id": "cg_012",
-        "query": "What substrate services are verified by HealthMonitor in check_cerebrum_health?",
+        "query": "What substrate services are verified in check_kortext_health?",
         "gold_passages": [
-            "HealthMonitor",
-            "check_cerebrum_health",
+            "audit_kortext_health",
+            "check_kortext_health",
             "check_falkordb",
             "check_qdrant"
         ],
@@ -1625,9 +1625,9 @@ cerebrum_golden_data = [
     },
     {
         "id": "cg_013",
-        "query": "How does CerebrumServer register and dispatch FastMCP tools?",
+        "query": "How does Kortext server register and dispatch FastMCP tools?",
         "gold_passages": [
-            "CerebrumServer",
+            "check_kortext_health",
             "search_knowledge_and_memory",
             "seek_symbol",
             "manage_tasks"
@@ -1691,7 +1691,7 @@ cerebrum_golden_data = [
     },
     {
         "id": "cg_019",
-        "query": "What system invariants are validated by InvariantChecker in cerebrum.invariants?",
+        "query": "What system invariants are validated by InvariantChecker in kortext.invariants?",
         "gold_passages": [
             "InvariantChecker",
             "check_graph_integrity",
@@ -1706,7 +1706,7 @@ cerebrum_golden_data = [
         "gold_passages": [
             "get_shared_falkordb_client",
             "unix_socket_path",
-            "cerebrum-falkordb.sock",
+            "falkordb.sock",
             "fallback_tcp_port"
         ],
         "notes": "Tests FalkorDB client socket connection and TCP failover resilience"
@@ -1716,7 +1716,7 @@ cerebrum_golden_data = [
 def main():
     p_hotpot = FIXTURES_DIR / "hotpotqa_sample.json"
     p_longmem = FIXTURES_DIR / "longmemeval_sample.json"
-    p_golden = FIXTURES_DIR / "cerebrum_golden_set.json"
+    p_golden = FIXTURES_DIR / "kortext_golden_set.json"
 
     print(f"Writing {len(hotpotqa_data)} items to {p_hotpot}...")
     with open(p_hotpot, "w", encoding="utf-8") as f:
@@ -1728,9 +1728,9 @@ def main():
         json.dump(longmemeval_data, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
-    print(f"Writing {len(cerebrum_golden_data)} items to {p_golden}...")
+    print(f"Writing {len(kortext_golden_data)} items to {p_golden}...")
     with open(p_golden, "w", encoding="utf-8") as f:
-        json.dump(cerebrum_golden_data, f, indent=2, ensure_ascii=False)
+        json.dump(kortext_golden_data, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     print("All fixtures generated successfully!")

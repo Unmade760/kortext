@@ -1,47 +1,22 @@
 #!/usr/bin/env python3
 """
-Kortext PostToolUse Hook: Safe spool-based cache invalidation.
-Lifecycle hooks NEVER instantiate QdrantClient or write directly to SQLite
-to prevent exclusive OS lock crashes (RocksDB LOCK_EX).
+Antigravity PostToolUse Hook (thin wrapper delegating to kortext.hooks.runner).
 """
-import json
-import os
 import sys
-import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import emit_hook_response, get_hook_payload
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-FILE_MODIFYING_TOOLS = {
-    "write_to_file",
-    "replace_file_content",
-    "multi_replace_file_content",
-}
+from kortext.hooks.context import HookContext
+from kortext.hooks.runner import emit_response, run_hook
 
 
-def main():
-    payload = get_hook_payload()
-    tool_call = payload.get("toolCall", {})
-    name = tool_call.get("name", "")
-    args = tool_call.get("args", {}) or {}
-
-    if name in FILE_MODIFYING_TOOLS:
-        target_file = args.get("TargetFile")
-        if target_file and os.path.isfile(target_file):
-            spool_base = os.environ.get(
-                "KORTEXT_HOME",
-                os.environ.get("CEREBRUM_HOME", str(Path.home() / ".cerebrum")),
-            )
-            spool_dir = Path(spool_base) / "spool" / "invalidation"
-            try:
-                spool_dir.mkdir(parents=True, exist_ok=True)
-                event_file = spool_dir / f"event_{os.getpid()}_{int(time.time() * 1000)}.json"
-                event_file.write_text(json.dumps({"action": "invalidate", "path": target_file}))
-            except Exception:
-                pass
-
-    emit_hook_response({})
+def main() -> None:
+    ctx = HookContext.from_stdin(event="post_tool")
+    res = run_hook("post_tool", ctx)
+    emit_response(event="post_tool", decision=res.decision, reason=res.reason, data=res.data)
 
 
 if __name__ == "__main__":

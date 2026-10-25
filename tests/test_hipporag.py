@@ -33,7 +33,7 @@ class TestHippoRAGPPR:
         results = ppr.retrieve_associative_subgraph(
             seed_entities=["SessionManager"],
             top_k=5,
-            graph_name="cerebrum"
+            graph_name="kortext"
         )
 
         assert len(results) > 0
@@ -44,8 +44,8 @@ class TestHippoRAGPPR:
         mock_falkor.query.assert_called()
         calls = mock_falkor.query.call_args_list
         assert len(calls) == 2
-        assert calls[0][0][0] == "cerebrum"
-        assert calls[1][0][0] == "cerebrum_symbols"
+        assert calls[0][0][0] == "kortext"
+        assert calls[1][0][0] == "kortext_symbols"
         assert "$seeds" in calls[0][0][1]
         assert "$seeds" in calls[1][0][1]
         assert calls[0][0][2] == {"seeds": ["SessionManager"]}
@@ -96,15 +96,15 @@ class TestHippoRAGPPR:
         total_score = sum(r[1] for r in res)
         assert total_score > 0.0
 
-    def test_hippo_ppr_merges_cerebrum_and_symbols_graphs(self):
+    def test_hippo_ppr_merges_episodic_and_symbols_graphs(self):
         client = MagicMock()
         def mock_query(graph, cypher, params=None):
-            if graph == "cerebrum":
+            if graph == "kortext":
                 return [
                     ["source", "target", "weight"],
                     [["SeedFunc", "EpisodicConcept", 0.8]]
                 ]
-            elif graph == "cerebrum_symbols":
+            elif graph == "kortext_symbols":
                 return [
                     ["source", "target", "weight"],
                     [["SeedFunc", "CalleeSymbol", 1.0]]
@@ -115,7 +115,7 @@ class TestHippoRAGPPR:
         ppr = HippoRAGPPR()
         ppr.client = client
 
-        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="cerebrum")
+        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="kortext")
         nodes = {r[0] for r in res}
         assert "SeedFunc" in nodes
         assert "EpisodicConcept" in nodes
@@ -124,7 +124,7 @@ class TestHippoRAGPPR:
     def test_hippo_ppr_graceful_fallback_when_symbols_fails(self):
         client = MagicMock()
         def mock_query(graph, cypher, params=None):
-            if graph == "cerebrum":
+            if graph == "kortext":
                 return [
                     ["source", "target", "weight"],
                     [["SeedFunc", "EpisodicConcept", 0.8]]
@@ -135,26 +135,26 @@ class TestHippoRAGPPR:
         ppr = HippoRAGPPR()
         ppr.client = client
 
-        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="cerebrum")
+        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="kortext")
         nodes = {r[0] for r in res}
         assert "SeedFunc" in nodes
         assert "EpisodicConcept" in nodes
 
-    def test_hippo_ppr_graceful_fallback_when_cerebrum_fails(self):
+    def test_hippo_ppr_graceful_fallback_when_episodic_fails(self):
         client = MagicMock()
         def mock_query(graph, cypher, params=None):
-            if graph == "cerebrum_symbols":
+            if graph == "kortext_symbols":
                 return [
                     ["source", "target", "weight"],
                     [["SeedFunc", "CalleeSymbol", 1.0]]
                 ]
-            raise RuntimeError("Cerebrum graph offline")
+            raise RuntimeError("Episodic graph offline")
 
         client.query.side_effect = mock_query
         ppr = HippoRAGPPR()
         ppr.client = client
 
-        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="cerebrum")
+        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="kortext")
         nodes = {r[0] for r in res}
         assert "SeedFunc" in nodes
         assert "CalleeSymbol" in nodes
@@ -168,9 +168,39 @@ class TestHippoRAGPPR:
         ppr = HippoRAGPPR()
         ppr.client = client
 
-        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="cerebrum", symbols_graph=None)
+        res = ppr.retrieve_associative_subgraph(["SeedFunc"], graph_name="kortext", symbols_graph=None)
         client.query.assert_called_once()
-        assert client.query.call_args[0][0] == "cerebrum"
+        assert client.query.call_args[0][0] == "kortext"
         assert len(res) == 2
+
+    def test_hippo_ppr_custom_graph_and_file_path_nodes(self):
+        client = MagicMock()
+        def mock_query(graph, cypher, params=None):
+            if graph == "custom_app":
+                return [
+                    ["source", "target", "weight"],
+                    [["MyHandler", "/app/src/handler.py", 1.0]],
+                ]
+            elif graph == "custom_app_symbols":
+                return [
+                    ["source", "target", "weight"],
+                    [["/app/src/handler.py", "HelperFunc", 0.95]],
+                ]
+            return [[], []]
+
+        client.query.side_effect = mock_query
+        ppr = HippoRAGPPR()
+        ppr.client = client
+
+        res = ppr.retrieve_associative_subgraph(
+            ["MyHandler"],
+            graph_name="custom_app",
+            symbols_graph="custom_app_symbols",
+        )
+        nodes = {r[0] for r in res}
+        assert "MyHandler" in nodes
+        assert "/app/src/handler.py" in nodes
+        assert "HelperFunc" in nodes
+        assert client.query.call_count == 2
 
 

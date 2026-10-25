@@ -196,7 +196,7 @@ def test_autocomplete_symbols_parameterized():
         assert mock_client.query.call_count == 2
         # Symbol query check
         s_args, s_kwargs = mock_client.query.call_args_list[0]
-        assert s_args[0] in ("kortext_symbols", "cerebrum_symbols")
+        assert s_args[0] == "kortext_symbols"
         assert "$q_clean" in s_args[1]
         assert "$limit" in s_args[1]
         assert "TestSymbol" not in s_args[1]
@@ -205,7 +205,7 @@ def test_autocomplete_symbols_parameterized():
 
         # File query check
         f_args, f_kwargs = mock_client.query.call_args_list[1]
-        assert f_args[0] in ("kortext_symbols", "cerebrum_symbols")
+        assert f_args[0] == "kortext_symbols"
         assert "$q_clean" in f_args[1]
         assert "$rem" in f_args[1]
         assert "TestSymbol" not in f_args[1]
@@ -371,10 +371,13 @@ def test_action_create_collection_meta_json_safe(tmp_path, monkeypatch):
     meta_path = q_dir / "meta.json"
     meta_path.write_text(json.dumps({"collections": {}, "aliases": {}}), encoding="utf-8")
 
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path))
     monkeypatch.delenv("QDRANT_URL", raising=False)
 
-    with patch("qdrant_client.QdrantClient") as mock_qdrant:
+    with (
+        patch("kortext.dashboard.routes.actions._check_remote_qdrant", return_value=False),
+        patch("qdrant_client.QdrantClient") as mock_qdrant,
+    ):
         resp = client.post("/api/collections", json={"name": "safe_vector_col"})
         assert resp.status_code == 200
         data = resp.json()
@@ -393,11 +396,12 @@ def test_action_create_collection_meta_json_safe(tmp_path, monkeypatch):
 def test_action_create_collection_sole_custodian_safe(tmp_path, monkeypatch):
     """Verify when sole custodian daemon is running, meta.json is safely provisioned."""
     import json
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path))
     monkeypatch.delenv("QDRANT_URL", raising=False)
 
     with (
         patch("kortext.dashboard.routes.actions._is_sole_custodian_running", return_value=True),
+        patch("kortext.dashboard.routes.actions._check_remote_qdrant", return_value=False),
         patch("qdrant_client.QdrantClient") as mock_qdrant,
     ):
         resp = client.post("/api/collections", json={"name": "custodian_col"})
@@ -413,7 +417,7 @@ def test_action_create_collection_sole_custodian_safe(tmp_path, monkeypatch):
 
 def test_action_create_collection_fallback_locked_error(tmp_path, monkeypatch):
     """Verify fallback to EmbeddedQdrantEngine catches sqlite locked error cleanly."""
-    monkeypatch.setenv("CEREBRUM_HOME", str(tmp_path))
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path))
     monkeypatch.delenv("QDRANT_URL", raising=False)
 
     with (

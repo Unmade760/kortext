@@ -132,8 +132,9 @@ export async function loadGraph() {
   }
 
   const clean = document.getElementById('toggle-hide-mentions') ? document.getElementById('toggle-hide-mentions').checked : true;
+  const activeProj = (!isSymbols && state.activeProject && state.activeProject !== 'all') ? state.activeProject : null;
   try {
-    const data = await api.getGraph(selectedDb, clean);
+    const data = await api.getGraph(selectedDb, clean, activeProj);
     if (data.status !== 'ok') {
       if (statsEl) statsEl.textContent = 'Error: ' + data.message;
       return;
@@ -223,27 +224,67 @@ export function applyGraphFilters() {
   }
 }
 
+const VIS_GROUPS_SPEC = {
+  useDefaultGroups: false,
+  symbol: {
+    color: { background: '#0a0f1d', border: '#10b981', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#10b981' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  file: {
+    color: { background: '#0a0f1d', border: '#38bdf8', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#38bdf8' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  document: {
+    color: { background: '#0a0f1d', border: '#06b6d4', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#06b6d4' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  concept: {
+    color: { background: '#0a0f1d', border: '#06b6d4', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#06b6d4' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  subsystem: {
+    color: { background: '#0a0f1d', border: '#a855f7', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#a855f7' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  project: {
+    color: { background: '#0a0f1d', border: '#6366f1', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#6366f1' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  episodic: {
+    color: { background: '#0a0f1d', border: '#f59e0b', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#f59e0b' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  decision: {
+    color: { background: '#0a0f1d', border: '#f59e0b', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#f59e0b' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+  task: {
+    color: { background: '#0a0f1d', border: '#6366f1', highlight: { background: '#1e293b', border: '#ffffff' }, hover: { background: '#1e293b', border: '#6366f1' } },
+    font: { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', size: 12, bold: true },
+  },
+};
+
 export function renderGraph(nodesData, edgesData) {
   const container = document.getElementById('network-graph');
   if (!container) return;
 
   const formattedNodes = nodesData.map(n => {
-    let icon = '●';
-    let bg = '#0f172a', border = '#38bdf8', hiBg = '#1e293b', hiBorder = '#7dd3fc', fontColor = '#f8fafc';
+    let icon = '📁';
+    let border = '#38bdf8', hiBorder = '#7dd3fc';
     let shadowColor = 'rgba(56, 189, 248, 0.25)';
 
     if (n.group === 'episodic' || n.group === 'decision') {
-      icon = '💡'; bg = '#2a1406'; border = '#f97316'; hiBg = '#3d1d09'; hiBorder = '#fb923c'; fontColor = '#fed7aa'; shadowColor = 'rgba(249, 115, 22, 0.35)';
+      icon = '💡'; border = '#f59e0b'; hiBorder = '#fbbf24'; shadowColor = 'rgba(245, 158, 11, 0.25)';
     } else if (n.group === 'task') {
-      icon = '📋'; bg = '#06202a'; border = '#0284c7'; hiBg = '#075985'; hiBorder = '#38bdf8'; fontColor = '#e0f2fe'; shadowColor = 'rgba(2, 132, 199, 0.35)';
+      icon = '📋'; border = '#6366f1'; hiBorder = '#818cf8'; shadowColor = 'rgba(99, 102, 241, 0.25)';
     } else if (n.group === 'project') {
-      icon = '📁'; bg = '#1e1b4b'; border = '#6366f1'; hiBg = '#312e81'; hiBorder = '#818cf8'; fontColor = '#e0e7ff'; shadowColor = 'rgba(99, 102, 241, 0.35)';
+      icon = '📦'; border = '#6366f1'; hiBorder = '#818cf8'; shadowColor = 'rgba(99, 102, 241, 0.25)';
     } else if (n.group === 'symbol') {
-      icon = '⚡'; bg = '#022c22'; border = '#10b981'; hiBg = '#064e3b'; hiBorder = '#34d399'; fontColor = '#a7f3d0'; shadowColor = 'rgba(16, 185, 129, 0.35)';
-    } else if (n.group === 'document') {
-      icon = '📄'; bg = '#083344'; border = '#06b6d4'; hiBg = '#164e63'; hiBorder = '#22d3ee'; fontColor = '#cffafe'; shadowColor = 'rgba(6, 182, 212, 0.35)';
+      icon = '⚡'; border = '#10b981'; hiBorder = '#34d399'; shadowColor = 'rgba(16, 185, 129, 0.25)';
+    } else if (n.group === 'document' || n.group === 'concept') {
+      icon = '📄'; border = '#06b6d4'; hiBorder = '#22d3ee'; shadowColor = 'rgba(6, 182, 212, 0.25)';
     } else if (n.group === 'subsystem') {
-      icon = '🧩'; bg = '#2e1065'; border = '#a855f7'; hiBg = '#3b0764'; hiBorder = '#c084fc'; fontColor = '#f3e8ff'; shadowColor = 'rgba(168, 85, 247, 0.35)';
+      icon = '🧩'; border = '#a855f7'; hiBorder = '#c084fc'; shadowColor = 'rgba(168, 85, 247, 0.25)';
     }
 
     const labelText = n.label || n.id;
@@ -257,14 +298,24 @@ export function renderGraph(nodesData, edgesData) {
       cluster_id: n.cluster_id || 'general',
       cluster_name: n.cluster_name || 'General',
       degree: n.degree || 0,
-      color: { background: bg, border, highlight: { background: hiBg, border: hiBorder } },
-      font: { color: fontColor, face: 'ui-monospace, monospace', size: 11, bold: true },
+      color: {
+        background: '#0a0f1d',
+        border: border,
+        highlight: { background: '#1e293b', border: '#ffffff' },
+        hover: { background: '#1e293b', border: border },
+      },
+      font: {
+        color: '#ffffff',
+        face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        size: 12,
+        bold: true,
+      },
       shape: 'box',
       shapeProperties: { borderRadius: 6 },
       title: createVisTooltip(n.title || `<b>${escapeHtml(n.label || n.id)}</b><br/><span style="color:#94a3b8">Type: ${escapeHtml(n.group || 'entity')}</span>`),
-      margin: 8,
-      borderWidth: 1.6,
-      borderWidthSelected: 2.6,
+      margin: 10,
+      borderWidth: 2,
+      borderWidthSelected: 2.5,
       shadow: { enabled: true, color: shadowColor, size: 12, x: 0, y: 3 },
     };
   });
@@ -276,6 +327,7 @@ export function renderGraph(nodesData, edgesData) {
   let options;
   if (state.graph.currentLayoutMode === 'hierarchical-lr') {
     options = {
+      groups: VIS_GROUPS_SPEC,
       layout: {
         hierarchical: {
           enabled: true,
@@ -297,6 +349,7 @@ export function renderGraph(nodesData, edgesData) {
     };
   } else if (state.graph.currentLayoutMode === 'hierarchical-ud') {
     options = {
+      groups: VIS_GROUPS_SPEC,
       layout: {
         hierarchical: {
           enabled: true,
@@ -318,6 +371,7 @@ export function renderGraph(nodesData, edgesData) {
     };
   } else {
     options = {
+      groups: VIS_GROUPS_SPEC,
       physics: {
         solver: 'barnesHut',
         barnesHut: {
@@ -334,6 +388,9 @@ export function renderGraph(nodesData, edgesData) {
     };
   }
 
+  if (state.graph.network && typeof state.graph.network.destroy === 'function') {
+    state.graph.network.destroy();
+  }
   state.graph.network = new vis.Network(container, { nodes: state.graph.nodesDataSet, edges: state.graph.edgesDataSet }, options);
 
   state.graph.network.on('stabilizationIterationsDone', () => {
@@ -427,8 +484,8 @@ export function clusterAllModules() {
           );
           clusterOptions.shape = 'box';
           clusterOptions.margin = 12;
-          clusterOptions.color = { background: '#1e1b4b', border: '#818cf8', highlight: { background: '#312e81', border: '#c7d2fe' } };
-          clusterOptions.font = { color: '#e0e7ff', face: 'ui-monospace, monospace', size: 12, bold: true, multi: true };
+          clusterOptions.color = { background: '#1e1b4b', border: '#818cf8', highlight: { background: '#312e81', border: '#ffffff' }, hover: { background: '#312e81', border: '#c7d2fe' } };
+          clusterOptions.font = { color: '#ffffff', face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace', size: 12, bold: true, multi: true };
           clusterOptions.borderWidth = 2.5;
           clusterOptions.shadow = { enabled: true, color: 'rgba(129, 140, 248, 0.45)', size: 18 };
           return clusterOptions;
@@ -588,6 +645,7 @@ export function focusNode(nodeId) {
   const nodeUpdates = state.graph.nodesDataSet.get().map(n => ({
     id: n.id,
     opacity: connectedSet.has(n.id) ? 1.0 : 0.12,
+    color: n.color,
   }));
   state.graph.nodesDataSet.update(nodeUpdates);
 
@@ -607,7 +665,7 @@ export function resetGraphFocus() {
   const input = document.getElementById('graph-search');
   if (input) input.value = '';
   if (state.graph.nodesDataSet && state.graph.edgesDataSet) {
-    state.graph.nodesDataSet.update(state.graph.nodesDataSet.get().map(n => ({ id: n.id, opacity: 1.0 })));
+    state.graph.nodesDataSet.update(state.graph.nodesDataSet.get().map(n => ({ id: n.id, opacity: 1.0, color: n.color })));
     state.graph.edgesDataSet.update(state.graph.edgesDataSet.get().map(e => ({ id: e.id, color: e.originalColor || e.color, width: e.originalWidth || 1.8 })));
   }
 }

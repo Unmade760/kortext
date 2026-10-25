@@ -1,5 +1,5 @@
 """
-Common utilities for Cerebrum Antigravity Lifecycle Hooks.
+Common utilities for Kortext Antigravity Lifecycle Hooks.
 Provides non-blocking socket checks, JSON payload parsing, transcript analysis, and response formatting.
 """
 
@@ -16,10 +16,9 @@ from typing import Any, Dict, List, Optional, Tuple
 KORTEXT_ROOT = Path(
     os.environ.get(
         "KORTEXT_ROOT",
-        os.environ.get("CEREBRUM_ROOT", str(Path(__file__).resolve().parent.parent.parent)),
+        str(Path(__file__).resolve().parent.parent.parent),
     )
 )
-CEREBRUM_ROOT = KORTEXT_ROOT
 
 
 def get_hook_payload() -> Dict[str, Any]:

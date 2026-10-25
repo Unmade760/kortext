@@ -7,34 +7,69 @@ stale vectors when files are modified or deleted.
 import hashlib
 import json
 import os
+from pathlib import Path
 import sqlite3
 import struct
 import time
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from kortext._home import KORTEXT_HOME, get_kortext_home
 
-from kortext._home import KORTEXT_HOME
-
-DEFAULT_CACHE_DIR = KORTEXT_HOME
+DEFAULT_CACHE_DIR = get_kortext_home()
 DEFAULT_CACHE_FILE = DEFAULT_CACHE_DIR / "index_cache.db"
-CACHE_DB_PATH = Path(os.getenv("KORTEXT_CACHE_DB", os.getenv("CEREBRUM_CACHE_DB", str(DEFAULT_CACHE_FILE))))
+CACHE_DB_PATH = Path(os.getenv("KORTEXT_CACHE_DB", os.getenv("CACHE_DB", str(DEFAULT_CACHE_FILE)))).expanduser().resolve()
+
+
+class _ClosingConnection:
+    """
+    Wraps a sqlite3.Connection so `with self._get_connection() as conn:` both
+    manages the SQLite transaction AND deterministically closes the underlying
+    OS file handle on context exit, while also supporting direct `conn.close()`.
+    """
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def __enter__(self) -> Any:
+        self._conn.__enter__()
+        return self._conn
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+        try:
+            return bool(self._conn.__exit__(exc_type, exc_val, exc_tb))
+        finally:
+            self._conn.close()
+
+    def close(self) -> None:
+        self._conn.close()
 
 
 class IngestCache:
     """Manages file hashes and point IDs for incremental indexing."""
 
     def __init__(self, db_path: Path = CACHE_DB_PATH):
-        self.db_path = db_path
+        self.db_path = Path(db_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._write_ops = 0
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    def _get_connection(self) -> Any:
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=30000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        return conn
+        return _ClosingConnection(conn)
+
+    def checkpoint_wal(self) -> None:
+        """Executes a passive/truncate WAL checkpoint to prevent unbounded .db-wal bloat."""
+        try:
+            with self._get_connection() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        except Exception:
+            pass
 
     def _init_db(self):
         with self._get_connection() as conn:
@@ -160,6 +195,9 @@ class IngestCache:
                 (resolved, collection, mtime, sha256, json.dumps(point_ids), now),
             )
             conn.commit()
+        self._write_ops += 1
+        if self._write_ops % 200 == 0:
+            self.checkpoint_wal()
 
     def remove_file(self, file_path: str, collection: str) -> List[str]:
         """Remove a file from the cache and return its old point IDs for deletion."""
@@ -218,6 +256,18 @@ class IngestCache:
             conn.commit()
         return purged
 
+    def clear_collection(self, collection: str) -> int:
+        """Removes all cached file entries for a given collection and returns deleted row count."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM file_cache WHERE collection = ?",
+                (collection,),
+            )
+            conn.commit()
+            count = int(cursor.rowcount or 0)
+        self.checkpoint_wal()
+        return count
+
 
 class ChunkEmbeddingCache:
     """
@@ -227,16 +277,25 @@ class ChunkEmbeddingCache:
     """
 
     def __init__(self, db_path: Path = CACHE_DB_PATH):
-        self.db_path = db_path
+        self.db_path = Path(db_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._write_ops = 0
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    def _get_connection(self) -> Any:
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=30000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        return conn
+        return _ClosingConnection(conn)
+
+    def checkpoint_wal(self) -> None:
+        """Executes a WAL checkpoint to truncate .db-wal after batch writes."""
+        try:
+            with self._get_connection() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        except Exception:
+            pass
 
     def _init_db(self):
         with self._get_connection() as conn:
@@ -261,8 +320,8 @@ class ChunkEmbeddingCache:
 
     @staticmethod
     def compute_chunk_sha(text: str) -> str:
-        """Computes SHA-256 hex digest of normalized chunk text."""
-        return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+        """Computes SHA-256 hex digest of raw chunk text preserving significant leading indentation."""
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def get_embedding(self, text: str, model_name: str) -> Optional[List[float]]:
         """Look up embedding for a single text."""
@@ -355,6 +414,9 @@ class ChunkEmbeddingCache:
                 records,
             )
             conn.commit()
+        self._write_ops += 1
+        if self._write_ops % 50 == 0:
+            self.checkpoint_wal()
 
     def get_stats(self) -> Dict[str, Any]:
         """Returns cache stats."""
@@ -375,6 +437,5 @@ class ChunkEmbeddingCache:
             count = int(row[0] or 0)
             conn.execute("DELETE FROM chunk_embedding_cache")
             conn.commit()
-            return count
-
-
+        self.checkpoint_wal()
+        return count

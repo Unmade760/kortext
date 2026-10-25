@@ -34,6 +34,8 @@ def compute_weibull_retention(
     floor: float = DEFAULT_FLOOR,
     *,
     age_hours: Optional[float] = None,
+    half_life_hours: Optional[float] = None,
+    shape_parameter: Optional[float] = None,
     strength: Optional[float] = None,
     delta_t: Optional[float] = None,
     k: Optional[float] = None,
@@ -55,6 +57,8 @@ def compute_weibull_retention(
         beta: Stretched exponential shape parameter (default: 0.65).
         floor: Minimum retention probability (biological floor, default: 0.05).
         age_hours: Optional keyword alias for delta_hours.
+        half_life_hours: Optional keyword alias for lambda_h.
+        shape_parameter: Optional keyword alias for beta.
         strength: Initial memory strength [0.0-1.0] (default: 1.0).
         delta_t: Elapsed time in seconds or hours matching the scale parameter (lam).
         k: Optional alias for shape parameter (beta).
@@ -65,6 +69,10 @@ def compute_weibull_retention(
     """
     if age_hours is not None:
         delta_hours = age_hours
+    if half_life_hours is not None:
+        lambda_h = half_life_hours
+    if shape_parameter is not None:
+        beta = shape_parameter
 
     eff_delta = delta_t if delta_t is not None else delta_hours
 
@@ -152,7 +160,7 @@ def compute_age_hours(
             else:
                 return max(0.0, val)
         except ValueError:
-            pass
+            logger.debug("Suppressed non-fatal exception")
 
         # Try ISO parsing
         try:

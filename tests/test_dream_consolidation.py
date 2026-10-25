@@ -75,14 +75,12 @@ class TestDreamConsolidation:
         assert any("[DreamEngine]" in record.message for record in caplog.records)
         assert any("Dream Report persisted to" in record.message for record in caplog.records)
 
-    def test_cerebrum_dream_engine_deprecation_warning(self):
-        """Verify that instantiating legacy CerebrumDreamEngine emits DeprecationWarning."""
-        from kortext.dream import CerebrumDreamEngine, KortextDreamEngine
+    def test_kortext_dream_engine_alias(self):
+        """Verify that KortextDreamEngine is an alias for DreamEngine."""
+        from kortext.dream import KortextDreamEngine
 
-        with pytest.warns(DeprecationWarning, match="CerebrumDreamEngine is deprecated"):
-            engine = CerebrumDreamEngine()
+        engine = KortextDreamEngine()
         assert isinstance(engine, DreamEngine)
-        assert isinstance(engine, KortextDreamEngine)
 
     def test_distill_skill_creates_skill_markdown_with_yaml_frontmatter(self, dream_engine, tmp_path):
         """Verifies distill_skill generates SKILL.md with valid YAML frontmatter in workspace .agents/skills."""
@@ -450,7 +448,7 @@ class TestDreamConsolidation:
                     "drifted": [
                         {
                             "symbol_name": "embedded_qdrant_client",
-                            "file_path": "/Users/rb/cortex/legacy_client.py",
+                            "file_path": "/workspace/legacy_client.py",
                             "rule": "Never instantiate QdrantClient directly in embedded mode",
                         }
                     ],
@@ -713,6 +711,79 @@ class TestDreamConsolidation:
         # Markdown body
         extracted_body = parts[2].strip()
         assert extracted_body == body_markdown.strip()
+
+    def test_surface_potential_contradictions_staged_for_agent_review(self, dream_engine):
+        """Verifies surface_potential_contradictions detects conflicting active facts on same subject/relation."""
+        import uuid
+        test_db = f"test_dream_contra_{uuid.uuid4().hex[:6]}"
+        dream_engine.episodic_db = test_db
+
+        try:
+            # Seed 2 facts with same subject, relation, and object but conflicting facts
+            dream_engine._query(
+                test_db,
+                "MERGE (s:Entity {name: 'QdrantService'}) MERGE (t:Entity {name: 'NetworkPort'}) "
+                "CREATE (s)-[r1:RELATES_TO {id: 'fact_port_6333', relation: 'RUNS_ON_PORT', fact: 'Port is 6333'}]->(t) "
+                "CREATE (s)-[r2:RELATES_TO {id: 'fact_port_6334', relation: 'RUNS_ON_PORT', fact: 'Port is 6334'}]->(t)",
+            )
+
+            contradictions = dream_engine.surface_potential_contradictions(project="kortext")
+            assert len(contradictions) >= 1
+            contra = contradictions[0]
+            assert contra["subject"] == "QdrantService"
+            assert contra["object"] == "NetworkPort"
+            assert contra["relation"] == "RUNS_ON_PORT"
+            assert "6333" in contra["fact_a"] or "6333" in contra["fact_b"]
+            assert "6334" in contra["fact_a"] or "6334" in contra["fact_b"]
+        finally:
+            try:
+                dream_engine._get_client().execute_command("GRAPH.DELETE", test_db)
+            except Exception:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_dream_cycle_stages_proposals_for_agent_review(self, dream_engine, monkeypatch, tmp_path):
+        """Verifies run_dream_cycle surfaces potential contradictions and stages them in staged_proposals."""
+        import uuid
+        test_db = f"test_dream_staged_{uuid.uuid4().hex[:6]}"
+        dream_engine.episodic_db = test_db
+
+        monkeypatch.setattr(dream_engine, "sweep_weibull_decay", lambda dry_run=False: 0)
+        async def mock_cluster(*args, **kwargs):
+            return []
+        async def mock_induce(*args, **kwargs):
+            return {"active": [], "drift_audit": {"drifted_count": 0, "total_grounded": 0, "verified_count": 0, "orphaned_count": 0, "drifted": []}, "inducted": []}
+
+        monkeypatch.setattr(dream_engine, "cluster_subsystems", mock_cluster)
+        monkeypatch.setattr(dream_engine, "induce_invariants", mock_induce)
+
+        try:
+            dream_engine._query(
+                test_db,
+                "MERGE (s:Entity {name: 'Model'}) MERGE (t:Entity {name: 'Dimension'}) "
+                "CREATE (s)-[r1:RELATES_TO {id: 'f_dim_384', relation: 'EMBED_DIM', fact: 'Dimension 384'}]->(t) "
+                "CREATE (s)-[r2:RELATES_TO {id: 'f_dim_768', relation: 'EMBED_DIM', fact: 'Dimension 768'}]->(t)",
+            )
+
+            res = await dream_engine.run_dream_cycle(
+                project="test_stage",
+                dry_run=False,
+                workspace_root=str(tmp_path),
+            )
+
+            assert res["status"] == "ok"
+            assert "staged_proposals" in res
+            proposals = res["staged_proposals"]
+            assert "contradictions" in proposals
+            assert len(proposals["contradictions"]) >= 1
+            # Verify markdown report includes Section 7 for staged proposals
+            assert "## 7. Staged Proposals for Agent Review & Reflection" in res["markdown_report"]
+        finally:
+            try:
+                dream_engine._get_client().execute_command("GRAPH.DELETE", test_db)
+            except Exception:
+                pass
+
 
 
 

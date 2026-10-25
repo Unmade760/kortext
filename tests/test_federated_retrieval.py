@@ -50,7 +50,7 @@ def mock_retrieval_engine():
     mock_episodic.search = AsyncMock(return_value=[
         "[Decision]: Switched to 5-signal RRF fusion with TAA-k trimming",
         "[Architecture]: FalkorDB UDS primary transport with TCP fallback",
-        "[Observation]: Qdrant collection cerebrum_codebase reindexed",
+        "[Observation]: Qdrant collection kortext_codebase reindexed",
     ])
     mock_episodic.initialize = AsyncMock()
     mock_episodic.close = AsyncMock()
@@ -174,7 +174,7 @@ class TestKnapsackMMRDiversity:
             "Weibull retention decay scales with parameter lambda_h = 72 hours",
             "Weibull retention decay scales with parameter lambda_h = 72.0 hours exactly",  # Near duplicate
             "FalkorDB graph stores AST nodes and CALLS relationships",  # Highly distinct
-            "Qdrant vector collection cerebrum_codebase indexed with Qwen3 MRL",  # Highly distinct
+            "Qdrant vector collection kortext_codebase indexed with Qwen3 MRL",  # Highly distinct
         ]
         query = "Weibull decay and graph relationships"
         selected = apply_knapsack_mmr(candidates, query=query, token_budget=200, lambda_param=0.7)
@@ -259,7 +259,7 @@ class TestFastMCPFederatedMemoryTool:
             assert "symbolic_context" in data
             assert "code_chunks" in data
             assert "episodic_history" in data
-            assert "markdown" in data
+            assert "markdown" not in data
             assert data["total_estimated_tokens"] <= 1400
 
     @pytest.mark.anyio
@@ -270,6 +270,7 @@ class TestFastMCPFederatedMemoryTool:
             res_str = await search_knowledge_and_memory(
                 query="SymbolSeekEngine architecture",
                 token_budget=1000,
+                include_markdown=True,
             )
             assert isinstance(res_str, str)
             data = json.loads(res_str)
@@ -301,9 +302,9 @@ class TestFastMCPFederatedMemoryTool:
         )
         assert mock_retrieval_engine._symbol_seek.seek_symbol.call_args[0] == ("RetrievalEngine",)
         assert mock_retrieval_engine._symbol_seek.seek_symbol.call_args.kwargs.get("detail_level") == "full"
-        assert mock_retrieval_engine._symbol_seek.seek_symbol.call_args.kwargs.get("graph_name") in ("kortext_symbols", "cerebrum_symbols")
+        assert mock_retrieval_engine._symbol_seek.seek_symbol.call_args.kwargs.get("graph_name") == "kortext_symbols"
         assert mock_retrieval_engine._symbol_seek.seek_symbol.call_args.kwargs.get("workspace_root") is None
-        assert mock_retrieval_engine.query.call_args.kwargs.get("collection") in ("kortext_codebase", "cerebrum_codebase")
+        assert mock_retrieval_engine.query.call_args.kwargs.get("collection") == "kortext_codebase"
 
     @pytest.mark.anyio
     async def test_search_knowledge_and_memory_forwards_all_parameters(self, mock_retrieval_engine):
@@ -444,7 +445,7 @@ class TestProjectScopedFederatedRetrieval:
     async def test_federated_query_resolves_project_from_workspace_root(self, mock_retrieval_engine):
         await mock_retrieval_engine.federated_query(
             "App routing facts",
-            workspace_root="/Users/rb/projects/my_mobile_app",
+            workspace_root="/workspace/projects/my_mobile_app",
         )
         mock_retrieval_engine._episodic.search.assert_awaited()
         call_kwargs = mock_retrieval_engine._episodic.search.call_args.kwargs

@@ -88,7 +88,6 @@ class TestProbeAndFallback:
     def test_probe_returns_false_when_unset_or_empty(self, monkeypatch):
         monkeypatch.delenv("EMBED_BASE_URL", raising=False)
         monkeypatch.delenv("KORTEXT_EMBED_BASE_URL", raising=False)
-        monkeypatch.delenv("CEREBRUM_EMBED_BASE_URL", raising=False)
         assert not is_remote_embed_alive("")
         assert not is_remote_embed_alive("none")
 
@@ -306,7 +305,6 @@ class TestUnsetEnvFallback:
     def test_fallback_when_env_unset(self, monkeypatch):
         monkeypatch.delenv("EMBED_BASE_URL", raising=False)
         monkeypatch.delenv("KORTEXT_EMBED_BASE_URL", raising=False)
-        monkeypatch.delenv("CEREBRUM_EMBED_BASE_URL", raising=False)
 
         embedder = get_dense_embedder()
         assert isinstance(embedder, FastEmbedDenseProvider)

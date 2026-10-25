@@ -4,7 +4,7 @@
     "rule": "trace_impact must bound response tokens using progressive degradation",
     "rationale": "Prevents context window explosion for deep call trees",
     "symbol_name": "trace_impact",
-    "file_path": "/Users/rb/cortex/cerebrum/symbols/seek.py",
+    "file_path": "kortext/symbols/seek.py",
     "ast_hash": "fd50e1b1762b9578caf4bdb1651081022ad1a419afb3a36089ffd617b32c9f47",
     "status": "drifted",
     "trust_level": "tool_confirmed",

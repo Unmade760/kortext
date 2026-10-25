@@ -1,7 +1,6 @@
 ---
-trigger: always_on
-description: "Mandatory rule prohibiting brute-force ripgrep text search in favor of deterministic AST symbol lookups."
-globs: "**/*"
+trigger: model_decision
+description: "Activate when searching for code symbols, function or class declarations, caller graphs, or refactoring blast radius."
 ---
 
 # Invariant [Anti-Ripgrep-Mandate]

@@ -2,7 +2,7 @@
 SCIP (Source Code Intelligence Protocol) Graph Ingestion Engine.
 
 Ingests compiler-grade, type-checked index.scip Protobuf files into FalkorDB
-(cerebrum_symbols), populating:
+(kortext_symbols), populating:
   (:Symbol {name, scip_id, kind})
   (:File {path})
   (s:Symbol)-[:DEFINED_IN {kind, line, signature, docstring, parent, scip_id}]->(f:File)
@@ -104,11 +104,12 @@ class SCIPImporter:
         self._indexes_ensured = False
 
     def _ensure_indexes(self):
-        """Ensures B-tree schema indexes on :Symbol(name) and :File(path)."""
+        """Ensures B-tree schema indexes on :Symbol(name), :Symbol(qualified_name), and :File(path)."""
         self.client.ensure_indexes(
             self.graph_name,
             [
                 ("Symbol", "name"),
+                ("Symbol", "qualified_name"),
                 ("File", "path"),
             ],
         )
@@ -139,7 +140,7 @@ class SCIPImporter:
     ) -> Dict[str, Any]:
         """
         Ingests a SCIP index into FalkorDB.
-        Creates File nodes, Symbol nodes, DEFINED_IN, IMPORTS, REFERENCES, and IMPLEMENTS edges.
+        Creates File nodes, Symbol nodes (keyed by qualified_name/scip_id), DEFINED_IN, IMPORTS, REFERENCES, and IMPLEMENTS edges.
         """
         start_time = time.perf_counter()
 
@@ -153,20 +154,39 @@ class SCIPImporter:
         total_references = 0
         total_relationships = 0
 
-        # Ingest external symbols if present
+        # Ingest external symbols in a single UNWIND batch if present
+        ext_batch = []
         for ext_sym in index.external_symbols:
             name = ext_sym.display_name or parse_scip_symbol_name(ext_sym.symbol)
             kind = scip_kind_to_str(ext_sym.kind)
+            qname = ext_sym.symbol or name
+            ext_batch.append({"qname": qname, "name": name, "scip_id": ext_sym.symbol, "kind": kind})
+        if ext_batch:
             self._query(
-                "MERGE (s:Symbol {name: $name}) "
-                "SET s.scip_id = $scip_id, s.kind = $kind",
-                {"name": name, "scip_id": ext_sym.symbol, "kind": kind},
+                "UNWIND $ext_syms AS es "
+                "MERGE (s:Symbol {qualified_name: es.qname}) "
+                "SET s.name = es.name, s.scip_id = es.scip_id, s.kind = es.kind",
+                {"ext_syms": ext_batch},
             )
 
+        base_dir: Optional[Path] = None
+        if isinstance(source, (str, Path)):
+            try:
+                src_p = Path(source).resolve()
+                if src_p.is_file():
+                    base_dir = src_p.parent
+            except Exception:
+                base_dir = None
+
         for doc in index.documents:
-            file_path = doc.relative_path
-            if not file_path:
+            raw_rel_path = doc.relative_path
+            if not raw_rel_path:
                 continue
+            file_path = raw_rel_path.replace("\\", "/")
+            if base_dir is not None and not Path(raw_rel_path).is_absolute():
+                cand_abs = (base_dir / raw_rel_path).resolve()
+                if cand_abs.exists():
+                    file_path = cand_abs.as_posix()
 
             # 1. Clean previous links for this file if requested
             if purge_existing:
@@ -199,8 +219,13 @@ class SCIPImporter:
                     "relationships": sym_info.relationships,
                 }
 
-            # Map occurrences to declarations, imports, and references
+            # Map occurrences to batched declarations, imports, and references
             seen_refs = set()
+            doc_symbols: Dict[str, Dict[str, Any]] = {}
+            doc_defs: List[Dict[str, Any]] = []
+            doc_imps: List[Dict[str, Any]] = []
+            doc_refs: List[Dict[str, Any]] = []
+
             for occ in doc.occurrences:
                 s_id = occ.symbol
                 if not s_id:
@@ -214,89 +239,125 @@ class SCIPImporter:
                 kind = info.get("kind") or "symbol"
                 docstring = info.get("docstring") or ""
                 parent = info.get("parent") or extract_parent_name(s_id)
-
                 is_def = bool(roles & scip_pb2.SymbolRole.Definition)
                 is_imp = bool(roles & scip_pb2.SymbolRole.Import)
+                qname = f"{file_path}::{parent + '.' if parent else ''}{name}" if is_def else (s_id or name)
 
-                # Ensure Symbol node exists
-                self._query(
-                    "MERGE (s:Symbol {name: $name}) "
-                    "SET s.scip_id = $scip_id, s.kind = $kind",
-                    {"name": name, "scip_id": s_id, "kind": kind},
-                )
+                doc_symbols[qname] = {
+                    "qname": qname,
+                    "name": name,
+                    "scip_id": s_id,
+                    "kind": kind,
+                }
 
                 if is_def:
-                    self._query(
-                        "MATCH (s:Symbol {name: $name}) "
-                        "MATCH (f:File {path: $path}) "
-                        "MERGE (s)-[:DEFINED_IN {kind: $kind, line: $line, signature: '', docstring: $doc, parent: $parent, scip_id: $scip_id}]->(f)",
-                        {
-                            "name": name,
-                            "path": file_path,
-                            "kind": kind,
-                            "line": start_line,
-                            "doc": docstring,
-                            "parent": parent,
-                            "scip_id": s_id,
-                        },
-                    )
+                    doc_defs.append({
+                        "qname": qname,
+                        "name": name,
+                        "kind": kind,
+                        "line": start_line,
+                        "doc": docstring,
+                        "parent": parent,
+                        "scip_id": s_id,
+                    })
                     total_symbols += 1
-
                 elif is_imp:
-                    self._query(
-                        "MATCH (s:Symbol {name: $name}) "
-                        "MATCH (f:File {path: $path}) "
-                        "MERGE (f)-[:IMPORTS {module: '', line: $line, scip_id: $scip_id}]->(s)",
-                        {
-                            "name": name,
-                            "path": file_path,
-                            "line": start_line,
-                            "scip_id": s_id,
-                        },
-                    )
-
+                    doc_imps.append({
+                        "qname": qname,
+                        "name": name,
+                        "line": start_line,
+                        "scip_id": s_id,
+                    })
                 else:
-                    # Regular reference / call / read-write access
-                    ref_key = (name, start_line)
+                    ref_key = (qname, start_line)
                     if ref_key not in seen_refs:
                         seen_refs.add(ref_key)
                         ref_kind = "write" if (roles & scip_pb2.SymbolRole.WriteAccess) else "call"
-                        self._query(
-                            "MATCH (s:Symbol {name: $name}) "
-                            "MATCH (f:File {path: $path}) "
-                            "MERGE (f)-[:REFERENCES {line: $line, kind: $kind, scip_id: $scip_id}]->(s)",
-                            {
-                                "name": name,
-                                "path": file_path,
-                                "line": start_line,
-                                "kind": ref_kind,
-                                "scip_id": s_id,
-                            },
-                        )
+                        doc_refs.append({
+                            "qname": qname,
+                            "name": name,
+                            "line": start_line,
+                            "kind": ref_kind,
+                            "scip_id": s_id,
+                        })
                         total_references += 1
 
-            # Ingest symbol relationships (e.g. IMPLEMENTS)
+            if doc_symbols:
+                self._query(
+                    "UNWIND $syms AS sym "
+                    "MERGE (s:Symbol {qualified_name: sym.qname}) "
+                    "SET s.name = sym.name, s.scip_id = sym.scip_id, s.kind = sym.kind, s.file_path = coalesce(s.file_path, $path)",
+                    {"path": file_path, "syms": list(doc_symbols.values())},
+                )
+
+            if doc_defs:
+                self._query(
+                    "MATCH (f:File {path: $path}) "
+                    "WITH f "
+                    "UNWIND $defs AS d "
+                    "MATCH (s:Symbol {qualified_name: d.qname}) "
+                    "SET s.file_path = $path "
+                    "MERGE (s)-[:DEFINED_IN {kind: d.kind, line: d.line, signature: '', docstring: d.doc, parent: d.parent, scip_id: d.scip_id}]->(f)",
+                    {"path": file_path, "defs": doc_defs},
+                )
+
+            if doc_imps:
+                self._query(
+                    "MATCH (f:File {path: $path}) "
+                    "WITH f "
+                    "UNWIND $imps AS i "
+                    "MATCH (s:Symbol {qualified_name: i.qname}) "
+                    "MERGE (f)-[:IMPORTS {module: '', line: i.line, scip_id: i.scip_id}]->(s)",
+                    {"path": file_path, "imps": doc_imps},
+                )
+
+            if doc_refs:
+                batch_size = 200
+                for idx in range(0, len(doc_refs), batch_size):
+                    self._query(
+                        "MATCH (f:File {path: $path}) "
+                        "WITH f "
+                        "UNWIND $refs AS r "
+                        "MATCH (s:Symbol {qualified_name: r.qname}) "
+                        "MERGE (f)-[:REFERENCES {line: r.line, kind: r.kind, scip_id: r.scip_id}]->(s)",
+                        {"path": file_path, "refs": doc_refs[idx:idx + batch_size]},
+                    )
+
+            # Ingest symbol relationships (e.g. IMPLEMENTS, TYPE_OF) in batched UNWIND queries
+            impl_rels: List[Dict[str, str]] = []
+            type_rels: List[Dict[str, str]] = []
             for s_id, info in symbol_info_map.items():
                 s_name = info["name"]
                 for rel in info.get("relationships", []):
                     target_id = rel.symbol
                     target_name = parse_scip_symbol_name(target_id)
                     if rel.is_implementation:
-                        self._query(
-                            "MERGE (s1:Symbol {name: $s1}) "
-                            "MERGE (s2:Symbol {name: $s2}) "
-                            "MERGE (s1)-[:IMPLEMENTS {scip_id: $scip_id}]->(s2)",
-                            {"s1": s_name, "s2": target_name, "scip_id": target_id},
-                        )
+                        impl_rels.append({"s1": s_name, "s1_id": s_id, "s2": target_name, "scip_id": target_id})
                         total_relationships += 1
                     elif rel.is_type_definition:
-                        self._query(
-                            "MERGE (s1:Symbol {name: $s1}) "
-                            "MERGE (s2:Symbol {name: $s2}) "
-                            "MERGE (s1)-[:TYPE_OF {scip_id: $scip_id}]->(s2)",
-                            {"s1": s_name, "s2": target_name, "scip_id": target_id},
-                        )
+                        type_rels.append({"s1": s_name, "s1_id": s_id, "s2": target_name, "scip_id": target_id})
                         total_relationships += 1
+
+            if impl_rels:
+                self._query(
+                    "UNWIND $rels AS r "
+                    "MERGE (s1:Symbol {name: r.s1}) "
+                    "SET s1.qualified_name = coalesce(s1.qualified_name, r.s1_id) "
+                    "MERGE (s2:Symbol {name: r.s2}) "
+                    "SET s2.qualified_name = coalesce(s2.qualified_name, r.scip_id) "
+                    "MERGE (s1)-[:IMPLEMENTS {scip_id: r.scip_id}]->(s2)",
+                    {"rels": impl_rels},
+                )
+            if type_rels:
+                self._query(
+                    "UNWIND $rels AS r "
+                    "MERGE (s1:Symbol {name: r.s1}) "
+                    "SET s1.qualified_name = coalesce(s1.qualified_name, r.s1_id) "
+                    "MERGE (s2:Symbol {name: r.s2}) "
+                    "SET s2.qualified_name = coalesce(s2.qualified_name, r.scip_id) "
+                    "MERGE (s1)-[:TYPE_OF {scip_id: r.scip_id}]->(s2)",
+                    {"rels": type_rels},
+                )
 
         duration = time.perf_counter() - start_time
         return {
@@ -308,6 +369,9 @@ class SCIPImporter:
             "duration_seconds": round(duration, 4),
             "graph_name": self.graph_name,
         }
+
+    # Alias for backward compatibility with dashboard/API callers
+    ingest_scip_file = ingest_index
 
 
 def detect_project_scip_indexer(workspace_root: str) -> Dict[str, Any]:

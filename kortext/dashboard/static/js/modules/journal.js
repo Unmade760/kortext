@@ -1,6 +1,6 @@
 /**
  * Kortext Dashboard - Decision Journal & 8-Category Taxonomy
- * Filter chips, search, and Markdown audit viewer.
+ * Filter chips, search, interactive tag filtering, and Markdown audit viewer.
  */
 
 import { state } from './state.js';
@@ -14,11 +14,40 @@ export async function loadJournal() {
   try {
     const data = await api.getJournal();
     state.journal.allEntries = data.entries || [];
+    updateCategoryChipsCounts();
     applyJournalFilters();
   } catch (err) {
     if (container) container.innerHTML = '<div class="text-rose-400 py-8 text-center text-xs font-mono">Failed to load journal.</div>';
     toast('Failed to load journal: ' + err.message, 'error');
   }
+}
+
+export function updateCategoryChipsCounts() {
+  const entries = state.journal.allEntries || [];
+  const counts = { all: entries.length };
+  entries.forEach(e => {
+    const c = (e.category || 'implementation').toLowerCase();
+    counts[c] = (counts[c] || 0) + 1;
+  });
+
+  const categoryLabels = {
+    all: 'All',
+    decision: 'Decision (ADR)',
+    roadmap: 'Roadmap',
+    implementation: 'Implementation',
+    experiment: 'Experiment',
+    benchmark: 'Benchmark',
+    investigation: 'Investigation',
+    research: 'Research',
+    report: 'Report',
+  };
+
+  document.querySelectorAll('.journal-cat-chip').forEach(chip => {
+    const cat = chip.dataset.cat;
+    const baseLabel = categoryLabels[cat] || cat;
+    const count = counts[cat] || 0;
+    chip.textContent = `${baseLabel} (${count})`;
+  });
 }
 
 export function filterJournalByCategory(category) {
@@ -35,6 +64,20 @@ export function filterJournalByCategory(category) {
   applyJournalFilters();
 }
 
+export function filterJournalByTag(tag) {
+  if (state.journal.selectedTag === tag) {
+    state.journal.selectedTag = null; // Toggle off if clicked again
+  } else {
+    state.journal.selectedTag = tag;
+  }
+  applyJournalFilters();
+}
+
+export function clearJournalTagFilter() {
+  state.journal.selectedTag = null;
+  applyJournalFilters();
+}
+
 export function filterJournal() {
   const input = document.getElementById('journal-search');
   state.journal.searchQuery = input ? input.value.toLowerCase().trim() : '';
@@ -43,19 +86,35 @@ export function filterJournal() {
 
 export function applyJournalFilters() {
   const cat = state.journal.selectedCategory;
+  const tag = state.journal.selectedTag;
   const q = state.journal.searchQuery;
+  const activeProj = state.activeProject;
 
   let entries = state.journal.allEntries;
 
+  // Global project filter
+  if (activeProj && activeProj !== 'all') {
+    entries = entries.filter(e => (e.project || 'kortext').toLowerCase() === activeProj.toLowerCase());
+  }
+
+  // Strict category filter
   if (cat && cat !== 'all') {
     entries = entries.filter(e => {
       const eCat = (e.category || 'implementation').toLowerCase();
-      const titleLower = (e.title || '').toLowerCase();
-      const tags = (e.tags || []).map(t => String(t).toLowerCase());
-      return eCat === cat || titleLower.includes(cat) || tags.includes(cat);
+      return eCat === cat.toLowerCase();
     });
   }
 
+  // Tag filter
+  if (tag) {
+    const targetTag = tag.toLowerCase();
+    entries = entries.filter(e => {
+      const tags = (e.tags || []).map(t => String(t).toLowerCase());
+      return tags.includes(targetTag);
+    });
+  }
+
+  // Text search filter
   if (q) {
     entries = entries.filter(e =>
       (e.title && e.title.toLowerCase().includes(q)) ||
@@ -65,6 +124,7 @@ export function applyJournalFilters() {
     );
   }
 
+  state.journal.filteredEntries = entries;
   renderJournal(entries);
 }
 
@@ -72,8 +132,21 @@ export function renderJournal(entries) {
   const container = document.getElementById('journal-timeline');
   if (!container) return;
 
+  let bannerHtml = '';
+  if (state.journal.selectedTag) {
+    bannerHtml = `
+      <div class="flex items-center justify-between bg-indigo-950/60 border border-indigo-700/60 rounded-xl px-4 py-2.5 text-xs font-mono text-indigo-200">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">Filtered by Tag:</span>
+          <span class="px-2 py-0.5 rounded-full bg-indigo-600 text-white font-semibold">#${escapeHtml(state.journal.selectedTag)}</span>
+        </div>
+        <button onclick="clearJournalTagFilter()" class="text-indigo-400 hover:text-white underline transition">Clear Tag Filter</button>
+      </div>
+    `;
+  }
+
   if (!entries || entries.length === 0) {
-    container.innerHTML = '<div class="text-slate-400 py-12 text-center text-xs font-mono">No journal entries match the selected filters.</div>';
+    container.innerHTML = bannerHtml + '<div class="text-slate-400 py-12 text-center text-xs font-mono">No journal entries match the selected filters.</div>';
     return;
   }
 
@@ -88,7 +161,7 @@ export function renderJournal(entries) {
     report: 'bg-teal-500/10 text-teal-300 border-teal-500/40',
   };
 
-  container.innerHTML = entries.map((e, idx) => {
+  const cardsHtml = entries.map((e, idx) => {
     const cat = (e.category || 'implementation').toLowerCase();
     const badgeStyle = categoryBadges[cat] || categoryBadges.implementation;
 
@@ -108,16 +181,26 @@ export function renderJournal(entries) {
         <p class="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">${escapeHtml(e.body || '')}</p>
         ${e.tags && e.tags.length > 0 ? `
           <div class="flex flex-wrap gap-1.5 pt-1">
-            ${e.tags.map(t => `<span class="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700/60">#${escapeHtml(t)}</span>`).join('')}
+            ${e.tags.map(t => {
+              const isActive = state.journal.selectedTag && state.journal.selectedTag.toLowerCase() === String(t).toLowerCase();
+              const style = isActive
+                ? 'bg-indigo-600 text-white border-indigo-400 font-bold'
+                : 'bg-slate-800 text-slate-400 hover:text-indigo-300 hover:bg-slate-700/80 border-slate-700/60';
+              const safeTagAttr = escapeHtml(String(t));
+              return `<button data-tag="${safeTagAttr}" onclick="filterJournalByTag(this.dataset.tag)" class="text-[10px] font-mono px-2 py-0.5 rounded-full border transition cursor-pointer ${style}" title="Filter by #${safeTagAttr}">#${safeTagAttr}</button>`;
+            }).join('')}
           </div>
         ` : ''}
       </div>
     `;
   }).join('');
+
+  container.innerHTML = bannerHtml + cardsHtml;
 }
 
 export function viewJournalMarkdown(index) {
-  const entry = state.journal.allEntries[index];
+  const sourceList = state.journal.filteredEntries || state.journal.allEntries || [];
+  const entry = sourceList[index] || state.journal.allEntries[index];
   if (!entry) return;
 
   const modal = document.getElementById('modal-markdown-viewer');

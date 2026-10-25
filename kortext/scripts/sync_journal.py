@@ -1,36 +1,43 @@
 """
 Journal Backfill & Synchronization Utility.
 Reads markdown journal files from journal/*.md and syncs any missing
-episodes into the FalkorDB temporal knowledge graph via Graphiti and MiniCPM5.
+episodes into the FalkorDB temporal knowledge graph via AgentNativeEpisodicDriver.
 """
 import asyncio
 import os
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Set, Tuple
 
-import redis
 from dotenv import load_dotenv
 
 from kortext.episodic import AgentNativeEpisodicDriver
+from kortext.falkordb_client import get_shared_falkordb_client
 
 KORTEXT_ROOT = Path(__file__).resolve().parent.parent.parent
-CEREBRUM_ROOT = KORTEXT_ROOT
 JOURNAL_DIR = Path(os.getenv("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")))
 FALKORDB_HOST = os.getenv("FALKORDB_HOST", "127.0.0.1")
 FALKORDB_PORT = int(os.getenv("FALKORDB_PORT", "6379"))
 FALKORDB_DB = os.getenv("KORTEXT_DATABASE", os.getenv("FALKORDB_DATABASE", "kortext"))
 
 
-def get_existing_episodes_in_falkor() -> set[str]:
+def get_existing_episodes_in_falkor() -> Set[str]:
+    """Queries FalkorDB via shared UDS/TCP client for all existing Episodic/Episode node names."""
+    existing: Set[str] = set()
     try:
-        r = redis.Redis(host=FALKORDB_HOST, port=FALKORDB_PORT, decode_responses=True)
-        res = r.execute_command("GRAPH.QUERY", FALKORDB_DB, "MATCH (e:Episodic) RETURN e.name")
+        client = get_shared_falkordb_client(host=FALKORDB_HOST, port=FALKORDB_PORT)
+        res = client.query(
+            FALKORDB_DB,
+            "MATCH (e) WHERE e:Episodic OR e:Episode RETURN e.name",
+            read_only=True,
+        )
         if res and len(res) > 1 and isinstance(res[1], list):
-            return {str(row[0]) for row in res[1] if row}
+            for row in res[1]:
+                if row and row[0]:
+                    existing.add(str(row[0]))
     except Exception as e:
         print(f"[Sync] Warning: Failed to query existing episodes: {e}")
-    return set()
+    return existing
 
 
 def parse_journal_entries() -> List[Tuple[str, str, List[str], str | None]]:
@@ -72,7 +79,7 @@ def parse_journal_entries() -> List[Tuple[str, str, List[str], str | None]]:
     return entries
 
 
-async def sync_journal():
+async def sync_journal(dry_run: bool = False):
     print(f"=== Kortext Journal Sync -> FalkorDB ({FALKORDB_DB}) ===")
     existing = get_existing_episodes_in_falkor()
     print(f"Current episodes in FalkorDB: {len(existing)}")
@@ -89,9 +96,13 @@ async def sync_journal():
     for title, _, tags, proj in to_sync:
         print(f"  • {title} (Project: {proj or 'default'}, Tags: {', '.join(tags) or 'none'})")
 
+    if dry_run:
+        return
+
     print("\nStarting indexing via AgentNativeEpisodicDriver directly into FalkorDB...")
     driver = AgentNativeEpisodicDriver()
-    await driver.initialize()
+    if hasattr(driver, "initialize"):
+        await driver.initialize()
 
     success_count = 0
     for idx, (title, body, tags, proj) in enumerate(to_sync, 1):
@@ -111,8 +122,13 @@ async def sync_journal():
         except Exception as e:
             print(f"  ❌ Failed: {e}")
 
-    await driver.close()
+    if hasattr(driver, "close"):
+        await driver.close()
     print(f"\n🎉 Successfully synced {success_count}/{len(to_sync)} episodes into FalkorDB!")
+
+
+# Alias for backward compatibility
+sync_journals = sync_journal
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ Verifies:
    - Abstention items have is_answerable=False and gold_answer=""
    - Non-abstention items have is_answerable=True and non-empty gold_answer
    - context_facts contains subject, relation, fact, object
-3. tests/fixtures/cerebrum_golden_set.json:
+3. tests/fixtures/kortext_golden_set.json:
    - Exactly 20 real codebase questions
    - Keys: id, query, gold_passages, notes
 """
@@ -136,12 +136,12 @@ class TestLongMemEvalFixture:
             assert item["id"] == f"lme_{i:03d}"
 
 
-class TestCerebrumGoldenSetFixture:
-    """Validation suite for cerebrum_golden_set.json."""
+class TestKortextGoldenSetFixture:
+    """Validation suite for kortext_golden_set.json."""
 
     @pytest.fixture(scope="module")
     def golden_data(self):
-        fixture_path = FIXTURES_DIR / "cerebrum_golden_set.json"
+        fixture_path = FIXTURES_DIR / "kortext_golden_set.json"
         assert fixture_path.exists(), f"Missing fixture file: {fixture_path}"
         with open(fixture_path, "r", encoding="utf-8") as f:
             data = json.load(f)

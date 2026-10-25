@@ -31,7 +31,7 @@ class TestRerankerEngine:
 
     def test_offline_fallback_deterministic_scoring(self, monkeypatch):
         """Verifies deterministic lexical tie-breaking: token matches + AST header/signature bonus."""
-        monkeypatch.setenv("CEREBRUM_CI_MODE", "1")
+        monkeypatch.setenv("KORTEXT_CI_MODE", "1")
 
         async def _run():
             engine = RerankerEngine()
@@ -83,8 +83,9 @@ class TestRerankerEngine:
 
     def test_online_scoring_success(self, monkeypatch):
         """Verifies successful HTTP 200 response from cross-encoder reranks candidates."""
-        monkeypatch.delenv("CEREBRUM_CI_MODE", raising=False)
         monkeypatch.delenv("KORTEXT_CI_MODE", raising=False)
+        monkeypatch.delenv("CI_MODE", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         async def _run():
             engine = RerankerEngine(base_url="http://127.0.0.1:8000/v1")
@@ -119,8 +120,9 @@ class TestRerankerEngine:
 
     def test_online_timeout_falls_back_to_offline(self, monkeypatch):
         """Verifies strict 250ms timeout triggers graceful fallback to offline scoring."""
-        monkeypatch.delenv("CEREBRUM_CI_MODE", raising=False)
         monkeypatch.delenv("KORTEXT_CI_MODE", raising=False)
+        monkeypatch.delenv("CI_MODE", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         async def _run():
             engine = RerankerEngine(base_url="http://127.0.0.1:8000/v1")
@@ -143,8 +145,9 @@ class TestRerankerEngine:
 
     def test_online_http_error_falls_back_to_offline(self, monkeypatch):
         """Verifies 500 server error triggers graceful fallback to offline scoring."""
-        monkeypatch.delenv("CEREBRUM_CI_MODE", raising=False)
         monkeypatch.delenv("KORTEXT_CI_MODE", raising=False)
+        monkeypatch.delenv("CI_MODE", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         async def _run():
             engine = RerankerEngine(base_url="http://127.0.0.1:8000/v1")
@@ -171,7 +174,7 @@ class TestRerankerEngine:
 
     def test_candidate_format_variations(self, monkeypatch):
         """Verifies reranker supports strings and dicts with different text keys."""
-        monkeypatch.setenv("CEREBRUM_CI_MODE", "1")
+        monkeypatch.setenv("KORTEXT_CI_MODE", "1")
 
         async def _run():
             engine = RerankerEngine()
@@ -194,7 +197,7 @@ class TestRerankerEngine:
 
     def test_rerank_sync_wrapper(self, monkeypatch):
         """Verifies synchronous rerank_sync wrapper executes offline fallback correctly."""
-        monkeypatch.setenv("CEREBRUM_CI_MODE", "1")
+        monkeypatch.setenv("KORTEXT_CI_MODE", "1")
         engine = RerankerEngine()
         candidates = [
             {"text": "match query token", "score": 0.01},

@@ -4,7 +4,7 @@
 # ==============================================================================
 set -euo pipefail
 
-KORTEXT_HOME="${KORTEXT_HOME:-${CEREBRUM_HOME:-${HOME}/.kortext}}"
+KORTEXT_HOME="${KORTEXT_HOME:-${HOME}/.kortext}"
 RUN_DIR="${KORTEXT_HOME}/run"
 PID_FILE="${RUN_DIR}/falkordb.pid"
 SOCKET_FILE="${RUN_DIR}/falkordb.sock"
@@ -27,29 +27,11 @@ if [ -f "${PID_FILE}" ]; then
     fi
     rm -f "${PID_FILE}" "${SOCKET_FILE}"
 else
-    # Fallback: check if legacy ~/.cerebrum PID file exists
-    LEGACY_PID_FILE="${HOME}/.cerebrum/run/falkordb.pid"
-    if [ -f "${LEGACY_PID_FILE}" ]; then
-        PID=$(cat "${LEGACY_PID_FILE}")
-        if kill -0 "${PID}" 2>/dev/null; then
-            echo "Shutting down legacy FalkorDB server (PID ${PID})..."
-            kill -TERM "${PID}"
-            for i in {1..30}; do
-                if ! kill -0 "${PID}" 2>/dev/null; then
-                    echo "FalkorDB process terminated gracefully."
-                    break
-                fi
-                sleep 0.1
-            done
-        fi
-        rm -f "${LEGACY_PID_FILE}" "${HOME}/.cerebrum/run/falkordb.sock"
-    else
-        # Fallback: check if redis-server with falkordb.conf is running
-        CONF_PID=$(pgrep -f "falkordb.conf" || true)
-        if [ -n "${CONF_PID}" ]; then
-            echo "Terminating FalkorDB process ${CONF_PID}..."
-            kill -TERM ${CONF_PID} 2>/dev/null || true
-        fi
+    # Fallback: check if redis-server with falkordb.conf is running
+    CONF_PID=$(pgrep -f "falkordb.conf" || true)
+    if [ -n "${CONF_PID}" ]; then
+        echo "Terminating FalkorDB process ${CONF_PID}..."
+        kill -TERM ${CONF_PID} 2>/dev/null || true
     fi
 fi
 

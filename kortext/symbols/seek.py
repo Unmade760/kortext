@@ -193,17 +193,15 @@ def extract_symbol_candidates(
             client = getattr(qdrant_engine, "client", qdrant_engine)
             target_collection = os.getenv("KORTEXT_COLLECTION", os.getenv("QDRANT_COLLECTION", "kortext_codebase"))
 
-            # Check collection existence if available; fall back to "cerebrum_codebase" or "codebase" alias if needed
+            # Check collection existence if available; fall back to "codebase" alias if needed
             check_fn = getattr(client, "collection_exists", None) or getattr(qdrant_engine, "collection_exists", None)
             if callable(check_fn):
                 try:
                     if not check_fn(target_collection):
-                        if check_fn("cerebrum_codebase"):
-                            target_collection = "cerebrum_codebase"
-                        elif check_fn("codebase"):
+                        if check_fn("codebase"):
                             target_collection = "codebase"
                 except Exception:
-                    pass
+                    logger.debug("Suppressed non-fatal exception")
 
             resp = None
             query_fn = getattr(client, "query_points", None) or getattr(qdrant_engine, "query_points", None)
@@ -211,7 +209,7 @@ def extract_symbol_candidates(
                 try:
                     resp = query_fn(collection_name=target_collection, limit=2)
                 except Exception as q_err:
-                    if target_collection in ("kortext_codebase", "cerebrum_codebase"):
+                    if target_collection == "kortext_codebase":
                         try:
                             resp = query_fn(collection_name="codebase", limit=2)
                         except Exception:
@@ -437,9 +435,9 @@ def extract_symbol_source_detail(
                                 skeleton_code = ast.unparse(fn_skel)
                                 interface_code = skeleton_code
                     except Exception:
-                        pass
+                        logger.debug("Suppressed non-fatal exception")
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception")
 
     # Fallbacks if AST processing did not yield outputs
     if not full_code:
@@ -511,11 +509,11 @@ class SymbolSeekEngine:
         target_graph = graph_name or default_sym_graph
 
         def _make_cache_key(mtime: float) -> Any:
-            if level == "skeleton" and not graph_name and not workspace_root:
+            if level == "skeleton" and not graph_name and not workspace_root and not file_hint:
                 return (symbol_name, mtime)
-            elif not graph_name and not workspace_root:
+            elif not graph_name and not workspace_root and not file_hint:
                 return (f"{symbol_name}:{level}", mtime)
-            return (f"{symbol_name}:{level}:{target_graph}:{workspace_root or ''}", mtime)
+            return (f"{symbol_name}:{level}:{target_graph}:{workspace_root or ''}:{file_hint or ''}", mtime)
 
         # Fast Path LRU Cache check: (symbol_name, file_mtime)
         file_path = file_hint or self._symbol_to_file.get(symbol_name)
@@ -530,7 +528,7 @@ class SymbolSeekEngine:
                         self._cache[cache_key] = val
                         return val
                 except OSError:
-                    pass
+                    logger.debug("Suppressed non-fatal exception")
 
         # 1. Fast Path: Exact B-Tree indexed lookup on Symbol.name (Linear aggregation)
         fast_cypher = """
@@ -631,6 +629,37 @@ class SymbolSeekEngine:
                 match_entry["declaration"] = code_meta["declaration"]
             matches.append(match_entry)
 
+        # Deduplicate matches pointing to the same resolved realpath / symbol
+        seen_keys = set()
+        unique_matches = []
+        for m in matches:
+            f = m.get("file")
+            # Exclude non-code markdown files and section headings
+            if f and str(f).lower().endswith((".md", ".markdown")):
+                continue
+            k = m.get("kind")
+            if k and (str(k).lower().endswith("_section") or str(k).lower() == "section"):
+                continue
+
+            try:
+                real_f = str(Path(f).resolve()) if f else ""
+            except Exception:
+                real_f = str(f)
+            key = (m.get("symbol"), real_f)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                unique_matches.append(m)
+        matches = unique_matches
+
+        # Filter or prioritize matches if file_hint is provided
+        if file_hint:
+            hint_matches = [
+                m for m in matches
+                if m.get("file") and (file_hint in str(m["file"]) or str(m["file"]).endswith(file_hint))
+            ]
+            if hint_matches:
+                matches = hint_matches
+
         # Filter or prioritize matches if workspace_root is provided
         if workspace_root:
             in_ws = [
@@ -647,7 +676,43 @@ class SymbolSeekEngine:
                     key=lambda m: 0 if (m.get("file") and str(m["file"]).startswith(workspace_root)) else 1
                 )
 
-        result_json = json.dumps({"status": "found", "matches": matches, "detail_level": level}, indent=2)
+        # Attach active AST-grounded invariants (from journal/grounded_invariants.json) to matched symbols
+        grounded_for_matches: List[Dict[str, Any]] = []
+        try:
+            from kortext.invariants import GROUNDED_FILE
+
+            if GROUNDED_FILE.is_file():
+                g_items = json.loads(GROUNDED_FILE.read_text(encoding="utf-8"))
+                if isinstance(g_items, list):
+                    for m in matches:
+                        m_sym = str(m.get("symbol") or "")
+                        m_file = str(m.get("file") or "")
+                        m_invs: List[Dict[str, str]] = []
+                        for g_inv in g_items:
+                            if not isinstance(g_inv, dict) or g_inv.get("quarantined"):
+                                continue
+                            inv_sym = str(g_inv.get("symbol_name") or "")
+                            inv_fp = str(g_inv.get("file_path") or "")
+                            if (m_sym and inv_sym == m_sym) or (
+                                m_file and inv_fp and Path(m_file).name == Path(inv_fp).name
+                            ):
+                                entry_inv = {
+                                    "domain": str(g_inv.get("domain") or "INV"),
+                                    "symbol": inv_sym,
+                                    "rule": str(g_inv.get("rule") or ""),
+                                }
+                                m_invs.append(entry_inv)
+                                if entry_inv not in grounded_for_matches:
+                                    grounded_for_matches.append(entry_inv)
+                        if m_invs:
+                            m["grounded_invariants"] = m_invs
+        except Exception as inv_exc:
+            logger.debug("Grounded invariants lookup in seek_symbol skipped: %s", inv_exc)
+
+        payload_out: Dict[str, Any] = {"status": "found", "matches": matches, "detail_level": level}
+        if grounded_for_matches:
+            payload_out["grounded_invariants"] = grounded_for_matches
+        result_json = json.dumps(payload_out, separators=(",", ":"))
 
         # Populate LRU cache keyed on (symbol_name, level, target_graph, workspace_root, file_mtime)
         target_file = file_hint or primary_file
@@ -661,8 +726,8 @@ class SymbolSeekEngine:
                         self._cache.pop(next(iter(self._cache)))
                     self._cache[cache_key] = result_json
                     self._symbol_to_file[symbol_name] = str(p)
-                except OSError:
-                    pass
+                except OSError as os_exc:
+                    logger.debug("LRU cache stat skipped in seek_symbol: %s", os_exc)
 
         return result_json
 
@@ -689,5 +754,28 @@ class SymbolSeekEngine:
             max_depth=depth,
             token_budget=token_budget,
         )
-        return json.dumps(impact, indent=2)
+        return json.dumps(impact, separators=(",", ":"))
+
+    def _resolve_graph_for_workspace(self, workspace_root: Optional[str] = None) -> str:
+        """
+        Resolves the FalkorDB symbols graph containing files under workspace_root
+        using strictly parameterized Cypher ($ws) to prevent Cypher string injection.
+        """
+        default_sym_graph = os.getenv("KORTEXT_SYMBOLS_GRAPH", os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"))
+        if not workspace_root:
+            return default_sym_graph
+        try:
+            ws_resolved = str(Path(workspace_root).resolve())
+            res = self.client.query(
+                default_sym_graph,
+                "MATCH (f:File) WHERE f.path STARTS WITH $ws RETURN count(f) LIMIT 1",
+                {"ws": ws_resolved},
+                read_only=True,
+            )
+            if res and len(res) > 1 and res[1] and res[1][0] and int(res[1][0][0] or 0) > 0:
+                return default_sym_graph
+        except Exception as exc:
+            logger.debug("Workspace symbol graph resolution fallback: %s", exc)
+        return default_sym_graph
+
 

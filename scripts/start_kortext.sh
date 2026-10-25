@@ -4,7 +4,7 @@
 # ==============================================================================
 set -euo pipefail
 
-KORTEXT_HOME="${KORTEXT_HOME:-${CEREBRUM_HOME:-${HOME}/.kortext}}"
+KORTEXT_HOME="${KORTEXT_HOME:-${HOME}/.kortext}"
 BIN_DIR="${KORTEXT_HOME}/bin"
 RUN_DIR="${KORTEXT_HOME}/run"
 LOG_DIR="${KORTEXT_HOME}/logs"
@@ -30,22 +30,13 @@ if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
 else
     # Verify native module binary exists
     if [ ! -f "${BIN_DIR}/falkordb.so" ]; then
-        if [ -f "${HOME}/.cerebrum/bin/falkordb.so" ]; then
-            echo "Copying existing FalkorDB module from ~/.cerebrum/bin/falkordb.so..."
-            cp "${HOME}/.cerebrum/bin/falkordb.so" "${BIN_DIR}/falkordb.so"
-        else
-            echo "Native FalkorDB module not found. Building/downloading now..."
-            bash "$(dirname "$0")/build_falkordb_native.sh"
-        fi
+        echo "Native FalkorDB module not found. Building/downloading now..."
+        bash "$(dirname "$0")/build_falkordb_native.sh"
     fi
 
-    # Ensure falkordb.conf exists in CONF_DIR
-    if [ ! -f "${CONF_DIR}/falkordb.conf" ]; then
-        if [ -f "${HOME}/.cerebrum/config/falkordb.conf" ]; then
-            sed "s|/Users/rb/\.cerebrum|${KORTEXT_HOME}|g; s|cerebrum|kortext|g" "${HOME}/.cerebrum/config/falkordb.conf" > "${CONF_DIR}/falkordb.conf"
-        elif [ -f "$(dirname "$0")/../config/falkordb.conf" ]; then
-            cp "$(dirname "$0")/../config/falkordb.conf" "${CONF_DIR}/falkordb.conf"
-        fi
+    # Ensure dynamic configurations exist in CONF_DIR
+    if [ ! -f "${CONF_DIR}/falkordb.conf" ] || [ ! -f "${CONF_DIR}/qdrant.yaml" ]; then
+        python3 -c "from kortext.setup import provision_configurations; provision_configurations()" 2>/dev/null || true
     fi
 
     echo "Launching native FalkorDB server daemon via ${REDIS_SERVER_BIN}..."

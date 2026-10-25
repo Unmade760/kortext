@@ -30,7 +30,6 @@ def test_get_kortext_home_from_env(monkeypatch, tmp_path):
 
 def test_get_kortext_home_fallback_to_kortext_dir(monkeypatch, tmp_path):
     monkeypatch.delenv("KORTEXT_HOME", raising=False)
-    monkeypatch.delenv("CEREBRUM_HOME", raising=False)
     fake_home = tmp_path / "user_home"
     k_dir = fake_home / ".kortext"
     k_dir.mkdir(parents=True)
@@ -39,20 +38,8 @@ def test_get_kortext_home_fallback_to_kortext_dir(monkeypatch, tmp_path):
         assert get_kortext_home() == k_dir
 
 
-def test_get_kortext_home_fallback_to_cerebrum_dir(monkeypatch, tmp_path):
-    monkeypatch.delenv("KORTEXT_HOME", raising=False)
-    monkeypatch.delenv("CEREBRUM_HOME", raising=False)
-    fake_home = tmp_path / "user_home"
-    c_dir = fake_home / ".cerebrum"
-    c_dir.mkdir(parents=True)
-
-    with patch.object(Path, "home", return_value=fake_home):
-        assert get_kortext_home() == c_dir
-
-
 def test_get_kortext_home_default_when_neither_exists(monkeypatch, tmp_path):
     monkeypatch.delenv("KORTEXT_HOME", raising=False)
-    monkeypatch.delenv("CEREBRUM_HOME", raising=False)
     fake_home = tmp_path / "user_home"
     fake_home.mkdir(parents=True)
 

@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help us improve Cortex
+about: Create a report to help us improve Kortext
 title: '[BUG] '
 labels: ['bug']
 assignees: ''

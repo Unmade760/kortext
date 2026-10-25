@@ -1,0 +1,270 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep Cosmic Nebula Radial Gradients -->
+    <radialGradient id="space-bg" cx="50%" cy="50%" r="68%">
+      <stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#0f172a" stop-opacity="0.95"/>
+      <stop offset="70%" stop-color="#070b14" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#020617" stop-opacity="1"/>
+    </radialGradient>
+
+    <radialGradient id="nebula-purple" cx="64%" cy="30%" r="45%">
+      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#9333ea" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="nebula-cyan" cx="35%" cy="65%" r="45%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.2"/>
+      <stop offset="60%" stop-color="#0284c7" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Node Gradient Themes for 5 Memory Tiers -->
+    <!-- Tier 0: AST Symbol Parser (Cyan -> Royal Blue) -->
+    <linearGradient id="grad-ast" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+
+    <!-- Tier 1: Vector Embeddings (Emerald -> Cyan) -->
+    <linearGradient id="grad-vector" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+
+    <!-- Tier 2: Episodic Memory & Causality (Fuchsia -> Purple) -->
+    <linearGradient id="grad-episodic" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+
+    <!-- Tier 3: Federated Fusion Hub (Indigo -> Rose) -->
+    <linearGradient id="grad-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+
+    <!-- Tier 4: Cognitive Dream Consolidation (Violet -> Magenta) -->
+    <linearGradient id="grad-dream" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#e879f9"/>
+    </linearGradient>
+
+    <!-- Tier 5: Substrate IPC / Resilience (Sky -> Teal) -->
+    <linearGradient id="grad-ipc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+
+    <!-- Luminescent Edge Gradients -->
+    <linearGradient id="k-spine-glow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+
+    <linearGradient id="k-upper-glow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+
+    <linearGradient id="k-lower-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+
+    <linearGradient id="outer-ring-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#818cf8" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#c084fc" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <!-- Optics & Bloom Filters -->
+    <filter id="neon-bloom" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur1" />
+      <feGaussianBlur stdDeviation="10" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="subtle-bloom" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="diffraction-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Canvas Base with Rounded Bezel -->
+  <rect width="512" height="512" rx="108" fill="url(#space-bg)"/>
+  <rect width="512" height="512" rx="108" fill="url(#nebula-purple)"/>
+  <rect width="512" height="512" rx="108" fill="url(#nebula-cyan)"/>
+  <rect width="506" height="506" x="3" y="3" rx="105" fill="none" stroke="#475569" stroke-width="1.5" stroke-opacity="0.45"/>
+
+  <!-- Celestial Background Starfield -->
+  <g fill="#ffffff">
+    <circle cx="80" cy="95" r="1" opacity="0.35"/>
+    <circle cx="140" cy="65" r="1.2" opacity="0.45"/>
+    <circle cx="370" cy="80" r="1.5" opacity="0.5"/>
+    <circle cx="440" cy="110" r="1" opacity="0.3"/>
+    <circle cx="455" cy="270" r="1.2" opacity="0.4"/>
+    <circle cx="435" cy="425" r="1.4" opacity="0.45"/>
+    <circle cx="330" cy="455" r="1" opacity="0.35"/>
+    <circle cx="160" cy="450" r="1.3" opacity="0.4"/>
+    <circle cx="65" cy="310" r="1.5" opacity="0.5"/>
+    <circle cx="75" cy="230" r="1" opacity="0.35"/>
+    <circle cx="230" cy="190" r="0.9" opacity="0.25"/>
+    <circle cx="280" cy="320" r="0.9" opacity="0.25"/>
+  </g>
+
+  <!-- Outer Orbital Guide Rings (Concentric Geometric Constellation) -->
+  <circle cx="256" cy="256" r="184" fill="none" stroke="#6366f1" stroke-width="1" stroke-opacity="0.15" stroke-dasharray="6, 8"/>
+  <circle cx="256" cy="256" r="126" fill="none" stroke="#38bdf8" stroke-width="1" stroke-opacity="0.12" stroke-dasharray="4, 6"/>
+
+  <!-- Celestial Truss & Synaptic Edge Network -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer Constellation Perimeter Ring -->
+    <g stroke="url(#outer-ring-glow)" stroke-width="2.2" opacity="0.75">
+      <line x1="256" y1="76" x2="424" y2="172"/>
+      <line x1="424" y1="172" x2="396" y2="384" stroke-dasharray="5, 5"/>
+      <line x1="396" y1="384" x2="256" y2="436"/>
+      <line x1="256" y1="436" x2="116" y2="384"/>
+      <line x1="116" y1="384" x2="88" y2="172" stroke-dasharray="5, 5"/>
+      <line x1="88" y1="172" x2="256" y2="76"/>
+    </g>
+
+    <!-- Cross-Tier Associative Truss Links (Triangulation) -->
+    <g stroke="#818cf8" stroke-width="1.6" stroke-opacity="0.35">
+      <line x1="256" y1="76" x2="180" y2="136"/>
+      <line x1="256" y1="76" x2="328" y2="136"/>
+      <line x1="424" y1="172" x2="328" y2="136"/>
+      <line x1="424" y1="172" x2="180" y2="256"/>
+      <line x1="396" y1="384" x2="328" y2="376"/>
+      <line x1="396" y1="384" x2="180" y2="256"/>
+      <line x1="256" y1="436" x2="180" y2="376"/>
+      <line x1="256" y1="436" x2="328" y2="376"/>
+      <line x1="116" y1="384" x2="180" y2="376"/>
+      <line x1="116" y1="384" x2="180" y2="256"/>
+      <line x1="88" y1="172" x2="180" y2="136"/>
+      <line x1="88" y1="172" x2="180" y2="256"/>
+      <!-- Diagonal Cross-Bracing for Structural Integrity -->
+      <line x1="180" y1="136" x2="328" y2="376" stroke-opacity="0.18" stroke-dasharray="3, 5"/>
+      <line x1="180" y1="376" x2="328" y2="136" stroke-opacity="0.18" stroke-dasharray="3, 5"/>
+    </g>
+
+    <!-- Primary 'K' Backbone & Wings (Bold Luminous Beams) -->
+    <!-- 'K' Vertical Spine: (180, 136) -> (180, 376) -->
+    <line x1="180" y1="136" x2="180" y2="376" stroke="url(#k-spine-glow)" stroke-width="7" filter="url(#neon-bloom)"/>
+    <line x1="180" y1="136" x2="180" y2="376" stroke="#ffffff" stroke-width="2" stroke-opacity="0.85"/>
+
+    <!-- 'K' Upper Wing: (180, 256) -> (328, 136) -->
+    <line x1="180" y1="256" x2="328" y2="136" stroke="url(#k-upper-glow)" stroke-width="6.5" filter="url(#neon-bloom)"/>
+    <line x1="180" y1="256" x2="328" y2="136" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.85"/>
+
+    <!-- 'K' Lower Wing: (180, 256) -> (328, 376) -->
+    <line x1="180" y1="256" x2="328" y2="376" stroke="url(#k-lower-glow)" stroke-width="6.5" filter="url(#neon-bloom)"/>
+    <line x1="180" y1="256" x2="328" y2="376" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.85"/>
+  </g>
+
+  <!-- Peripheral Knowledge Nodes (5 Memory Tiers + Gateway) -->
+  <!-- Tier 0: AST Symbol Parser (Zenith) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="256" cy="76" r="16" fill="url(#grad-ast)"/>
+    <circle cx="256" cy="76" r="22" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="256" cy="76" r="7" fill="#ffffff"/>
+
+  <!-- Tier 1: Vector Embeddings (Upper East) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="424" cy="172" r="17" fill="url(#grad-vector)"/>
+    <circle cx="424" cy="172" r="23" fill="none" stroke="#34d399" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="424" cy="172" r="7.5" fill="#ffffff"/>
+
+  <!-- Tier 2: Episodic Memory & Causality (Lower East) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="396" cy="384" r="17" fill="url(#grad-episodic)"/>
+    <circle cx="396" cy="384" r="23" fill="none" stroke="#f472b6" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="396" cy="384" r="7.5" fill="#ffffff"/>
+
+  <!-- Tier 3: Federated Fusion Hub (Nadir) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="256" cy="436" r="16" fill="url(#grad-core)"/>
+    <circle cx="256" cy="436" r="22" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="256" cy="436" r="7" fill="#ffffff"/>
+
+  <!-- Tier 4: Cognitive Dream Consolidation (Lower West) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="116" cy="384" r="17" fill="url(#grad-dream)"/>
+    <circle cx="116" cy="384" r="23" fill="none" stroke="#c084fc" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="116" cy="384" r="7.5" fill="#ffffff"/>
+
+  <!-- Substrate IPC / Resilience Gateway (Upper West) -->
+  <g filter="url(#neon-bloom)">
+    <circle cx="88" cy="172" r="15" fill="url(#grad-ipc)"/>
+    <circle cx="88" cy="172" r="21" fill="none" stroke="#2dd4bf" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="88" cy="172" r="6.5" fill="#ffffff"/>
+
+  <!-- Central Nexus Backbone Nodes ('K' Vertices) -->
+  <!-- 'K' Spine Top: (180, 136) -->
+  <circle cx="180" cy="136" r="13" fill="#6366f1" filter="url(#subtle-bloom)"/>
+  <circle cx="180" cy="136" r="6" fill="#ffffff"/>
+
+  <!-- 'K' Spine Bottom: (180, 376) -->
+  <circle cx="180" cy="376" r="13" fill="#8b5cf6" filter="url(#subtle-bloom)"/>
+  <circle cx="180" cy="376" r="6" fill="#ffffff"/>
+
+  <!-- 'K' Upper Wing Tip: (328, 136) -->
+  <circle cx="328" cy="136" r="15" fill="#ec4899" filter="url(#neon-bloom)"/>
+  <circle cx="328" cy="136" r="7" fill="#ffffff"/>
+
+  <!-- 'K' Lower Wing Tip: (328, 376) -->
+  <circle cx="328" cy="376" r="15" fill="#0ea5e9" filter="url(#neon-bloom)"/>
+  <circle cx="328" cy="376" r="7" fill="#ffffff"/>
+
+  <!-- Central Hub: Master Synaptic Nexus (180, 256) -->
+  <!-- Outer Concentric Aura -->
+  <circle cx="180" cy="256" r="32" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-opacity="0.45" stroke-dasharray="3, 4"/>
+  <!-- Primary Luminous Body -->
+  <circle cx="180" cy="256" r="22" fill="url(#grad-core)" filter="url(#neon-bloom)"/>
+  <!-- Pure White Core -->
+  <circle cx="180" cy="256" r="10" fill="#ffffff"/>
+
+  <!-- Diffraction Sparkle Starbursts (Telescopic Optical Spikes) -->
+  <!-- Center Nexus Sparkle -->
+  <g filter="url(#diffraction-glow)" opacity="0.95">
+    <path d="M 180,214 Q 180,256 138,256 Q 180,256 180,298 Q 180,256 222,256 Q 180,256 180,214 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Upper Wing Tip Sparkle -->
+  <g filter="url(#diffraction-glow)" opacity="0.85">
+    <path d="M 328,108 Q 328,136 300,136 Q 328,136 328,164 Q 328,136 356,136 Q 328,136 328,108 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Lower Wing Tip Sparkle -->
+  <g filter="url(#diffraction-glow)" opacity="0.85">
+    <path d="M 328,348 Q 328,376 300,376 Q 328,376 328,404 Q 328,376 356,376 Q 328,376 328,348 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Zenith AST Sparkle -->
+  <g filter="url(#diffraction-glow)" opacity="0.75">
+    <path d="M 256,54 Q 256,76 234,76 Q 256,76 256,98 Q 256,76 278,76 Q 256,76 256,54 Z" fill="#ffffff"/>
+  </g>
+</svg>

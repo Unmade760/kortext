@@ -111,7 +111,7 @@ async def test_index_single_file_indexes_python_ast_and_qdrant(tmp_path):
     mock_cache.is_file_changed.return_value = (True, 12345, "sha_sample", [])
     mock_chunk_cache = MagicMock()
     mock_chunk_cache.get_batch.return_value = ({0: [0.1] * 4096}, [])
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     mock_node = TextNode(text="def hello():\n    return 'world'\n", id_="node_1")
     mock_parser = MagicMock()
@@ -207,7 +207,7 @@ async def test_watcher_sync_file_delegates_to_index_single_file(tmp_path):
 @pytest.mark.anyio
 async def test_index_single_file_indexes_markdown_structure(tmp_path):
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "notes.md"
     test_file.write_text("# Title\n\nSome notes with [link](other.md)\n", encoding="utf-8")
@@ -316,9 +316,9 @@ def test_watcher_should_ignore_glob_and_directory_exclusions():
 
 
 def test_watcher_custom_exclude_dirs():
-    from kortext.watcher import DebouncedChangeHandler, CerebrumIncrementalSync
+    from kortext.watcher import DebouncedChangeHandler, KortextIncrementalSync
 
-    syncer = MagicMock(spec=CerebrumIncrementalSync)
+    syncer = MagicMock(spec=KortextIncrementalSync)
     loop = MagicMock()
     handler = DebouncedChangeHandler(
         loop=loop,
@@ -547,7 +547,7 @@ async def test_index_single_file_skips_binary_files(tmp_path):
 async def test_index_single_file_prevents_cache_poisoning_on_embedding_failure(tmp_path):
     import httpx
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "code.py"
     test_file.write_text("def test(): pass\n", encoding="utf-8")
@@ -566,6 +566,7 @@ async def test_index_single_file_prevents_cache_poisoning_on_embedding_failure(t
     mock_symbol_mgr = MagicMock()
 
     with patch("kortext.chunking.SmartCodeNodeParser", return_value=mock_parser), \
+         patch("kortext.embeddings.is_remote_embed_alive", return_value=True), \
          patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Connection refused")):
         res = await index_single_file(
             test_file,
@@ -657,7 +658,7 @@ async def test_index_single_file_batches_embeddings_and_retries_transient_failur
     import os
     import httpx
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "batch_test.py"
     test_file.write_text("print('test')\n", encoding="utf-8")
@@ -697,6 +698,7 @@ async def test_index_single_file_batches_embeddings_and_retries_transient_failur
     with patch.dict(os.environ, {"EMBED_BATCH_SIZE": "2", "EMBED_CONCURRENCY": "2"}), \
          patch("kortext.chunking.ast_splitter.ASTCodeSplitter", return_value=mock_ast_splitter), \
          patch("kortext.chunking.SmartCodeNodeParser", return_value=mock_parser), \
+         patch("kortext.embeddings.is_remote_embed_alive", return_value=True), \
          patch("httpx.AsyncClient.post", side_effect=fake_post):
 
         res = await index_single_file(
@@ -719,7 +721,7 @@ async def test_index_single_file_batches_embeddings_and_retries_transient_failur
 @pytest.mark.anyio
 async def test_index_single_file_passes_ast_info_to_document_metadata(tmp_path):
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "ast_meta_test.py"
     test_file.write_text("def sample(): pass\n", encoding="utf-8")
@@ -763,7 +765,8 @@ async def test_index_single_file_passes_ast_info_to_document_metadata(tmp_path):
 
 @pytest.mark.anyio
 async def test_index_workspace_streams_in_bounded_batches(tmp_path):
-    from llama_index.core.schema import TextNode, Document
+    from kortext.chunking.node_parser import TextNode
+    from kortext.ingest import Document
     import os
 
     docs = [
@@ -823,13 +826,14 @@ async def test_index_workspace_streams_in_bounded_batches(tmp_path):
     # BATCH_DOC_COUNT is 2, 5 documents -> batches should be [2, 2, 1]
     assert batch_calls == [2, 2, 1]
     assert mock_parser.get_nodes_from_documents.call_count == 3
-    assert mock_vector_index.call_count == 3
+    assert mock_client.upsert.call_count == 3
     assert mock_cache.record_file.call_count == 5
 
 
 @pytest.mark.anyio
 async def test_index_workspace_forwards_ast_metadata_to_parser(tmp_path):
-    from llama_index.core.schema import TextNode, Document
+    from kortext.chunking.node_parser import TextNode
+    from kortext.ingest import Document
 
     test_file = tmp_path / "mod.py"
     test_file.write_text("def hello(): pass\n", encoding="utf-8")
@@ -892,7 +896,7 @@ async def test_index_workspace_forwards_ast_metadata_to_parser(tmp_path):
 async def test_index_single_file_handles_sparse_model_failure_gracefully(tmp_path, monkeypatch):
     """Verifies index_single_file still indexes dense vector when sparse model fails or is offline."""
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "offline_sparse.py"
     test_file.write_text("def offline_func(): pass\n", encoding="utf-8")
@@ -948,7 +952,7 @@ async def test_index_single_file_handles_sparse_model_failure_gracefully(tmp_pat
 async def test_index_single_file_embeds_misses_via_dense_embedder(tmp_path):
     """Verifies index_single_file uses get_dense_embedder() to embed misses and stores them with embedder.model_name."""
     from kortext.ingest import index_single_file
-    from llama_index.core.schema import TextNode
+    from kortext.chunking.node_parser import TextNode
 
     test_file = tmp_path / "misses_embed.py"
     test_file.write_text("def miss_func(): return 42\n", encoding="utf-8")

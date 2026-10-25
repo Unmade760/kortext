@@ -1,181 +1,103 @@
 """
-Unit tests for Kortext native async pipeline (KortextPipeline) and make_graph factory.
+Unit tests for unified federated retrieval pipeline (RetrievalEngine.federated_query),
+replacing the retired kortext.graph (KortextPipeline / make_graph) module.
 """
 
-import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+import inspect
 import pytest
 
-from kortext.graph import (
-    KortextPipeline,
-    KortextState,
-    CerebrumPipeline,
-    CerebrumState,
-    CortexState,
-    make_graph,
-    extract_symbol_candidates,
-    _extract_symbol_candidates,
-)
+from kortext.retrieval import RetrievalEngine, federated_query
+from kortext.symbols.seek import extract_symbol_candidates, _extract_symbol_candidates
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.anyio
-async def test_make_graph_returns_kortext_pipeline():
-    mock_retrieval = AsyncMock()
-    mock_episodic = AsyncMock()
-    mock_symbol_graph = MagicMock()
+async def test_federated_query_executes_all_tiers():
+    engine = RetrievalEngine()
 
-    pipeline = make_graph(
-        retrieval=mock_retrieval,
-        episodic=mock_episodic,
-        symbol_graph=mock_symbol_graph,
-    )
-    assert isinstance(pipeline, KortextPipeline)
-    assert pipeline.retrieval is mock_retrieval
-    assert pipeline.episodic is mock_episodic
-    assert pipeline.symbol_graph is mock_symbol_graph
+    with patch("kortext.retrieval.engine.execute_federated_query", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = {
+            "query": "Where is test_foo defined?",
+            "symbolic_context": [
+                {
+                    "symbol": "test_foo",
+                    "kind": "function",
+                    "file": "kortext/foo.py",
+                    "lines": [10],
+                    "signature": "def test_foo():",
+                }
+            ],
+            "code_chunks": ["def test_foo(): pass"],
+            "episodic_history": ["Learned pattern X"],
+            "architectural_overview": "# Architecture Overview",
+            "total_estimated_tokens": 120,
+        }
 
-
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-@pytest.mark.anyio
-async def test_kortext_pipeline_default_symbol_graph():
-    mock_retrieval = AsyncMock()
-    mock_episodic = AsyncMock()
-
-    with patch("kortext.graph.SymbolGraphManager") as mock_sym_mgr_cls:
-        mock_instance = MagicMock()
-        mock_sym_mgr_cls.return_value = mock_instance
-
-        pipeline = KortextPipeline(
-            retrieval=mock_retrieval,
-            episodic=mock_episodic,
-            symbol_graph=None,
+        result = await engine.federated_query(
+            query="Where is test_foo defined?",
+            collection="kortext_codebase",
+            workspace_root="/fake/workspace",
+            token_budget=1500,
         )
-        assert pipeline.symbol_graph is mock_instance
-        mock_sym_mgr_cls.assert_called_once()
+
+        assert isinstance(result, dict)
+        assert result["query"] == "Where is test_foo defined?"
+        assert len(result["symbolic_context"]) == 1
+        assert result["symbolic_context"][0]["symbol"] == "test_foo"
+        assert "def test_foo(): pass" in result["code_chunks"]
+        assert "Learned pattern X" in result["episodic_history"]
+        assert result["architectural_overview"] == "# Architecture Overview"
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.anyio
-async def test_kortext_pipeline_ainvoke_flow():
-    mock_retrieval = AsyncMock()
-    mock_retrieval.query = AsyncMock(return_value=["def test_foo(): pass"])
-
-    mock_episodic = AsyncMock()
-    mock_episodic.search = AsyncMock(return_value=["Learned pattern X"])
-
-    mock_symbol_graph = MagicMock()
-    mock_symbol_graph.graph_name = "kortext_symbols"
-    mock_symbol_graph.find_references.return_value = {
-        "symbol": "test_foo",
-        "definitions": [{"file_path": "kortext/foo.py", "line": 10, "kind": "function", "signature": "def test_foo():", "docstring": "A test func."}],
-        "imports": [{"file_path": "kortext/bar.py", "line": 2, "module": "kortext.foo"}],
-        "references": [{"file_path": "tests/test_foo.py", "line": 15, "kind": "call"}],
-    }
-
-    pipeline = KortextPipeline(
-        retrieval=mock_retrieval,
-        episodic=mock_episodic,
-        symbol_graph=mock_symbol_graph,
+async def test_module_level_federated_query_convenience_wrapper():
+    mock_engine = MagicMock()
+    mock_engine.federated_query = AsyncMock(
+        return_value={
+            "query": "test_symbol",
+            "symbolic_context": [],
+            "code_chunks": [],
+            "episodic_history": [],
+            "architectural_overview": None,
+            "total_estimated_tokens": 0,
+        }
     )
 
-    state: KortextState = {
-        "query": "Where is test_foo defined?",
-        "collection": "kortext_codebase",
-        "workspace_root": "/fake/workspace",
-    }
-
-    result = await pipeline.ainvoke(state)
-    assert isinstance(result, dict)
-    assert "final_context" in result
-    final_context = result["final_context"]
-
-    # Verify all 4 tiers are formatted
-    assert "### Deterministic Code Symbols & Cross-File References (FalkorDB)" in final_context
-    assert "test_foo" in final_context
-    assert "### Operational Facts & Decisions (Graphiti)" in final_context
-    assert "Learned pattern X" in final_context
-    assert "### System Architecture Overview (OpenViking)" in final_context
-    assert "_No structural context available._" in final_context
-    assert "### Ground-Truth Code References (Qdrant Reranked)" in final_context
-    assert "def test_foo(): pass" in final_context
-
-
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-@pytest.mark.anyio
-async def test_kortext_pipeline_graceful_degradation():
-    """Verify that failure in retrieval nodes does not crash pipeline."""
-    mock_retrieval = AsyncMock()
-    mock_retrieval.query = AsyncMock(side_effect=RuntimeError("Qdrant offline"))
-
-    mock_episodic = AsyncMock()
-    mock_episodic.search = AsyncMock(side_effect=RuntimeError("Episodic offline"))
-
-    mock_symbol_graph = MagicMock()
-    mock_symbol_graph.graph_name = "kortext_symbols"
-    mock_symbol_graph.find_references.side_effect = RuntimeError("FalkorDB offline")
-
-    pipeline = KortextPipeline(
-        retrieval=mock_retrieval,
-        episodic=mock_episodic,
-        symbol_graph=mock_symbol_graph,
+    res = await federated_query(
+        query="test_symbol",
+        token_budget=900,
+        collection="kortext_codebase",
+        engine=mock_engine,
+    )
+    assert res["query"] == "test_symbol"
+    mock_engine.federated_query.assert_awaited_once_with(
+        query="test_symbol",
+        token_budget=900,
+        collection="kortext_codebase",
+        workspace_root=None,
+        detail_level="balanced",
+        project=None,
     )
 
-    state: KortextState = {
-        "query": "Where is test_symbol?",
-        "collection": "kortext_codebase",
-    }
 
-    result = await pipeline.ainvoke(state)
-    assert "final_context" in result
-    final_context = result["final_context"]
-    assert "_No relevant operational facts found._" in final_context
-    assert "_No structural context available._" in final_context
-    assert "_No code references found._" in final_context
-
-
-def test_kortext_state_backwards_compatibility():
-    assert CortexState is KortextState
-    assert CerebrumState is KortextState
+def test_symbol_candidate_extractors_exported():
     assert extract_symbol_candidates is not None
     assert _extract_symbol_candidates is not None
+    cands = extract_symbol_candidates("Where is RetrievalEngine.federated_query defined?")
+    assert any("RetrievalEngine" in c or "federated_query" in c for c in cands)
 
 
-def test_graph_deprecation_notices():
-    """Verify deprecation notices and warnings for kortext.graph components."""
-    import warnings
-    import kortext.graph as graph_mod
-
-    # 1. Module docstring deprecation notice
-    assert "deprecated" in (graph_mod.__doc__ or "").lower()
-    assert "retrievalengine.federated_query" in (graph_mod.__doc__ or "").lower()
-
-    # 2. Class and function docstrings mention deprecation
-    assert "deprecated" in (KortextPipeline.__doc__ or "").lower()
-    assert "deprecated" in (make_graph.__doc__ or "").lower()
-
-    # 3. Executing make_graph issues DeprecationWarning
-    mock_retrieval = AsyncMock()
-    mock_episodic = AsyncMock()
-    mock_symbol_graph = MagicMock()
-
-    with pytest.deprecated_call():
-        p = make_graph(
-            retrieval=mock_retrieval,
-            episodic=mock_episodic,
-            symbol_graph=mock_symbol_graph,
-        )
-        assert isinstance(p, KortextPipeline)
+def test_deprecated_graph_module_removed():
+    """Verify dead kortext/graph.py module has been removed per audit remediation."""
+    graph_file = Path(__file__).resolve().parent.parent / "kortext" / "graph.py"
+    assert not graph_file.exists(), "Deprecated kortext/graph.py should be deleted"
 
 
 def test_server_does_not_depend_on_graph_pipeline():
     """Verify server.py does not import make_graph or bind graph to lifespan."""
-    import inspect
     import kortext.server as server_mod
 
-    # server should not import make_graph
     assert not hasattr(server_mod, "make_graph")
-
-    # Inspect lifespan source code to verify make_graph is unbound
     lifespan_source = inspect.getsource(server_mod.lifespan)
     assert "make_graph" not in lifespan_source

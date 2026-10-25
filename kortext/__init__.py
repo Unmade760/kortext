@@ -1,5 +1,8 @@
 """Kortext: Local RAG, 5-tier dual-memory, AST code intelligence, and task DAG knowledge OS for Antigravity CLI."""
 
+import logging
+from pathlib import Path
+from typing import Any
 from kortext._home import KORTEXT_HOME, get_kortext_home
 from kortext._env import (
     get_env,
@@ -15,73 +18,56 @@ from kortext._env import (
     get_qdrant_collection,
     get_embed_base_url,
     get_embed_model_name,
+    get_embed_dimension,
     get_rerank_base_url,
 )
-try:
-    from kortext._qdrant import (
-        get_qdrant_client,
-        get_sync_qdrant_client,
-        get_async_qdrant_client,
-        is_qdrant_online,
-    )
-except ImportError:
-    get_qdrant_client = None  # type: ignore
-    get_sync_qdrant_client = None  # type: ignore
-    get_async_qdrant_client = None  # type: ignore
-    is_qdrant_online = None  # type: ignore
 
-try:
-    from kortext.embeddings import (
-        DenseEmbedder,
-        DenseEmbedderProtocol,
-        FastEmbedDenseProvider,
-        RemoteDenseProvider,
-        get_dense_embedder,
-        is_remote_embed_alive,
-    )
-except ImportError:
-    DenseEmbedder = None  # type: ignore
-    DenseEmbedderProtocol = None  # type: ignore
-    FastEmbedDenseProvider = None  # type: ignore
-    RemoteDenseProvider = None  # type: ignore
-    get_dense_embedder = None  # type: ignore
-    is_remote_embed_alive = None  # type: ignore
+logger = logging.getLogger(__name__)
 
-CEREBRUM_HOME = KORTEXT_HOME
+_QDRANT_ATTRS = {
+    "get_qdrant_client",
+    "get_sync_qdrant_client",
+    "get_async_qdrant_client",
+    "is_qdrant_online",
+}
+
+_EMBED_ATTRS = {
+    "DenseEmbedder",
+    "DenseEmbedderProtocol",
+    "FastEmbedDenseProvider",
+    "RemoteDenseProvider",
+    "get_dense_embedder",
+    "is_remote_embed_alive",
+}
 
 
-import importlib
-import importlib.abc
-import importlib.machinery
-import sys
-
-
-class _AliasLoader(importlib.abc.Loader):
-    def __init__(self, target_module):
-        self.target_module = target_module
-
-    def create_module(self, spec):
-        return self.target_module
-
-    def exec_module(self, module):
-        pass
-
-
-class _CerebrumAliasFinder(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path, target=None):
-        if fullname == "cerebrum" or fullname.startswith("cerebrum."):
-            kortext_name = "kortext" + fullname[len("cerebrum"):]
-            mod = importlib.import_module(kortext_name)
-            sys.modules[fullname] = mod
-            is_pkg = hasattr(mod, "__path__")
-            return importlib.machinery.ModuleSpec(fullname, _AliasLoader(mod), is_package=is_pkg)
-        return None
-
-
-if not any(isinstance(f, _CerebrumAliasFinder) for f in sys.meta_path):
-    sys.meta_path.insert(0, _CerebrumAliasFinder())
-
-if "kortext" in sys.modules and "cerebrum" not in sys.modules:
-    sys.modules["cerebrum"] = sys.modules["kortext"]
-elif "cerebrum" in sys.modules and "kortext" not in sys.modules:
-    sys.modules["kortext"] = sys.modules["cerebrum"]
+def __getattr__(name: str) -> Any:
+    """Lazy-load heavy Qdrant and embedding submodules on first access (PEP 562)
+    so lightweight CLI hooks (kortext.hooks.runner) avoid ~100ms import overhead."""
+    if name in _QDRANT_ATTRS:
+        try:
+            import kortext._qdrant as _qdrant
+            return getattr(_qdrant, name)
+        except ImportError:
+            logger.debug("Failed to import kortext._qdrant for %s", name, exc_info=True)
+            return None
+    if name in _EMBED_ATTRS:
+        try:
+            import kortext.embeddings as _embeddings
+            return getattr(_embeddings, name)
+        except ImportError:
+            logger.debug("Failed to import kortext.embeddings for %s", name, exc_info=True)
+            return None
+    try:
+        import importlib
+        return importlib.import_module(f"kortext.{name}")
+    except ModuleNotFoundError as exc:
+        mod_dir = Path(__file__).resolve().parent
+        is_real_submodule = (mod_dir / f"{name}.py").is_file() or (mod_dir / name / "__init__.py").is_file()
+        logger.debug("ImportError loading kortext.%s", name, exc_info=True)
+        if is_real_submodule or (exc.name is not None and exc.name != f"kortext.{name}"):
+            raise
+    except ImportError:
+        logger.debug("ImportError loading kortext.%s", name, exc_info=True)
+        raise
+    raise AttributeError(f"module 'kortext' has no attribute {name!r}")

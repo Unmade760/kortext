@@ -145,16 +145,31 @@ export async function loadTelemetry() {
     const data = await api.getTelemetry();
     if (data.status === 'ok' && data.telemetry) {
       const t = data.telemetry;
+      const verEl = document.getElementById('kortext-version');
+      if (verEl && t.version) verEl.innerText = `v${t.version}`;
       const rssEl = document.getElementById('hud-rss');
       const latEl = document.getElementById('hud-lat');
       const invEl = document.getElementById('hud-invariants');
       if (rssEl) rssEl.innerText = `${t.substrate_ram_rss_mb} MB RSS`;
       if (latEl) latEl.innerText = `${t.falkordb_latency_ms} ms`;
-      if (invEl && t.active_invariants !== undefined) invEl.innerText = `${t.active_invariants} Verified`;
+      if (invEl && t.active_invariants !== undefined) {
+        const inst = t.instincts_count ? ` • ${t.instincts_count} Instincts` : '';
+        invEl.innerText = `${t.active_invariants} Verified${inst}`;
+      }
+      const ctxEl = document.getElementById('hud-context-window');
+      if (ctxEl && t.context_window) {
+        const cw = t.context_window;
+        const pct = cw.used_percentage || 0;
+        const cPct = cw.compaction_budget_pct || 0;
+        ctxEl.innerText = `${pct}% (${cPct}% of 25% ceil)`;
+      }
 
       // Update 5-Tier Memory Grid UI if present
       renderMemoryTiersUI(t.memory_tiers);
       renderHooksStatusUI(t.nextgen_hooks);
+      loadQuarantine();
+      loadContextTelemetry();
+      loadInstinctsAndInvariants();
     }
   } catch (err) {
     console.warn('Telemetry load error:', err);
@@ -318,4 +333,145 @@ export function refreshAll() {
   if (state.activeTab === 'journal' && window.loadJournal) window.loadJournal();
   if (state.activeTab === 'collections' && window.loadCollections) window.loadCollections();
   toast('Refreshed all active telemetry', 'info');
+}
+
+// Live Session Context & Token Burn Telemetry (25% Compaction Window Monitor)
+export async function loadContextTelemetry() {
+  const barEl = document.getElementById("ctx-compaction-bar");
+  const usedEl = document.getElementById("ctx-used-tokens");
+  const ceilEl = document.getElementById("ctx-compaction-pct");
+  const savedEl = document.getElementById("ctx-tokens-saved");
+  const batonsEl = document.getElementById("ctx-handoff-batons-list");
+
+  try {
+    const data = await api.getContextTelemetry();
+    if (data.status !== "ok") return;
+    const cw = data.context_window || {};
+    const usedTokens = cw.total_input_tokens || 0;
+    const winSize = cw.context_window_size || 1000000;
+    const compPct = cw.compaction_budget_pct || 0;
+
+    if (usedEl) usedEl.textContent = `${usedTokens.toLocaleString()} / ${(winSize / 4).toLocaleString()} tok (25% ceil)`;
+    if (ceilEl) ceilEl.textContent = `${compPct}% of Compaction Ceiling`;
+    if (savedEl) savedEl.textContent = `~${(data.estimated_tokens_saved || 0).toLocaleString()} tokens saved (${data.seek_symbol_calls || 0} AST seeks)`;
+
+    if (barEl) {
+      const clamped = Math.min(100, Math.max(2, compPct));
+      barEl.style.width = `${clamped}%`;
+      barEl.className = compPct >= 88
+        ? "h-2 rounded-full bg-rose-500 transition-all"
+        : (compPct >= 72 ? "h-2 rounded-full bg-amber-400 transition-all" : "h-2 rounded-full bg-emerald-400 transition-all");
+    }
+
+    if (batonsEl) {
+      const batons = data.handoff_batons || [];
+      if (batons.length === 0) {
+        batonsEl.innerHTML = "<div class=\"text-slate-400 text-xs font-mono py-2\">No pre-compaction handoff batons recorded yet.</div>";
+      } else {
+        batonsEl.innerHTML = batons.slice(0, 5).map(b => `
+          <div class="p-2 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs font-mono">
+            <div class="truncate max-w-[260px]">
+              <span class="text-indigo-400 font-bold">${escapeHtml(b.task_id || b.filename)}</span>
+              <span class="text-slate-400 ml-2">${escapeHtml(b.current_scope || "")}</span>
+            </div>
+            <span class="text-[10px] text-slate-400">${escapeHtml(b.target_agent || "orchestrator")}</span>
+          </div>
+        `).join("");
+      }
+    }
+  } catch (err) {
+    console.warn("Context telemetry load error:", err);
+  }
+}
+
+// Continuous Learning (InstinctStore) & Grounded Invariants Manager
+export async function loadInstinctsAndInvariants() {
+  const instContainer = document.getElementById("instincts-manager-list");
+  const invContainer = document.getElementById("grounded-invariants-list");
+  const instBadge = document.getElementById("instincts-count-badge");
+  const invBadge = document.getElementById("invariants-drift-badge");
+
+  try {
+    const [instData, invData] = await Promise.all([
+      api.getInstincts(state.activeProject),
+      api.getGroundedInvariants(),
+    ]);
+
+    if (instData.status === "ok") {
+      const list = instData.instincts || [];
+      if (instBadge) instBadge.textContent = `${list.length} Learned`;
+      if (instContainer) {
+        if (list.length === 0) {
+          instContainer.innerHTML = "<div class=\"text-slate-400 text-xs font-mono py-4 text-center\">No instincts recorded yet. PostToolUse error->fix transitions populate this automatically.</div>";
+        } else {
+          instContainer.innerHTML = list.slice(0, 12).map(inst => {
+            const confPct = Math.round((inst.confidence || 0) * 100);
+            const trust = inst.trust_level || "speculative";
+            const safeId = escapeHtml(inst.id || "");
+            const isVerified = ["tool_confirmed", "verified", "user_approved", "system"].includes(trust);
+            const badgeCls = isVerified
+              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+              : "bg-amber-500/10 text-amber-300 border-amber-500/30";
+            return `
+              <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 font-mono text-xs">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold text-indigo-300 truncate">${escapeHtml(inst.pattern || inst.id)}</span>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <span class="text-[10px] px-1.5 py-0.5 rounded border ${badgeCls}">${escapeHtml(trust)} (${confPct}%)</span>
+                    <button data-instinct-id="${safeId}" onclick="promoteInstinctById(this.dataset.instinctId)" class="px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px] border border-indigo-500/40 transition">Promote</button>
+                  </div>
+                </div>
+                <div class="text-slate-300 text-[11px]">${escapeHtml(inst.action || "")}</div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+    }
+
+    if (invData.status === "ok") {
+      const audit = invData.drift_audit || {};
+      const drifted = audit.drifted_count || 0;
+      if (invBadge) {
+        invBadge.textContent = drifted > 0 ? `${drifted} Drifted` : "0 Drifted (Verified)";
+        invBadge.className = drifted > 0
+          ? "text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold"
+          : "text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold";
+      }
+      if (invContainer) {
+        const records = invData.grounded_invariants || [];
+        if (records.length === 0) {
+          invContainer.innerHTML = "<div class=\"text-slate-400 text-xs font-mono py-4 text-center\">All AST-grounded invariants are in sync with live Tree-sitter body hashes.</div>";
+        } else {
+          invContainer.innerHTML = records.slice(0, 10).map(r => `
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 font-mono text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white">${escapeHtml(r.symbol_name || r.domain || "Invariant")}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">${escapeHtml(r.status || "verified")}</span>
+              </div>
+              <div class="text-slate-300 text-[11px]">${escapeHtml(r.rule || "")}</div>
+              <div class="text-[10px] text-slate-400 truncate">AST SHA-256: ${escapeHtml((r.ast_hash || "").slice(0, 16))} • ${escapeHtml(r.file_path || "")}</div>
+            </div>
+          `).join("");
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Instincts/Invariants load error:", err);
+  }
+}
+
+export async function promoteInstinctById(id) {
+  if (!id) return;
+  try {
+    const res = await api.promoteInstinct(id);
+    if (res.status === "ok") {
+      toast(`Promoted instinct ${id} to user_approved`, "success");
+      loadInstinctsAndInvariants();
+    } else {
+      toast(`Promotion failed: ${res.message || "error"}`, "error");
+    }
+  } catch (err) {
+    toast("Promote instinct error: " + err.message, "error");
+  }
 }

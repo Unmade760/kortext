@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Kortext Knowledge OS: Real-Time Filesystem Watcher Daemon -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kortext.watcher</string>
+    <key>WorkingDirectory</key>
+    <string>{{PROJECT_DIR}}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{PYTHON_BIN}}</string>
+        <string>-m</string>
+        <string>kortext.watcher</string>
+        <string>--root</string>
+        <string>{{PROJECT_DIR}}</string>
+        <string>--collection</string>
+        <string>kortext_codebase</string>
+        <string>--debounce</string>
+        <string>3.0</string>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{{HOME}}/.kortext/logs/watcher.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{HOME}}/.kortext/logs/watcher.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONPATH</key>
+        <string>{{PROJECT_DIR}}</string>
+    </dict>
+</dict>
+</plist>

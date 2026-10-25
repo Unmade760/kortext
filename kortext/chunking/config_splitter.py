@@ -2,6 +2,8 @@
 Structured Configuration File Splitter for Kortext (.yaml, .yml, .json, .toml).
 """
 from __future__ import annotations
+import logging
+logger = logging.getLogger(__name__)
 
 import json
 from pathlib import Path
@@ -29,7 +31,7 @@ class ConfigSectionSplitter:
     by logical sections or keys, with syntax verification and breadcrumbs.
     """
 
-    def __init__(self, max_tokens: int = 512):
+    def __init__(self, max_tokens: int = 384):
         self.max_tokens = max_tokens
 
     def split_config(self, text: str, file_path: str = "") -> List[Dict[str, Any]]:
@@ -42,21 +44,21 @@ class ConfigSectionSplitter:
                 if isinstance(data, dict):
                     return self._split_dict_sections(data, file_path, "json")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
         elif ext in (".yaml", ".yml") and _YAML_AVAILABLE:
             try:
                 data = yaml.safe_load(text)
                 if isinstance(data, dict):
                     return self._split_dict_sections(data, file_path, "yaml")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
         elif ext == ".toml" and _TOMLLIB_AVAILABLE:
             try:
                 data = tomllib.loads(text)
                 if isinstance(data, dict):
                     return self._split_dict_sections(data, file_path, "toml")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
 
         # Fallback to single chunk or raw text
         header = f"# File: {file_path}\n# Config File\n\n"

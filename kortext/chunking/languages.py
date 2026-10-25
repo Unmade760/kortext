@@ -2,11 +2,16 @@
 Tree-sitter Language Grammars and Extension Mappings for Kortext.
 
 Supports 10 core language ecosystems across Tier 1 (Modern Web/Systems)
-and Tier 2 (Enterprise, Native & Systems).
+and Tier 2 (Enterprise, Native & Systems), with lazy on-demand grammar loading
+to eliminate cold-start import overhead in CLI hooks.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Set
+import importlib
+import logging
+from typing import Any, Callable, Dict, Iterator, Optional, Set
+
+logger = logging.getLogger(__name__)
 
 # Tree-sitter bindings
 try:
@@ -18,106 +23,128 @@ except ImportError:
     Parser = Any    # type: ignore
     _TS_AVAILABLE = False
 
-LANG_MAP: Dict[str, Language] = {}
 
-if _TS_AVAILABLE:
-    # ── Tier 1: Core Modern Stack ──────────────────────────────────────────
-    try:
-        import tree_sitter_python as tspython
-        LANG_MAP[".py"] = Language(tspython.language())
-    except ImportError:
-        pass
+_EXT_LOADERS: Dict[str, tuple[str, str]] = {
+    ".py": ("tree_sitter_python", "language"),
+    ".js": ("tree_sitter_javascript", "language"),
+    ".jsx": ("tree_sitter_javascript", "language"),
+    ".ts": ("tree_sitter_typescript", "language_typescript"),
+    ".tsx": ("tree_sitter_typescript", "language_tsx"),
+    ".rs": ("tree_sitter_rust", "language"),
+    ".go": ("tree_sitter_go", "language"),
+    ".c": ("tree_sitter_c", "language"),
+    ".h": ("tree_sitter_c", "language"),
+    ".cpp": ("tree_sitter_cpp", "language"),
+    ".hpp": ("tree_sitter_cpp", "language"),
+    ".cc": ("tree_sitter_cpp", "language"),
+    ".cxx": ("tree_sitter_cpp", "language"),
+    ".java": ("tree_sitter_java", "language"),
+    ".kt": ("tree_sitter_kotlin", "language"),
+    ".kts": ("tree_sitter_kotlin", "language"),
+    ".swift": ("tree_sitter_swift", "language"),
+    ".cs": ("tree_sitter_c_sharp", "language"),
+}
 
-    try:
-        import tree_sitter_javascript as tsjs
-        js_lang = Language(tsjs.language())
-        LANG_MAP[".js"] = js_lang
-        LANG_MAP[".jsx"] = js_lang
-    except ImportError:
-        pass
 
-    try:
-        import tree_sitter_typescript as tsts
-        LANG_MAP[".ts"] = Language(tsts.language_typescript())
-        LANG_MAP[".tsx"] = Language(tsts.language_tsx())
-    except ImportError:
-        pass
+class _LazyLangMap(dict):
+    """
+    Lazy dictionary mapping file extensions (e.g. '.py') to Tree-sitter Language objects.
+    Loads each compiled grammar C-extension on first access rather than at module import time.
+    """
 
-    try:
-        import tree_sitter_rust as tsrust
-        LANG_MAP[".rs"] = Language(tsrust.language())
-    except ImportError:
-        pass
+    def __init__(self) -> None:
+        super().__init__()
+        self._failed: Set[str] = set()
 
-    try:
-        import tree_sitter_go as tsgo
-        LANG_MAP[".go"] = Language(tsgo.language())
-    except ImportError:
-        pass
+    def _resolve_ext(self, ext: str) -> Optional[Any]:
+        if not _TS_AVAILABLE or ext in self._failed:
+            return None
+        if super().__contains__(ext):
+            return super().__getitem__(ext)
+        spec = _EXT_LOADERS.get(ext)
+        if not spec:
+            return None
+        mod_name, fn_name = spec
+        try:
+            mod = importlib.import_module(mod_name)
+            lang_fn: Callable[[], Any] = getattr(mod, fn_name)
+            lang_obj = Language(lang_fn())
+            super().__setitem__(ext, lang_obj)
+            return lang_obj
+        except Exception:
+            self._failed.add(ext)
+            return None
 
-    # ── Tier 2: Systems, Mobile & Enterprise ────────────────────────────────
-    try:
-        import tree_sitter_c as tsc
-        c_lang = Language(tsc.language())
-        LANG_MAP[".c"] = c_lang
-        LANG_MAP[".h"] = c_lang
-    except ImportError:
-        pass
+    def _ensure_all_loaded(self) -> None:
+        for ext in _EXT_LOADERS:
+            if not super().__contains__(ext) and ext not in self._failed:
+                self._resolve_ext(ext)
 
-    try:
-        import tree_sitter_cpp as tscpp
-        cpp_lang = Language(tscpp.language())
-        LANG_MAP[".cpp"] = cpp_lang
-        LANG_MAP[".hpp"] = cpp_lang
-        LANG_MAP[".cc"] = cpp_lang
-        LANG_MAP[".cxx"] = cpp_lang
-    except ImportError:
-        pass
+    def __getitem__(self, key: str) -> Any:
+        if super().__contains__(key):
+            return super().__getitem__(key)
+        val = self._resolve_ext(key)
+        if val is not None:
+            return val
+        raise KeyError(key)
 
-    try:
-        import tree_sitter_java as tsjava
-        LANG_MAP[".java"] = Language(tsjava.language())
-    except ImportError:
-        pass
+    def get(self, key: str, default: Any = None) -> Any:
+        if super().__contains__(key):
+            return super().__getitem__(key)
+        val = self._resolve_ext(key)
+        return val if val is not None else default
 
-    try:
-        import tree_sitter_kotlin as tskotlin
-        kt_lang = Language(tskotlin.language())
-        LANG_MAP[".kt"] = kt_lang
-        LANG_MAP[".kts"] = kt_lang
-    except ImportError:
-        pass
+    def __contains__(self, key: object) -> bool:
+        if not isinstance(key, str):
+            return False
+        if super().__contains__(key):
+            return True
+        return self._resolve_ext(key) is not None
 
-    try:
-        import tree_sitter_swift as tsswift
-        LANG_MAP[".swift"] = Language(tsswift.language())
-    except ImportError:
-        pass
+    def keys(self):  # type: ignore[override]
+        self._ensure_all_loaded()
+        return super().keys()
 
-    try:
-        import tree_sitter_c_sharp as tscsharp
-        LANG_MAP[".cs"] = Language(tscsharp.language())
-    except ImportError:
-        pass
+    def values(self):  # type: ignore[override]
+        self._ensure_all_loaded()
+        return super().values()
 
-# Backward compatibility aliases
-PY_LANG = LANG_MAP.get(".py")
-JS_LANG = LANG_MAP.get(".js")
-TS_LANG = LANG_MAP.get(".ts")
-TSX_LANG = LANG_MAP.get(".tsx")
-RUST_LANG = LANG_MAP.get(".rs")
-GO_LANG = LANG_MAP.get(".go")
+    def items(self):  # type: ignore[override]
+        self._ensure_all_loaded()
+        return super().items()
+
+    def __iter__(self) -> Iterator[str]:
+        self._ensure_all_loaded()
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._ensure_all_loaded()
+        return super().__len__()
+
+
+LANG_MAP: Dict[str, Language] = _LazyLangMap()
+
+
+def __getattr__(name: str) -> Any:
+    alias_map = {
+        "PY_LANG": ".py",
+        "JS_LANG": ".js",
+        "TS_LANG": ".ts",
+        "TSX_LANG": ".tsx",
+        "RUST_LANG": ".rs",
+        "GO_LANG": ".go",
+    }
+    if name in alias_map:
+        return LANG_MAP.get(alias_map[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Canonical extensions
-SUPPORTED_CODE_EXTS: Set[str] = set(LANG_MAP.keys())
+SUPPORTED_CODE_EXTS: Set[str] = set(_EXT_LOADERS.keys())
 SUPPORTED_CONFIG_EXTS: Set[str] = {".yaml", ".yml", ".json", ".toml"}
 SUPPORTED_DOC_EXTS: Set[str] = {".md", ".markdown", ".txt"}
 ALL_SUPPORTED_EXTS: Set[str] = (
-    (SUPPORTED_CODE_EXTS if SUPPORTED_CODE_EXTS else {
-        ".py", ".js", ".jsx", ".ts", ".tsx", ".rs", ".go",
-        ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx",
-        ".java", ".kt", ".kts", ".swift", ".cs"
-    })
+    SUPPORTED_CODE_EXTS
     | SUPPORTED_CONFIG_EXTS
     | SUPPORTED_DOC_EXTS
 )

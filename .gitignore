@@ -4,10 +4,15 @@
 .env.*
 !.env.example
 
-# Runtime logs and persisted databases
+# Runtime logs, workspace state, and persisted databases
+.kortext/
 logs/
 data/
 *.log
+*.rdb
+*.sqlite
+*.db
+*.tmp.*
 
 # Personal Daily Journals & Dreams (keep invariants.md and template)
 journal/20*.md
@@ -31,6 +36,10 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Ephemeral testing and MCP artifacts
+.playwright-mcp/
+journal/implementations/
 
 # OS artifacts
 .DS_Store

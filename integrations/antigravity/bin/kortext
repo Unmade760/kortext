@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+PRG="$0"
+while [ -h "$PRG" ]; do
+    ls="$(ls -ld "$PRG")"
+    link="$(expr "$ls" : '.*-> \(.*\)$')"
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG="$(dirname "$PRG")/$link"
+    fi
+done
+BIN_DIR="$(cd "$(dirname "$PRG")" && pwd)"
+PLUGIN_DIR="$(cd "$BIN_DIR/.." && pwd)"
+
+if [ -n "$KORTEXT_ROOT" ] && [ -d "$KORTEXT_ROOT" ]; then
+    PROJECT_ROOT="$KORTEXT_ROOT"
+elif [ -f "$PLUGIN_DIR/../../pyproject.toml" ]; then
+    PROJECT_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
+else
+    PROJECT_ROOT="$PLUGIN_DIR"
+fi
+
+if [ -n "$KORTEXT_PYTHON" ] && [ -x "$KORTEXT_PYTHON" ]; then
+    PY_BIN="$KORTEXT_PYTHON"
+elif [ -x "$PROJECT_ROOT/.venv/bin/python3" ]; then
+    PY_BIN="$PROJECT_ROOT/.venv/bin/python3"
+elif [ -x "$PROJECT_ROOT/.venv/Scripts/python.exe" ]; then
+    PY_BIN="$PROJECT_ROOT/.venv/Scripts/python.exe"
+elif [ -n "$VIRTUAL_ENV" ] && [ -x "$VIRTUAL_ENV/bin/python3" ]; then
+    PY_BIN="$VIRTUAL_ENV/bin/python3"
+elif [ -n "$VIRTUAL_ENV" ] && [ -x "$VIRTUAL_ENV/Scripts/python.exe" ]; then
+    PY_BIN="$VIRTUAL_ENV/Scripts/python.exe"
+elif command -v python3 >/dev/null 2>&1; then
+    PY_BIN="$(command -v python3)"
+elif command -v python >/dev/null 2>&1; then
+    PY_BIN="$(command -v python)"
+else
+    PY_BIN="python3"
+fi
+
+export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+exec "$PY_BIN" -m kortext.cli "$@"

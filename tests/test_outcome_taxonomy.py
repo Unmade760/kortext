@@ -133,7 +133,7 @@ async def test_falkordb_episodic_node_category_and_project_link(episodic_driver)
         episode_name="Feature Implementation",
         content="Implemented feature X",
         category="implementation",
-        project="cortex_project",
+        project="kortext_project",
     )
     assert res_impl["status"] == "ok"
 
@@ -144,18 +144,18 @@ async def test_falkordb_episodic_node_category_and_project_link(episodic_driver)
     """
     data_impl = episodic_driver._query(
         query_impl,
-        {"proj": "cortex_project", "ename": "Feature Implementation"},
+        {"proj": "kortext_project", "ename": "Feature Implementation"},
     )
     assert data_impl and len(data_impl) > 1 and data_impl[1]
     assert data_impl[1][0][0] == "implementation"
-    assert data_impl[1][0][1] == "cortex_project"
+    assert data_impl[1][0][1] == "kortext_project"
 
     # 2. Decision outcome without entities -> creates ADR entity node and [:DECIDES] link
     res_dec = await episodic_driver.record_outcome(
         episode_name="ADR 001 Architecture Choice",
         content="Chose FalkorDB for Graph substrate",
         category="decision",
-        project="cortex_project",
+        project="kortext_project",
     )
     assert res_dec["status"] == "ok"
 
@@ -176,7 +176,7 @@ async def test_falkordb_episodic_node_category_and_project_link(episodic_driver)
         episode_name="Q4 Alpha Release",
         content="Targeting alpha release by end of Q4",
         category="roadmap",
-        project="cortex_project",
+        project="kortext_project",
     )
     assert res_road["status"] == "ok"
 
@@ -197,7 +197,7 @@ async def test_falkordb_episodic_node_category_and_project_link(episodic_driver)
         episode_name="ADR 002 Component Modularity",
         content="Explicit entity provided",
         category="decision",
-        project="cortex_project",
+        project="kortext_project",
         entities=[{"name": "ModularitySpec", "type": "spec", "summary": "Module boundaries"}],
     )
     assert res_dec_with_ent["status"] == "ok"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Indexes codebase AST symbols and references directly into FalkorDB 'cerebrum_symbols'.
+Indexes codebase AST symbols and references directly into FalkorDB 'kortext_symbols'.
 """
 
 import os
@@ -8,18 +8,19 @@ import sys
 from pathlib import Path
 
 # Ensure project root is in sys.path
-sys.path.insert(0, "/Users/rb/cortex")
+KORTEXT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KORTEXT_ROOT))
 
-from cerebrum.chunking.ast_splitter import ASTCodeSplitter
-from cerebrum.chunking.languages import LANG_MAP
-from cerebrum.symbols.graph import SymbolGraphManager
+from kortext.chunking.ast_splitter import ASTCodeSplitter
+from kortext.chunking.languages import LANG_MAP
+from kortext.symbols.graph import SymbolGraphManager
 
-SYMBOLS_GRAPH = os.getenv("FALKORDB_SYMBOLS_GRAPH", "cerebrum_symbols")
+SYMBOLS_GRAPH = os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols")
 
 
 def index_directory(target_dir: str):
     root_path = Path(target_dir).resolve()
-    print(f"[Cerebrum Indexer] Target: {root_path} -> Graph: {SYMBOLS_GRAPH}")
+    print(f"[Kortext Indexer] Target: {root_path} -> Graph: {SYMBOLS_GRAPH}")
     manager = SymbolGraphManager(graph_name=SYMBOLS_GRAPH)
 
     total_files = 0
@@ -50,15 +51,15 @@ def index_directory(target_dir: str):
             total_files += 1
             total_decls += len(res["declarations"])
             total_refs += len(res["references"])
-            print(f"  Indexed {file_path.relative_to(root_path.parent)}: {len(res['declarations'])} decls, {len(res['references'])} refs")
+            print(f"  Indexed {file_path.relative_to(root_path.parent)}: {len(res['declarations'])} decls, {len(res['references'])} refs", flush=True)
         except Exception as e:
-            print(f"  [Error] Failed to index {file_path}: {e}", file=sys.stderr)
+            print(f"  [Error] Failed to index {file_path}: {e}", file=sys.stderr, flush=True)
 
-    print(f"\n[Cerebrum Indexer] Completed! Indexed {total_files} files, {total_decls} declarations, {total_refs} references.")
+    print(f"\n[Kortext Indexer] Completed! Indexed {total_files} files, {total_decls} declarations, {total_refs} references.", flush=True)
     stats = manager.get_statistics()
-    print(f"[Cerebrum Indexer] FalkorDB Statistics for '{SYMBOLS_GRAPH}': {stats}")
+    print(f"[Kortext Indexer] FalkorDB Statistics for '{SYMBOLS_GRAPH}': {stats}", flush=True)
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "/Users/rb/cortex/cerebrum"
+    target = sys.argv[1] if len(sys.argv) > 1 else str(KORTEXT_ROOT / "kortext")
     index_directory(target)

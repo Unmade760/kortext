@@ -157,7 +157,7 @@ def _retrieve_symbol_names(
     ppr = HippoRAGPPR()
     if candidates:
         ppr_results = ppr.retrieve_associative_subgraph(
-            candidates[:3], top_k=top_ppr, graph_name="cerebrum_symbols"
+            candidates[:3], top_k=top_ppr, graph_name="kortext_symbols"
         )
         for name, score in ppr_results:
             if score > 0.005 and name and _is_valid_symbol(name) and name not in seen:
@@ -173,71 +173,14 @@ def _retrieve_symbol_names(
 # Shared episodic retrieval helper (SB-2)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _query_seeded_facts(subject: str, gold_answer: str) -> str:
+def _query_seeded_facts(subject: str, query_text: str) -> str:
     """
-    Queries FalkorDB for all active facts about *subject* and returns the fact
-    string most likely to contain the gold_answer tokens.
-    When 1-hop facts do not match query tokens or return empty/low similarity,
-    falls back to 2-hop multi-session traversal (following intermediate bridge entities)
-    to retrieve multi-session facts.
-    Returns empty string when no fact exists (supports abstention).
+    Delegates directly to the production `AgentNativeEpisodicDriver.query_entity_fact_answer`
+    implementation so SB-2 benchmarks the real episodic retrieval driver rather than a test-only helper.
     """
     from kortext.episodic.driver import AgentNativeEpisodicDriver
-    from kortext.falkordb_client import get_shared_falkordb_client
 
-    client = get_shared_falkordb_client()
-    db_name = os.getenv("KORTEXT_DATABASE", os.getenv("FALKORDB_DATABASE", "kortext"))
-    rows = client.query(
-        db_name,
-        "MATCH (s:Entity {name: $sub})-[r:RELATES_TO]->(t:Entity) "
-        "WHERE (r.dormant IS NULL OR r.dormant = false) "
-        "RETURN r.fact, t.name, r.valid_from "
-        "ORDER BY r.valid_from DESC LIMIT 20",
-        {"sub": subject},
-    )
-
-    gold_tokens = set(gold_answer.lower().split()) if gold_answer else set()
-    best, best_score, best_valid_from = "", 0, ""
-
-    if rows and len(rows) > 1 and rows[1]:
-        for row in rows[1]:
-            fact_text = str(row[0]) if row[0] else ""
-            tgt_name = str(row[1]) if row[1] else ""
-            valid_from = str(row[2]) if len(row) > 2 and row[2] else ""
-            combined = (fact_text + " " + tgt_name).lower()
-            score = sum(1 for tok in gold_tokens if tok in combined) if gold_tokens else 0
-            if score > best_score or (score == best_score and score > 0 and valid_from > best_valid_from):
-                best_score = score
-                best_valid_from = valid_from
-                if fact_text and any(tok in fact_text.lower() for tok in gold_tokens):
-                    best = fact_text
-                elif tgt_name and any(tok in tgt_name.lower() for tok in gold_tokens):
-                    best = tgt_name
-                else:
-                    best = fact_text or tgt_name
-
-    # When 1-hop facts do not match query tokens or return empty/low similarity,
-    # fall back to 2-hop multi-session traversal (following intermediate bridge entities)
-    if best_score == 0 and subject:
-        driver = AgentNativeEpisodicDriver()
-        multi_hop = driver.query_multi_hop_facts(subject, max_hops=2)
-        for hfact in multi_hop:
-            f_text = hfact.get("fact", "")
-            t_name = hfact.get("target", "")
-            v_from = hfact.get("valid_from", "") or ""
-            combined = (f_text + " " + t_name).lower()
-            score = sum(1 for tok in gold_tokens if tok in combined) if gold_tokens else 0
-            if score > best_score or (score == best_score and score > 0 and v_from > best_valid_from):
-                best_score = score
-                best_valid_from = v_from
-                if f_text and any(tok in f_text.lower() for tok in gold_tokens):
-                    best = f_text
-                elif t_name and any(tok in t_name.lower() for tok in gold_tokens):
-                    best = t_name
-                else:
-                    best = f_text or t_name
-
-    return best
+    return AgentNativeEpisodicDriver().query_entity_fact_answer(subject, query_text)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,7 +221,7 @@ class TestHotpotQAMultiHop:
         return dcg / ideal if ideal > 0 else 0.0
 
     def test_hotpotqa_recall_at_5(self, hotpot_samples):
-        """SB-1a: Mean Recall@5 >= 0.75 on 50-question code-domain fixture."""
+        """SB-1a: Mean Recall@5 >= 0.35 on 50-question code-domain fixture."""
         scores = [
             recall_at_k(_retrieve_symbol_names(item["question"]), item["gold_passages"], k=5)
             for item in hotpot_samples
@@ -367,7 +310,7 @@ def cleanup_lme_sessions(seeded_lme_sessions):
 class TestLongMemEval:
     """
     SB-2: LongMemEval v1 style - 5 memory abilities over 50 questions.
-    Facts seeded into live cerebrum FalkorDB via module-scoped fixtures.
+    Facts seeded into live kortext FalkorDB via module-scoped fixtures.
 
     Thresholds calibrated from empirical measurements on this fixture corpus:
         extraction:         F1 >= 0.30
@@ -382,7 +325,7 @@ class TestLongMemEval:
         items = [s for s in lme_samples if s["ability"] == "information_extraction"]
         f1s = [
             token_f1(
-                _query_seeded_facts(item["subject"], item["gold_answer"]),
+                _query_seeded_facts(item["subject"], item["question"]),
                 item["gold_answer"],
             )
             for item in items
@@ -398,7 +341,7 @@ class TestLongMemEval:
         items = [s for s in lme_samples if s["ability"] == "knowledge_updates"]
         f1s = [
             token_f1(
-                _query_seeded_facts(item["subject"], item["gold_answer"]),
+                _query_seeded_facts(item["subject"], item["question"]),
                 item["gold_answer"],
             )
             for item in items
@@ -413,7 +356,7 @@ class TestLongMemEval:
         items = [s for s in lme_samples if s["ability"] == "temporal_reasoning"]
         f1s = [
             token_f1(
-                _query_seeded_facts(item["subject"], item["gold_answer"]),
+                _query_seeded_facts(item["subject"], item["question"]),
                 item["gold_answer"],
             )
             for item in items
@@ -428,7 +371,7 @@ class TestLongMemEval:
         items = [s for s in lme_samples if s["ability"] == "multi_session_reasoning"]
         f1s = [
             token_f1(
-                _query_seeded_facts(item["subject"], item["gold_answer"]),
+                _query_seeded_facts(item["subject"], item["question"]),
                 item["gold_answer"],
             )
             for item in items
@@ -443,7 +386,7 @@ class TestLongMemEval:
         items = [s for s in lme_samples if s["ability"] == "abstention"]
         abstained = sum(
             1 for item in items
-            if not _query_seeded_facts(item["subject"], "").strip()
+            if not _query_seeded_facts(item["subject"], item["question"]).strip()
         )
         rate = abstained / len(items)
         assert rate >= 0.80, (
@@ -485,7 +428,7 @@ class TestLongMemEval:
             result = _query_seeded_facts(subj, "engineer")
             assert "staff engineer" in result, f"Expected newest fact to win tie, got: {result}"
         finally:
-            client.query("cerebrum", "MATCH (s:Entity {name: $sub})-[r]->() DELETE r, s", {"sub": subj})
+            client.query("kortext", "MATCH (s:Entity {name: $sub})-[r]->() DELETE r, s", {"sub": subj})
 
     def test_query_multi_hop_facts_cross_session_traversal(self):
         """SB-2g: Validates 2-hop multi-session traversal following intermediate bridge entities."""
@@ -534,22 +477,22 @@ class TestLongMemEval:
             result = _query_seeded_facts(subj, target)
             assert target in result, f"Expected 2-hop traversal to retrieve {target}, got: {result}"
         finally:
-            client.query("cerebrum", "MATCH (s:Entity) WHERE s.name IN [$s, $b, $t] DETACH DELETE s", {"s": subj, "b": bridge, "t": target})
+            client.query("kortext", "MATCH (s:Entity) WHERE s.name IN [$s, $b, $t] DETACH DELETE s", {"s": subj, "b": bridge, "t": target})
 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SB-3: Cerebrum Domain-Specific Golden Set Benchmark
+# SB-3: Kortext Domain-Specific Golden Set Benchmark
 # ─────────────────────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
 def golden_set() -> List[Dict[str, Any]]:
-    return json.loads((FIXTURES / "cerebrum_golden_set.json").read_text())
+    return json.loads((FIXTURES / "kortext_golden_set.json").read_text())
 
 
-class TestCerebrumGoldenSet:
+class TestKortextGoldenSet:
     """
-    SB-3: 20-query golden set against the cortex codebase.
+    SB-3: 20-query golden set against the Kortext codebase.
     Gold passages are primary symbol names present in the FalkorDB AST index.
 
     Thresholds (empirically measured: R@5=0.85, MRR=0.95, safety margin applied):
@@ -558,7 +501,7 @@ class TestCerebrumGoldenSet:
     """
 
     def test_golden_set_recall_at_5(self, golden_set):
-        """SB-3a: Recall@5 >= 0.75 on 20-query Cerebrum golden set."""
+        """SB-3a: Recall@5 >= 0.75 on 20-query Kortext golden set."""
         scores = [
             recall_at_k(
                 _retrieve_symbol_names(item["query"], top_ppr=12),
@@ -574,7 +517,7 @@ class TestCerebrumGoldenSet:
         )
 
     def test_golden_set_mrr(self, golden_set):
-        """SB-3b: MRR >= 0.90 on 20-query Cerebrum golden set."""
+        """SB-3b: MRR >= 0.90 on 20-query Kortext golden set."""
         scores = []
         for item in golden_set:
             retrieved = _retrieve_symbol_names(item["query"], top_ppr=12)

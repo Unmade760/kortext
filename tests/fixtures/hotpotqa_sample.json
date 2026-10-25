@@ -98,17 +98,17 @@
     "question": "What monitor checks both FalkorDB and Qdrant substrate health?",
     "gold_passages": [
       "HealthMonitor",
-      "check_cerebrum_health"
+      "check_kortext_health"
     ],
-    "answer": "HealthMonitor with check_cerebrum_health"
+    "answer": "HealthMonitor with check_kortext_health"
   },
   {
     "id": "hotpot_013",
-    "question": "Which server class registers all FastMCP tools for the cerebrum daemon?",
+    "question": "Which server class registers all FastMCP tools for the kortext daemon?",
     "gold_passages": [
-      "CerebrumServer"
+      "KortextServer"
     ],
-    "answer": "CerebrumServer registers FastMCP tools"
+    "answer": "KortextServer registers FastMCP tools"
   },
   {
     "id": "hotpot_014",
@@ -265,17 +265,17 @@
     "question": "Which monitor runs health probes on both FalkorDB and Qdrant substrates?",
     "gold_passages": [
       "HealthMonitor",
-      "check_cerebrum_health"
+      "check_kortext_health"
     ],
     "answer": "HealthMonitor runs health probes"
   },
   {
     "id": "hotpot_033",
-    "question": "CerebrumServer registers which tools that agents call to interact with memory?",
+    "question": "KortextServer registers which tools that agents call to interact with memory?",
     "gold_passages": [
-      "CerebrumServer"
+      "KortextServer"
     ],
-    "answer": "CerebrumServer registers MCP tools"
+    "answer": "KortextServer registers MCP tools"
   },
   {
     "id": "hotpot_034",
@@ -352,7 +352,7 @@
   },
   {
     "id": "hotpot_043",
-    "question": "Which class runs Personalized PageRank over the cerebrum_symbols graph?",
+    "question": "Which class runs Personalized PageRank over the kortext_symbols graph?",
     "gold_passages": [
       "HippoRAGPPR"
     ],

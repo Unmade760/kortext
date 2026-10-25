@@ -150,7 +150,7 @@ class TestCIRedistribution:
         assert pytest.approx(res["ast"]) == 0.40
 
     def test_ci_mode_env_var_triggers_redistribution(self):
-        with patch.dict(os.environ, {"CEREBRUM_CI_MODE": "1"}):
+        with patch.dict(os.environ, {"KORTEXT_CI_MODE": "1", "CI_MODE": "1"}):
             assert is_ci_mode() is True
             weights = compute_adaptive_weights("RetrievalEngine", dense_available=True)
             assert weights["dense"] == 0.0
@@ -158,7 +158,7 @@ class TestCIRedistribution:
             assert pytest.approx(sum(weights.values())) == 1.0
 
     def test_dense_offline_triggers_redistribution_even_if_not_in_ci(self):
-        with patch.dict(os.environ, {"CEREBRUM_CI_MODE": "0"}):
+        with patch.dict(os.environ, {"KORTEXT_CI_MODE": "0", "CI_MODE": "0"}):
             assert is_ci_mode() is False
             weights = compute_adaptive_weights("RetrievalEngine", dense_available=False)
             assert weights["dense"] == 0.0
@@ -212,14 +212,14 @@ class TestRetrievalEngineQueryIntegration:
         asyncio.run(_run())
 
     def test_query_in_ci_mode_redistributes_dense_weight(self):
-        """Verifies engine.query in CEREBRUM_CI_MODE sets dense weight to 0.0 and redistributes."""
+        """Verifies engine.query in KORTEXT_CI_MODE sets dense weight to 0.0 and redistributes."""
         import asyncio
 
         async def _run():
             engine = RetrievalEngine()
             engine._client = AsyncMock()
 
-            with patch.dict(os.environ, {"CEREBRUM_CI_MODE": "1"}):
+            with patch.dict(os.environ, {"KORTEXT_CI_MODE": "1", "CI_MODE": "1"}):
                 with patch.object(engine, "_extract_symbol_candidates", return_value=["foo_bar"]):
                     with patch.object(engine, "_get_query_embedding", AsyncMock(return_value=[])):
                         with patch.object(engine, "_get_sparse_embedding", return_value=([1], [0.5])):

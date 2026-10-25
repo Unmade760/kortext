@@ -50,6 +50,7 @@ export const state = {
   journal: {
     allEntries: [],
     selectedCategory: 'all',
+    selectedTag: null,
     searchQuery: '',
   },
 

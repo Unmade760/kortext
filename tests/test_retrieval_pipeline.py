@@ -169,7 +169,7 @@ class TestRetrievalPipeline:
 
             # Ensure pickle.loads would raise an error if ever invoked
             with patch("pickle.loads", side_effect=RuntimeError("pickle.loads should never be called!")):
-                resolved = await resolve_workspace_root_for_collection("cerebrum_codebase")
+                resolved = await resolve_workspace_root_for_collection("kortext_codebase")
                 assert resolved is not None
                 expected_root = str(Path(__file__).resolve().parent.parent)
                 assert resolved == expected_root
@@ -193,7 +193,7 @@ class TestRetrievalPipeline:
                  patch.object(engine, "_retrieve_qdrant_points", AsyncMock(return_value=["[Dense] Match"])), \
                  patch.object(engine, "_retrieve_qdrant_sparse_points", AsyncMock(return_value=["[Sparse] BM25 Match"])):
 
-                results = await engine.query("test query", collection="cerebrum_codebase")
+                results = await engine.query("test query", collection="kortext_codebase")
                 assert len(results) >= 3
                 # Verify that both dense and sparse passages are included in candidate ranking
                 combined = " ".join(results)
@@ -243,7 +243,7 @@ class TestRetrievalPipeline:
                  patch.object(engine, "_retrieve_qdrant_points", AsyncMock(return_value=["### AST Symbol: `StrayAst` (func)", "Real code chunk"])), \
                  patch.object(engine, "_retrieve_qdrant_sparse_points", AsyncMock(return_value=["### ast symbol: stray", "Another code chunk"])):
 
-                results = await engine.query("test query", collection="cerebrum_codebase", suppress_ast_signal=True)
+                results = await engine.query("test query", collection="kortext_codebase", suppress_ast_signal=True)
                 # Verify _fetch_ast_matches was NOT called
                 ast_fetch_mock.assert_not_called()
 

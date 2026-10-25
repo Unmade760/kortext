@@ -25,8 +25,13 @@ DEFAULT_SIGNATURE_MATCH_BONUS: float = 0.50
 
 
 def is_ci_mode() -> bool:
-    """Checks whether KORTEXT_CI_MODE (or legacy CEREBRUM_CI_MODE) is active in the environment."""
-    return os.getenv("KORTEXT_CI_MODE", os.getenv("CEREBRUM_CI_MODE", "")).strip().lower() in ("1", "true", "yes")
+    """Checks whether KORTEXT_CI_MODE (or CI_MODE/CI) is active in the environment."""
+    return (
+        os.getenv("KORTEXT_CI_MODE", os.getenv("CI_MODE", os.getenv("CI", "")))
+        .strip()
+        .lower()
+        in ("1", "true", "yes")
+    )
 
 
 def extract_candidate_text(candidate: Union[Dict[str, Any], str]) -> str:
@@ -46,7 +51,7 @@ def extract_candidate_text(candidate: Union[Dict[str, Any], str]) -> str:
                 if isinstance(nc, dict) and "text" in nc:
                     return str(nc["text"])
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
 
         if "document" in candidate:
             return str(candidate["document"])

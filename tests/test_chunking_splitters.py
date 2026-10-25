@@ -153,7 +153,7 @@ def test_ast_splitter_split_code_accepts_tree_and_ast_info():
 
 
 def test_smart_code_node_parser_uses_cached_ast_and_pops_internal_metadata():
-    from llama_index.core.schema import Document
+    from kortext.ingest import Document
     from kortext.chunking.node_parser import SmartCodeNodeParser
     from kortext.chunking.languages import PY_LANG
     from kortext.chunking.ast_splitter import ASTCodeSplitter
@@ -183,4 +183,62 @@ def test_smart_code_node_parser_uses_cached_ast_and_pops_internal_metadata():
         assert "_source_bytes" not in n.metadata
         assert "_ast_info" not in n.metadata
         assert n.metadata.get("custom_meta") == "keep_me"
+
+
+def test_ast_splitter_token_bounded_sizing_and_preamble():
+    from kortext.chunking.ast_splitter import ASTCodeSplitter
+    from kortext.chunking.languages import PY_LANG
+
+    splitter = ASTCodeSplitter(language=PY_LANG)
+    assert splitter.max_tokens == 384
+    assert splitter.coalesce_target_tokens == 384
+    assert splitter.overlap_tokens == 48
+
+    code = (
+        "class MetricsTracker:\n"
+        "    \"\"\"Tracks throughput and latency for streaming workloads.\"\"\"\n"
+        "    def __init__(self, buffer_size: int = 1024):\n"
+        "        self.buffer_size = buffer_size\n"
+        "        self.records = []\n\n"
+        "    def record_metric(self, name: str, value: float) -> None:\n"
+        "        \"\"\"Record a single numeric measurement.\"\"\"\n"
+        "        self.records.append((name, value))\n"
+    )
+    chunks = splitter.split_text(code, file_path="metrics.py")
+    assert len(chunks) >= 1
+
+    first_chunk = chunks[0]
+    # Check contextual preamble fields
+    assert "# File: metrics.py" in first_chunk["text"]
+    assert any("# Scope:" in c["text"] for c in chunks)
+    assert any("# Signature:" in c["text"] for c in chunks)
+    assert all(count_tokens(c["text"]) <= 384 + 100 for c in chunks)
+
+
+def test_markdown_isolation_from_symbol_graph():
+    from unittest.mock import MagicMock
+    from kortext.symbols.graph import SymbolGraphManager
+    from kortext.falkordb_client import FalkorDBClient
+
+    mock_client = MagicMock(spec=FalkorDBClient)
+    mock_client.query.return_value = [["res"], []]
+    sgm = SymbolGraphManager(client=mock_client)
+
+    sgm.save_markdown_ast(
+        file_path="journal/2026-10-09.md",
+        title="Daily Journal",
+        frontmatter={"tags": ["journal"]},
+        sections=[{"id": "journal/2026-10-09.md#summary", "name": "Summary", "level": 1, "line": 1, "heading_path": "Summary"}],
+        declarations=[{"name": "Summary", "kind": "section", "line": 1, "signature": "# Summary", "docstring": "", "parent": ""}],
+        links=[],
+        tags=["journal"],
+    )
+
+    # Check queries executed
+    queries = [call[0][1] for call in mock_client.query.call_args_list]
+    # Ensure NO query created (s:Symbol) from markdown
+    for q in queries:
+        assert "(s:Symbol" not in q, f"Markdown heading leaked into Symbol node: {q}"
+        assert ":Symbol {" not in q, f"Markdown heading leaked into Symbol node: {q}"
+
 

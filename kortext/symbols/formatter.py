@@ -44,7 +44,7 @@ def format_impact_report(
         detail_level: 'skeleton', 'interface', or 'full' detail representation.
 
     Returns:
-        Structured dict with definitions, direct call sites/imports/links, type hierarchies,
+        Structured dict with in-budget definitions, direct call sites/imports/links, type hierarchies,
         progressive degradation statistics, and formatted markdown summary.
     """
     total_locations = len(direct_impacts) + len(type_hierarchies) + len(transitive_impacts)
@@ -57,6 +57,7 @@ def format_impact_report(
         f"- Total affected sites: {total_locations}",
     ]
 
+    included_definitions: List[Any] = []
     if definitions:
         lines.append("\n**Definitions:**")
         for d in definitions:
@@ -74,6 +75,7 @@ def format_impact_report(
                 lines.append(f"{def_line} - *\"{d['docstring']}\"*")
             else:
                 lines.append(def_line)
+            included_definitions.append(d)
 
     l1_count = 0
     l0_count = 0
@@ -86,6 +88,7 @@ def format_impact_report(
     current_tokens = est_tokens("\n".join(lines))
 
     # 1-hop Direct impacts: L1 detail
+    included_direct: List[Any] = []
     if direct_impacts:
         lines.append("\n**Direct impacts (1-hop):**")
         for node in direct_impacts:
@@ -95,11 +98,13 @@ def format_impact_report(
                 lines.append(node_line)
                 current_tokens += line_tokens
                 l1_count += 1
+                included_direct.append(node)
             else:
                 aggregated_count += 1
                 omitted_files.add(Path(node['source_file']).name)
 
     # Transitive paths (Hierarchy / Implements)
+    included_hierarchies: List[Any] = []
     if type_hierarchies:
         lines.append("\n**Type hierarchies & implementations:**")
         for tp in type_hierarchies:
@@ -109,11 +114,13 @@ def format_impact_report(
                 lines.append(tp_line)
                 current_tokens += line_tokens
                 l1_count += 1
+                included_hierarchies.append(tp)
             else:
                 omitted_files.add(Path(tp.get('file_path', 'unknown')).name)
                 aggregated_count += 1
 
     # Multi-hop transitive callers: L0 or aggregated count
+    included_transitive: List[Any] = []
     if transitive_impacts:
         lines.append(f"\n**Transitive references ({2}..{depth} hops):**")
         for tn in transitive_impacts:
@@ -123,12 +130,13 @@ def format_impact_report(
                 lines.append(tn_line)
                 current_tokens += line_tokens
                 l0_count += 1
+                included_transitive.append(tn)
             else:
                 aggregated_count += 1
                 omitted_files.add(Path(tn['source_file']).name)
 
     if aggregated_count > 0:
-        sample_omitted = list(omitted_files)[:5]
+        sample_omitted = sorted(omitted_files)[:5]
         summary_tail = f"\n*({aggregated_count} additional impact sites in {len(omitted_files)} files omitted to fit token budget: {', '.join(sample_omitted)}...)*"
         lines.append(summary_tail)
         current_tokens += est_tokens(summary_tail)
@@ -141,10 +149,11 @@ def format_impact_report(
         "direction": direction.lower(),
         "max_depth": depth,
         "detail_level": detail_level,
-        "definitions": definitions,
-        "direct_impacts": direct_impacts,
-        "type_hierarchies": type_hierarchies,
-        "transitive_impacts": transitive_impacts,
+        "definitions": included_definitions,
+        "direct_impacts": included_direct,
+        "type_hierarchies": included_hierarchies,
+        "transitive_impacts": included_transitive,
+        "omitted_files": sorted(omitted_files),
         "total_impacted_locations": total_locations,
         "token_budget": token_budget,
         "effective_tokens": current_tokens,

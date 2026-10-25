@@ -17,10 +17,10 @@ DEFAULT_REL_SPEC: Dict[str, Any] = {
     "dashes": False,
 }
 
-COLOR_TARGET = {"background": "#2e1065", "border": "#818cf8", "highlight": {"background": "#3b0764", "border": "#c7d2fe"}}
-COLOR_HOP1 = {"background": "#450a0a", "border": "#f43f5e", "highlight": {"background": "#7f1d1d", "border": "#fda4af"}}
-COLOR_HOP2 = {"background": "#2a1406", "border": "#f97316", "highlight": {"background": "#3d1d09", "border": "#fb923c"}}
-COLOR_HOP3 = {"background": "#082f49", "border": "#38bdf8", "highlight": {"background": "#0c4a6e", "border": "#bae6fd"}}
+COLOR_TARGET = {"background": "#0a0f1d", "border": "#818cf8", "highlight": {"background": "#1e293b", "border": "#ffffff"}}
+COLOR_HOP1 = {"background": "#0a0f1d", "border": "#f43f5e", "highlight": {"background": "#1e293b", "border": "#ffffff"}}
+COLOR_HOP2 = {"background": "#0a0f1d", "border": "#fb923c", "highlight": {"background": "#1e293b", "border": "#ffffff"}}
+COLOR_HOP3 = {"background": "#0a0f1d", "border": "#38bdf8", "highlight": {"background": "#1e293b", "border": "#ffffff"}}
 
 SHADOW_TARGET = {"enabled": True, "color": "rgba(129, 140, 248, 0.45)", "size": 16, "x": 0, "y": 4}
 SHADOW_HOP1 = {"enabled": True, "color": "rgba(244, 63, 94, 0.4)", "size": 12, "x": 0, "y": 3}
@@ -34,15 +34,15 @@ NODE_LEVEL_SPECS: Dict[int, Dict[str, Any]] = {
     },
     1: {
         "color": COLOR_HOP1, "shadow": SHADOW_HOP1, "shape": "box", "shape_properties": {"borderRadius": 6},
-        "margin": 8, "border_width": 2, "font": {"color": "#ffe4e6", "face": "ui-monospace, monospace", "size": 11},
+        "margin": 8, "border_width": 2, "font": {"color": "#ffffff", "face": "ui-monospace, monospace", "size": 11, "bold": True},
     },
     2: {
         "color": COLOR_HOP2, "shadow": SHADOW_HOP2, "shape": "box", "shape_properties": {"borderRadius": 6},
-        "margin": 8, "border_width": 1.8, "font": {"color": "#fed7aa", "face": "ui-monospace, monospace", "size": 11, "bold": {"color": "#fed7aa"}},
+        "margin": 8, "border_width": 1.8, "font": {"color": "#ffffff", "face": "ui-monospace, monospace", "size": 11, "bold": True},
     },
     3: {
         "color": COLOR_HOP3, "shadow": SHADOW_HOP3, "shape": "box", "shape_properties": {"borderRadius": 6},
-        "margin": 8, "border_width": 1.5, "font": {"color": "#e0f2fe", "face": "ui-monospace, monospace", "size": 11, "bold": {"color": "#e0f2fe"}},
+        "margin": 8, "border_width": 1.5, "font": {"color": "#ffffff", "face": "ui-monospace, monospace", "size": 11, "bold": True},
     },
 }
 

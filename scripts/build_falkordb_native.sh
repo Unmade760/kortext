@@ -2,19 +2,19 @@
 set -e
 
 # ==============================================================================
-# Cerebrum Native FalkorDB Build & Universal Binary Provisioning Script
+# Kortext Native FalkorDB Build & Universal Binary Provisioning Script
 # Target: macOS (Apple Silicon ARM64 / Intel) & Linux (x86_64 / aarch64)
 # ==============================================================================
 
-CEREBRUM_HOME="${HOME}/.cerebrum"
-BIN_DIR="${CEREBRUM_HOME}/bin"
-RUN_DIR="${CEREBRUM_HOME}/run"
-LOG_DIR="${CEREBRUM_HOME}/logs"
-DATA_DIR="${CEREBRUM_HOME}/data/falkordb"
-CONF_DIR="${CEREBRUM_HOME}/config"
-BUILD_DIR="/tmp/cerebrum_falkordb_build"
+KORTEXT_HOME="${KORTEXT_HOME:-${HOME}/.kortext}"
+BIN_DIR="${KORTEXT_HOME}/bin"
+RUN_DIR="${KORTEXT_HOME}/run"
+LOG_DIR="${KORTEXT_HOME}/logs"
+DATA_DIR="${KORTEXT_HOME}/data/falkordb"
+CONF_DIR="${KORTEXT_HOME}/config"
+BUILD_DIR="/tmp/kortext_falkordb_build"
 
-echo "=== Cerebrum Native FalkorDB Provisioning Initializing ==="
+echo "=== Kortext Native FalkorDB Provisioning Initializing ==="
 mkdir -p "${BIN_DIR}" "${RUN_DIR}" "${LOG_DIR}" "${DATA_DIR}" "${CONF_DIR}" "${BUILD_DIR}"
 
 TARGET_MODULE="${BIN_DIR}/falkordb.so"
@@ -28,7 +28,7 @@ if [ -f "${TARGET_MODULE}" ]; then
 fi
 
 # 1. Tier 0: Precompiled Verified Native Binary Retrieval
-RELEASE_VERSION="${FALKORDB_VERSION:-v4.20.7}"
+RELEASE_VERSION="${FALKORDB_VERSION:-v4.22.0}"
 RELEASE_URL="https://github.com/FalkorDB/FalkorDB/releases/download/${RELEASE_VERSION}"
 BINARY_DOWNLOADED=false
 

@@ -26,10 +26,10 @@ class TestFalkorDBResilience:
     def test_escaped_injection_sanitization(self):
         """Verifies that malicious string quotes do not break Cypher string literals."""
         cypher = "MATCH (e:Entity {name: $name}) RETURN e"
-        params = {"name": "Robert'); DROP GRAPH cerebrum; --"}
+        params = {"name": "Robert'); DROP GRAPH kortext; --"}
         formatted = format_cypher_query(cypher, params)
         
-        assert r"Robert\'); DROP GRAPH cerebrum; --" in formatted
+        assert r"Robert\'); DROP GRAPH kortext; --" in formatted
 
     def test_null_and_boolean_formatting(self):
         cypher = "MERGE (t:Task {strict: $strict, error: $err})"

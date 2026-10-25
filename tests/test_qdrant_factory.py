@@ -84,7 +84,6 @@ def test_get_async_qdrant_client_default(monkeypatch):
 
 def test_get_sync_qdrant_client_returns_qdrant_client(monkeypatch):
     monkeypatch.delenv("KORTEXT_QDRANT_URL", raising=False)
-    monkeypatch.delenv("CEREBRUM_QDRANT_URL", raising=False)
     monkeypatch.delenv("QDRANT_URL", raising=False)
 
     with patch("kortext._qdrant.QdrantClient") as mock_client:
@@ -101,7 +100,6 @@ def test_get_sync_qdrant_client_returns_qdrant_client(monkeypatch):
 
 def test_get_async_qdrant_client_configured_for_http_url(monkeypatch):
     monkeypatch.delenv("KORTEXT_QDRANT_URL", raising=False)
-    monkeypatch.delenv("CEREBRUM_QDRANT_URL", raising=False)
     monkeypatch.delenv("QDRANT_URL", raising=False)
 
     with patch("kortext._qdrant.AsyncQdrantClient") as mock_async_client:

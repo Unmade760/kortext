@@ -118,7 +118,7 @@ def test_scip_auto_mode(capsys):
 
 
 def test_scip_auto_missing_indexer(capsys):
-    args = argparse.Namespace(target=".", auto=True, graph="cerebrum_symbols", no_purge=False)
+    args = argparse.Namespace(target=".", auto=True, graph="kortext_symbols", no_purge=False)
     mock_auto = MagicMock(return_value={
         "status": "missing_indexer",
         "message": "SCIP indexer not found",
@@ -137,7 +137,7 @@ def test_clean_graphs(capsys):
     args = argparse.Namespace()
     mock_redis = MagicMock()
     mock_redis.execute_command.side_effect = lambda cmd, *cmd_args: (
-        ["prod_graph", "test_graph_1", "cerebrum_symbols", "my_test_2"] if cmd == "GRAPH.LIST" else None
+        ["prod_graph", "test_graph_1", "kortext_symbols", "my_test_2"] if cmd == "GRAPH.LIST" else None
     )
     mock_client = MagicMock()
     mock_client.get_redis.return_value = mock_redis

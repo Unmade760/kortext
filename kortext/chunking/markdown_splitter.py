@@ -14,7 +14,7 @@ from kortext.chunking.token_utils import count_tokens
 class MarkdownSectionSplitter:
     """Splits Markdown documents on heading boundaries with full hierarchy and breadcrumb tracking."""
 
-    def __init__(self, max_tokens: int = 512):
+    def __init__(self, max_tokens: int = 384):
         self.max_tokens = max_tokens
 
     def split_markdown(self, text: str, file_path: str = "") -> List[Dict[str, Any]]:

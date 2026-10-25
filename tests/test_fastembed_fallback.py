@@ -56,7 +56,6 @@ class TestIngestionFallback:
         unreachable_url = "http://127.0.0.1:9999/v1"
         monkeypatch.setenv("EMBED_BASE_URL", unreachable_url)
         monkeypatch.setenv("KORTEXT_EMBED_BASE_URL", unreachable_url)
-        monkeypatch.setenv("CEREBRUM_EMBED_BASE_URL", unreachable_url)
 
         source_code = (
             "def calculate_total(prices: list[float], tax_rate: float = 0.05) -> float:\n"
@@ -153,7 +152,6 @@ class TestRetrievalQueryFallback:
         unreachable_url = "http://127.0.0.1:9999/v1"
         monkeypatch.setenv("EMBED_BASE_URL", unreachable_url)
         monkeypatch.setenv("KORTEXT_EMBED_BASE_URL", unreachable_url)
-        monkeypatch.setenv("CEREBRUM_EMBED_BASE_URL", unreachable_url)
 
         engine = RetrievalEngine()
         query_text = "def calculate_total(prices: list[float]) -> float:"
@@ -186,7 +184,6 @@ class TestRetrievalQueryFallback:
         # Arrange: unset all embedding URLs
         monkeypatch.delenv("EMBED_BASE_URL", raising=False)
         monkeypatch.delenv("KORTEXT_EMBED_BASE_URL", raising=False)
-        monkeypatch.delenv("CEREBRUM_EMBED_BASE_URL", raising=False)
 
         engine = RetrievalEngine()
 
@@ -215,6 +212,7 @@ class TestFalkorDBSubstrateResilience:
         # Arrange
         custom_home = tmp_path / ".kortext"
         monkeypatch.setenv("KORTEXT_HOME", str(custom_home))
+        monkeypatch.delenv("FALKORDB_SOCKET", raising=False)
 
         # Act
         resolved_socket = get_default_socket()
@@ -336,7 +334,6 @@ class TestQdrantSoleCustodianInvariant:
         # Arrange: ensure clean URL resolution
         monkeypatch.delenv("QDRANT_URL", raising=False)
         monkeypatch.delenv("KORTEXT_QDRANT_URL", raising=False)
-        monkeypatch.delenv("CEREBRUM_QDRANT_URL", raising=False)
 
         with patch("kortext._qdrant.QdrantClient") as mock_qdrant_cls:
             # Act

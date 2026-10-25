@@ -1,41 +1,74 @@
 #!/usr/bin/env python3
 """
-Cerebrum Antigravity Plugin Dynamic Installer.
-Generates machine-specific hooks.json and installs symlinks to Antigravity plugins.
+Kortext Antigravity Plugin Dynamic Installer.
+Installs symlinks to Antigravity plugins without duplicating rules, skills, or manifests,
+synchronizes mcp_config.json environment variables from .env on every run,
+and wires Antigravity PreInvocation, PostInvocation, PreToolUse, PostToolUse, and Stop hooks.
 """
 import json
 import os
+from pathlib import Path
 import shutil
 import stat
-from pathlib import Path
+import subprocess
+from typing import Dict
 
 KORTEXT_ROOT = Path(__file__).resolve().parent.parent
-CEREBRUM_ROOT = KORTEXT_ROOT
 INTEGRATIONS_DIR = KORTEXT_ROOT / "integrations" / "antigravity"
 SCRIPTS_DIR = KORTEXT_ROOT / "scripts" / "hooks"
 
+import sys
+if str(KORTEXT_ROOT) not in sys.path:
+    sys.path.insert(0, str(KORTEXT_ROOT))
+
+
+
+def _load_dotenv_dict(env_path: Path) -> Dict[str, str]:
+    """Parses key=value pairs from .env without mutating os.environ."""
+    env_vars: Dict[str, str] = {}
+    if not env_path.is_file():
+        return env_vars
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        key = k.strip()
+        val = v.strip().strip("'").strip('"')
+        if key:
+            env_vars[key] = val
+    return env_vars
+
 
 def build_hooks_dict() -> dict:
-    venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
-    py_exec = str(venv_py) if venv_py.is_file() else "python3"
+    hook_cmd_prefix = 'sh "${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh"'
     return {
         "kortext-ambient-grounding": {
             "PreInvocation": [
                 {
                     "type": "command",
-                    "command": f"{py_exec} {SCRIPTS_DIR / 'hook_pre_invoke.py'}",
-                    "timeout": 15,
+                    "command": f"{hook_cmd_prefix} pre_invoke",
+                    "timeout": 5,
                 }
-            ]
+            ],
+        },
+        "kortext-runaway-guard": {
+            "PostInvocation": [
+                {
+                    "type": "command",
+                    "command": f"{hook_cmd_prefix} post_invoke",
+                    "timeout": 5,
+                }
+            ],
         },
         "kortext-safety-gate": {
             "PreToolUse": [
                 {
-                    "matcher": "run_command|replace_file_content|write_to_file",
+                    "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|grep_search|find_by_name|view_file|replace_file_content|multi_replace_file_content|write_to_file)",
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"{py_exec} {SCRIPTS_DIR / 'hook_pre_tool.py'}",
+                            "command": f"{hook_cmd_prefix} pre_tool",
                             "timeout": 5,
                         }
                     ],
@@ -45,11 +78,11 @@ def build_hooks_dict() -> dict:
         "kortext-cache-invalidation": {
             "PostToolUse": [
                 {
-                    "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+                    "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|write_to_file|replace_file_content|multi_replace_file_content|seek_symbol|trace_symbol_impact|manage_tasks|record_system_outcome)",
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"{py_exec} {SCRIPTS_DIR / 'hook_post_tool.py'}",
+                            "command": f"{hook_cmd_prefix} post_tool",
                             "timeout": 10,
                         }
                     ],
@@ -60,71 +93,106 @@ def build_hooks_dict() -> dict:
             "Stop": [
                 {
                     "type": "command",
-                    "command": f"{py_exec} {SCRIPTS_DIR / 'hook_stop.py'}",
-                    "timeout": 10,
+                    "command": f"{hook_cmd_prefix} stop",
+                    "timeout": 15,
                 }
             ]
         },
     }
 
 
+def _cleanup_dangling_symlinks_and_duplicate_rules(home: Path) -> None:
+    """
+    Repairs any dangling GEMINI.md symlinks created by older installer versions
+    and removes duplicate rule copies from ~/.gemini/config/rules/ and .agents/rules/
+    (while preserving official Antigravity agents.json, skills.json, and rules.json manifests).
+    """
+    for candidate in [
+        home / ".gemini" / "GEMINI.md",
+        home / ".gemini" / "config" / "GEMINI.md",
+        home / ".gemini" / "antigravity-cli" / "rules",
+    ]:
+        if candidate.is_symlink() and not candidate.exists():
+            candidate.unlink()
+            print(f"🧹 Removed dangling symlink: {candidate}")
+
+    # Remove invalid .agents/rules/AGENTS.md placement
+    invalid_agents_rule = KORTEXT_ROOT / ".agents" / "rules" / "AGENTS.md"
+    if invalid_agents_rule.is_file() or invalid_agents_rule.is_symlink():
+        invalid_agents_rule.unlink()
+        print(f"🧹 Removed invalid duplicate rule file: {invalid_agents_rule}")
+
+    rules_src = INTEGRATIONS_DIR / "rules"
+    if rules_src.is_dir():
+        plugin_rule_names = {f.name for f in rules_src.glob("*.md")}
+        for dup_dir in [home / ".gemini" / "config" / "rules", KORTEXT_ROOT / ".agents" / "rules"]:
+            if dup_dir.is_dir() and not dup_dir.is_symlink():
+                for rule_name in plugin_rule_names:
+                    dup_file = dup_dir / rule_name
+                    if dup_file.is_file() or dup_file.is_symlink():
+                        dup_file.unlink()
+                        print(f"🧹 Removed duplicate rule copy: {dup_file}")
+
+    # Remove duplicate workspace .agents/skills and .agents/agents copies that collide with plugin scope
+    for ws_dup_dir in [
+        KORTEXT_ROOT / ".agents" / "skills",
+        KORTEXT_ROOT / ".agents" / "agents",
+        KORTEXT_ROOT / ".agents" / "rules",
+    ]:
+        if ws_dup_dir.is_symlink():
+            ws_dup_dir.unlink()
+            print(f"🧹 Removed duplicate workspace symlink: {ws_dup_dir}")
+        elif ws_dup_dir.is_dir():
+            shutil.rmtree(ws_dup_dir)
+            print(f"🧹 Removed duplicate workspace customization dir: {ws_dup_dir}")
+
+
 def install_plugin():
     home = Path.home()
     plugin_name = "kortext"
-    for base_parent in [
-        home / ".gemini" / "config" / "plugins",
-        home / ".gemini" / "antigravity-cli" / "plugins",
-    ]:
-        base_plugin_dir = base_parent / plugin_name
-        base_plugin_dir.parent.mkdir(parents=True, exist_ok=True)
-        if base_plugin_dir.is_symlink() or base_plugin_dir.is_file():
-            base_plugin_dir.unlink()
-        elif base_plugin_dir.is_dir():
-            shutil.rmtree(base_plugin_dir)
-        os.symlink(INTEGRATIONS_DIR, base_plugin_dir)
-        print(f"📦 Linked {plugin_name} plugin to: {base_plugin_dir}")
 
-    # Backward-compatibility symlink for active session hook runner
-    compat_cerebrum_dir = home / ".gemini" / "config" / "plugins" / "cerebrum"
-    if not compat_cerebrum_dir.exists() and not compat_cerebrum_dir.is_symlink():
-        os.symlink(INTEGRATIONS_DIR, compat_cerebrum_dir)
-        print(f"🔗 Maintained backward-compatibility symlink: {compat_cerebrum_dir}")
+    # Link into canonical ~/.gemini/config/plugins/kortext (falling back to copy on Windows without symlink privileges)
+    canonical_plugin_dir = home / ".gemini" / "config" / "plugins" / plugin_name
+    canonical_plugin_dir.parent.mkdir(parents=True, exist_ok=True)
+    if canonical_plugin_dir.is_symlink() or canonical_plugin_dir.is_file():
+        canonical_plugin_dir.unlink()
+    elif canonical_plugin_dir.is_dir():
+        shutil.rmtree(canonical_plugin_dir)
+    try:
+        os.symlink(INTEGRATIONS_DIR, canonical_plugin_dir)
+        print(f"📦 Linked {plugin_name} plugin to: {canonical_plugin_dir}")
+    except OSError:
+        shutil.copytree(INTEGRATIONS_DIR, canonical_plugin_dir, dirs_exist_ok=True)
+        print(f"📦 Copied {plugin_name} plugin to: {canonical_plugin_dir} (symlink fallback)")
 
-    # Clean up stale cerebrum plugin from antigravity-cli if present
-    stale_cli_cerebrum = home / ".gemini" / "antigravity-cli" / "plugins" / "cerebrum"
-    if stale_cli_cerebrum.is_symlink() or stale_cli_cerebrum.is_file():
-        stale_cli_cerebrum.unlink()
-        print(f"🧹 Cleaned stale cerebrum plugin link: {stale_cli_cerebrum}")
-    elif stale_cli_cerebrum.is_dir():
-        shutil.rmtree(stale_cli_cerebrum)
-        print(f"🧹 Cleaned stale cerebrum plugin directory: {stale_cli_cerebrum}")
+    # Remove duplicate CLI plugin symlink if present (Antigravity syncs plugins across surfaces natively)
+    dup_cli_plugin = home / ".gemini" / "antigravity-cli" / "plugins" / plugin_name
+    if dup_cli_plugin.is_symlink() or dup_cli_plugin.is_file():
+        dup_cli_plugin.unlink()
+        print(f"🧹 Removed duplicate CLI plugin symlink: {dup_cli_plugin}")
 
-    # Generate hooks.json into integrations/antigravity/
+    # Clean up legacy cerebrum plugin
+    for stale_parent in [home / ".gemini" / "config" / "plugins", home / ".gemini" / "antigravity-cli" / "plugins"]:
+        stale_cerebrum = stale_parent / "cerebrum"
+        if stale_cerebrum.is_symlink() or stale_cerebrum.is_file():
+            stale_cerebrum.unlink()
+            print(f"🧹 Cleaned legacy cerebrum plugin link: {stale_cerebrum}")
+        elif stale_cerebrum.is_dir():
+            shutil.rmtree(stale_cerebrum)
+            print(f"🧹 Cleaned legacy cerebrum plugin directory: {stale_cerebrum}")
+
+    hooks_file = INTEGRATIONS_DIR / "hooks.json"
     hooks_payload = build_hooks_dict()
-    with open(INTEGRATIONS_DIR / "hooks.json", "w", encoding="utf-8") as f:
+    with open(hooks_file, "w", encoding="utf-8") as f:
         json.dump(hooks_payload, f, indent=2)
-
-    # Clean up plugin-level mcp_config.json to prevent plugin namespace duplication
-    venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
-    py_exec = str(venv_py) if venv_py.is_file() else "python3"
 
     mcp_config_src = INTEGRATIONS_DIR / "mcp_config.json"
     if mcp_config_src.is_file() or mcp_config_src.is_symlink():
         mcp_config_src.unlink()
         print(f"🧹 Cleaned plugin mcp_config.json: {mcp_config_src}")
 
-    target_plugin_dirs = [
-        home / ".gemini" / "config" / "plugins" / "kortext",
-        home / ".gemini" / "antigravity-cli" / "plugins" / "kortext",
-    ]
-    for target_plugin_dir in target_plugin_dirs:
-        target_mcp_config = target_plugin_dir / "mcp_config.json"
-        if target_mcp_config.is_file() or target_mcp_config.is_symlink():
-            target_mcp_config.unlink()
-            print(f"🧹 Cleaned plugin mcp_config.json: {target_mcp_config}")
-
-    # Ensure canonical host mcp_config.json has 'kortext' and no duplicate names
     host_mcp_config = home / ".gemini" / "config" / "mcp_config.json"
+    host_mcp_config.parent.mkdir(parents=True, exist_ok=True)
     if host_mcp_config.is_file():
         try:
             with open(host_mcp_config, "r", encoding="utf-8") as f:
@@ -145,68 +213,55 @@ def install_plugin():
     kortext_bin = KORTEXT_ROOT / ".venv" / "bin" / "kortext-server"
     server_cmd = str(kortext_bin) if kortext_bin.is_file() else "kortext-server"
 
-    if "kortext" not in host_mcp_payload["mcpServers"] or not isinstance(host_mcp_payload["mcpServers"]["kortext"], dict):
-        host_mcp_payload["mcpServers"]["kortext"] = {
-            "command": server_cmd,
-            "env": {
-                "WORKSPACE_ROOTS": str(KORTEXT_ROOT),
-                "LOCAL_LLM_BASE_URL": "http://localhost:8000/v1",
-                "EMBED_BASE_URL": "http://localhost:8000/v1",
-                "RERANK_BASE_URL": "http://localhost:8000/v1",
-                "EMBED_MODEL_NAME": "mlx-community--Qwen3-Embedding-8B-4bit-DWQ",
-                "RERANK_MODEL_NAME": "vserifsaglam--Qwen3-Reranker-4B-4bit-MLX",
-                "RERANK_TOP_K": "5",
-                "RETRIEVE_TOP_K": "30",
-                "FALKORDB_HOST": "localhost",
-                "FALKORDB_PORT": "6379",
-                "FALKORDB_DATABASE": "kortext",
-                "QDRANT_COLLECTION": "kortext_codebase",
-                "JOURNAL_DIR": str(KORTEXT_ROOT / "journal"),
-            },
-        }
-    else:
-        host_mcp_payload["mcpServers"]["kortext"]["command"] = server_cmd
+    dotenv_vals = _load_dotenv_dict(KORTEXT_ROOT / ".env")
+    embed_base = dotenv_vals.get("EMBED_BASE_URL", "").strip()
+    synced_env = {
+        "WORKSPACE_ROOTS": dotenv_vals.get("WORKSPACE_ROOTS", str(KORTEXT_ROOT)),
+        "LOCAL_LLM_BASE_URL": dotenv_vals.get("LOCAL_LLM_BASE_URL", "http://127.0.0.1:8000/v1"),
+        "RERANK_BASE_URL": dotenv_vals.get("RERANK_BASE_URL", "http://127.0.0.1:8000/v1"),
+        "EMBED_MODEL_NAME": dotenv_vals.get(
+            "EMBED_MODEL_NAME",
+            "mlx-community--Qwen3-Embedding-8B-4bit-DWQ" if embed_base else "BAAI/bge-small-en-v1.5",
+        ),
+        "RERANK_MODEL_NAME": dotenv_vals.get("RERANK_MODEL_NAME", "vserifsaglam--Qwen3-Reranker-4B-4bit-MLX"),
+        "RERANK_TOP_K": dotenv_vals.get("RERANK_TOP_K", "5"),
+        "RETRIEVE_TOP_K": dotenv_vals.get("RETRIEVE_TOP_K", "30"),
+        "FALKORDB_HOST": dotenv_vals.get("FALKORDB_HOST", "127.0.0.1"),
+        "FALKORDB_PORT": dotenv_vals.get("FALKORDB_PORT", "6379"),
+        "FALKORDB_DATABASE": dotenv_vals.get("FALKORDB_DATABASE", "kortext"),
+        "FALKORDB_SOCKET": dotenv_vals.get("FALKORDB_SOCKET", str(home / ".kortext" / "run" / "falkordb.sock")),
+        "QDRANT_COLLECTION": dotenv_vals.get("QDRANT_COLLECTION", "kortext_codebase"),
+        "JOURNAL_DIR": dotenv_vals.get("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")),
+        "KORTEXT_HOME": dotenv_vals.get("KORTEXT_HOME", str(home / ".kortext")),
+    }
+    if embed_base:
+        synced_env["EMBED_BASE_URL"] = embed_base
+    if "QDRANT_URL" in dotenv_vals and dotenv_vals["QDRANT_URL"]:
+        synced_env["QDRANT_URL"] = dotenv_vals["QDRANT_URL"]
+
+    host_mcp_payload["mcpServers"]["kortext"] = {
+        "command": server_cmd,
+        "env": synced_env,
+    }
 
     with open(host_mcp_config, "w", encoding="utf-8") as f:
         json.dump(host_mcp_payload, f, indent=2)
-    print(f"🔌 Canonical kortext MCP server verified in: {host_mcp_config}")
+    print(f"🔌 Synchronized canonical kortext MCP server and .env in: {host_mcp_config}")
 
-
-    # Synchronize and verify sidecars (integrations/antigravity/sidecars/*)
+    # Verify sidecar manifests in integrations/antigravity/sidecars/*
     sidecars_src = INTEGRATIONS_DIR / "sidecars"
     if sidecars_src.is_dir():
-        # Update sidecar manifests to use py_exec
         for sc_dir in sidecars_src.iterdir():
             if sc_dir.is_dir():
                 src_sc_json = sc_dir / "sidecar.json"
                 if src_sc_json.is_file():
                     with open(src_sc_json, "r", encoding="utf-8") as f:
                         sc_data = json.load(f)
-                    sc_data["command"] = py_exec
-                    with open(src_sc_json, "w", encoding="utf-8") as f:
-                        json.dump(sc_data, f, indent=2)
+                    assert ("command" in sc_data or "builtin" in sc_data) and "args" in sc_data, (
+                        f"Invalid sidecar manifest: {src_sc_json}"
+                    )
+                    print(f"🚗 Verified portable sidecar manifest: {src_sc_json}")
 
-        for target_plugin_dir in target_plugin_dirs:
-            target_sidecars_dir = target_plugin_dir / "sidecars"
-            if target_plugin_dir.is_dir() and not target_plugin_dir.is_symlink():
-                target_sidecars_dir.mkdir(parents=True, exist_ok=True)
-                for sc_dir in sidecars_src.iterdir():
-                    if sc_dir.is_dir():
-                        dest_sc = target_sidecars_dir / sc_dir.name
-                        if dest_sc.exists():
-                            shutil.rmtree(dest_sc)
-                        shutil.copytree(sc_dir, dest_sc)
-            for sc_dir in sidecars_src.iterdir():
-                if sc_dir.is_dir():
-                    sc_json = target_sidecars_dir / sc_dir.name / "sidecar.json"
-                    assert sc_json.is_file(), f"Expected sidecar manifest {sc_json} to exist"
-                    with open(sc_json, "r", encoding="utf-8") as f:
-                        sc_data = json.load(f)
-                        assert "command" in sc_data and "args" in sc_data, f"Invalid sidecar manifest: {sc_json}"
-                        assert sc_data["command"] == py_exec, f"Expected sidecar command {py_exec}, got {sc_data['command']}"
-                    print(f"🚗 Verified sidecar manifest: {sc_json}")
-
-    # Clean up duplicate skill symlinks in ~/.gemini/config/skills/ so skills are only sourced from the active plugin
     global_skills_dir = home / ".gemini" / "config" / "skills"
     if global_skills_dir.is_dir():
         skills_src = INTEGRATIONS_DIR / "skills"
@@ -220,179 +275,163 @@ def install_plugin():
                     shutil.rmtree(target_skill)
                     print(f"🧹 Cleaned duplicate skill dir: {skill_dir.name}")
 
-    # Synchronize Rules:
-    # 1. Global rules (active across ALL workspaces and directories on workstation)
-    plugin_agents_md = INTEGRATIONS_DIR / "rules" / "AGENTS.md"
-    global_config_agents_md = home / ".gemini" / "config" / "AGENTS.md"
-    global_gemini_agents_md = home / ".gemini" / "AGENTS.md"
-    global_rules_dir = home / ".gemini" / "config" / "rules"
-    global_rules_dir.mkdir(parents=True, exist_ok=True)
+    # Clean duplicate kortext/cerebrum hook entries from global ~/.gemini/config/hooks.json
+    global_hooks_file = home / ".gemini" / "config" / "hooks.json"
+    if global_hooks_file.is_file():
+        try:
+            g_hooks = json.loads(global_hooks_file.read_text(encoding="utf-8"))
+            if isinstance(g_hooks, dict):
+                stale_hook_keys = [
+                    k for k in g_hooks
+                    if k.startswith(("kortext-", "cerebrum-", "cortex-"))
+                ]
+                if stale_hook_keys:
+                    for k in stale_hook_keys:
+                        del g_hooks[k]
+                    global_hooks_file.write_text(json.dumps(g_hooks, indent=2) + "\n", encoding="utf-8")
+                    print(f"🧹 Removed duplicate global hooks from {global_hooks_file}: {stale_hook_keys}")
+        except Exception as exc:
+            print(f"⚠️ Could not clean global hooks.json: {exc}")
 
-    if plugin_agents_md.is_file():
-        shutil.copy2(plugin_agents_md, global_config_agents_md)
-        shutil.copy2(plugin_agents_md, global_gemini_agents_md)
-        print(f"📋 Installed global rules: {global_config_agents_md} & {global_gemini_agents_md}")
+    # Persist ~/.kortext/run/runtime.env so plugin hooks and sidecars resolve KORTEXT_ROOT even when copied via agy plugin install
+    runtime_env_dir = home / ".kortext" / "run"
+    runtime_env_dir.mkdir(parents=True, exist_ok=True)
+    venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
+    py_exec = str(venv_py) if venv_py.is_file() else "python3"
+    (runtime_env_dir / "runtime.env").write_text(
+        f'export KORTEXT_ROOT="{KORTEXT_ROOT}"\nexport KORTEXT_PYTHON="{py_exec}"\n',
+        encoding="utf-8",
+    )
 
-    rules_src = INTEGRATIONS_DIR / "rules"
-    if rules_src.is_dir():
-        for rule_file in rules_src.glob("*.md"):
-            shutil.copy2(rule_file, global_rules_dir / rule_file.name)
-        print(f"📋 Installed modular global rules in: {global_rules_dir}")
+    _cleanup_dangling_symlinks_and_duplicate_rules(home)
 
-    # Global compatibility symlinks
-    rule_symlinks = [
-        (home / ".gemini" / "GEMINI.md", home / ".gemini" / "AGENTS.md"),
-        (home / ".gemini" / "config" / "GEMINI.md", home / ".gemini" / "config" / "AGENTS.md"),
-        (home / ".gemini" / "antigravity-cli" / "rules", global_rules_dir),
-    ]
-    for link, target in rule_symlinks:
-        link.parent.mkdir(parents=True, exist_ok=True)
-        if link.is_symlink() or link.is_file():
-            link.unlink()
-        elif link.is_dir():
-            shutil.rmtree(link)
-        link.symlink_to(target)
-        print(f"🔗 Linked {link} -> {target}")
-
-    # 2. Workspace rules (local to Cortex workspace)
-    workspace_agents_md = CEREBRUM_ROOT / "AGENTS.md"
-    if plugin_agents_md.is_file():
-        shutil.copy2(plugin_agents_md, workspace_agents_md)
-        print(f"📋 Synchronized workspace root rules: {workspace_agents_md}")
-
-    workspace_rules_dir = CEREBRUM_ROOT / ".agents" / "rules"
-    workspace_rules_dir.mkdir(parents=True, exist_ok=True)
-    if rules_src.is_dir():
-        for rule_file in rules_src.glob("*.md"):
-            shutil.copy2(rule_file, workspace_rules_dir / rule_file.name)
-        print(f"📋 Synchronized workspace rules to: {workspace_rules_dir}")
-
-    # Synchronize Custom Subagents to both workspace .agents/agents and global ~/.gemini/config/agents
-    agents_src = INTEGRATIONS_DIR / "agents"
-    global_agents_dir = home / ".gemini" / "config" / "agents"
-    workspace_agents_dir = CEREBRUM_ROOT / ".agents" / "agents"
-    global_agents_dir.mkdir(parents=True, exist_ok=True)
-    workspace_agents_dir.mkdir(parents=True, exist_ok=True)
-
-    agent_names = [
-        "kortext-architect",
-        "kortext-researcher",
-        "kortext-code-reviewer",
-        "kortext-task-runner",
-        "kortext-security-auditor",
-    ]
-
-    # Clean up stale cerebrum-* agent folders and files in destination directories
-    for target_dir in [global_agents_dir, workspace_agents_dir]:
-        for stale_file in target_dir.glob("cerebrum-*.md"):
-            if stale_file.is_file() or stale_file.is_symlink():
-                stale_file.unlink()
-                print(f"🧹 Cleaned up stale agent file: {stale_file}")
-        for stale_folder in target_dir.glob("cerebrum-*"):
-            if stale_folder.is_dir():
-                shutil.rmtree(stale_folder)
-                print(f"🧹 Cleaned up stale agent directory: {stale_folder}")
-
-    for name in agent_names:
-        src_md = agents_src / f"{name}.md"
-        src_dir_md = agents_src / name / "agent.md"
-        agent_content_src = src_dir_md if src_dir_md.is_file() else src_md
-
-        if agent_content_src.is_file():
-            # 1. Global config: both <name>/agent.md and <name>.md
-            global_subagent_folder = global_agents_dir / name
-            global_subagent_folder.mkdir(parents=True, exist_ok=True)
-            for target_dst in [
-                global_subagent_folder / "agent.md",
-                global_agents_dir / f"{name}.md",
-            ]:
-                if target_dst.is_symlink() or target_dst.is_file():
-                    target_dst.unlink()
-                shutil.copy2(agent_content_src, target_dst)
-
-            # 2. Workspace .agents/agents: both <name>/agent.md and <name>.md
-            ws_subagent_folder = workspace_agents_dir / name
-            ws_subagent_folder.mkdir(parents=True, exist_ok=True)
-            for target_dst in [
-                ws_subagent_folder / "agent.md",
-                workspace_agents_dir / f"{name}.md",
-            ]:
-                if target_dst.is_symlink() or target_dst.is_file():
-                    target_dst.unlink()
-                shutil.copy2(agent_content_src, target_dst)
-
-            print(f"🤖 Installed subagent: {name}")
-
-    # Synchronize agents.json discovery manifests
-    agents_json_payload = {
-        "entries": [
-            {"path": "integrations/antigravity/agents"},
-            {"path": ".agents/agents"}
-        ]
-    }
-    with open(CEREBRUM_ROOT / ".agents" / "agents.json", "w", encoding="utf-8") as f:
-        json.dump(agents_json_payload, f, indent=2)
-
-    global_agents_json_payload = {
-        "entries": [
-            {"path": str(global_agents_dir)}
-        ]
-    }
-    with open(home / ".gemini" / "config" / "agents.json", "w", encoding="utf-8") as f:
-        json.dump(global_agents_json_payload, f, indent=2)
-
-    print("📄 Synchronized agents.json discovery manifests")
-
-    # Make hook scripts executable
-    for script in SCRIPTS_DIR.glob("*.py"):
-        st = os.stat(script)
-        os.chmod(script, st.st_mode | stat.S_IEXEC)
+    if SCRIPTS_DIR.is_dir():
+        for script in SCRIPTS_DIR.glob("*.py"):
+            st = os.stat(script)
+            os.chmod(script, st.st_mode | stat.S_IEXEC)
 
 
 def install_all():
     home = Path.home()
-    for storage_name in [".kortext", ".cerebrum"]:
-        storage_home = home / storage_name
-        for d in ["bin", "run", "logs", "config", "data/falkordb", "qdrant"]:
-            (storage_home / d).mkdir(parents=True, exist_ok=True)
-        print(f"📦 Provisioned storage directories in {storage_home}")
+    kortext_home = home / ".kortext"
+    for d in ["bin", "run", "logs", "config", "data/falkordb", "qdrant", "handoffs"]:
+        (kortext_home / d).mkdir(parents=True, exist_ok=True)
+    print(f"📦 Provisioned storage directories in {kortext_home}")
 
-    # Verify native binary
-    cerebrum_home = home / ".cerebrum"
-    bin_so = cerebrum_home / "bin" / "falkordb.so"
-    if not bin_so.is_file():
-        import subprocess
-        build_script = KORTEXT_ROOT / "scripts" / "build_falkordb_native.sh"
-        subprocess.run(["bash", str(build_script)], check=True)
+    try:
+        from kortext.setup import provision_binaries, provision_configurations
 
-    # Copy config
-    conf_src = cerebrum_home / "config" / "falkordb.conf"
-    if not conf_src.exists():
-        template_conf = KORTEXT_ROOT / "config" / "falkordb.conf"
-        if template_conf.exists():
-            shutil.copy(template_conf, conf_src)
+        bin_results = provision_binaries(kortext_home)
+        for _, b_res in bin_results.items():
+            if b_res.success:
+                print(f"📦 {b_res.message}")
+            else:
+                print(f"ℹ️ {b_res.message}")
+        provision_configurations(kortext_home, overwrite=True)
+    except Exception as exc:
+        print(f"⚠️ Binary/config provisioning fallback: {exc}")
+        bin_so = kortext_home / "bin" / "falkordb.so"
+        if not bin_so.is_file():
+            build_script = KORTEXT_ROOT / "scripts" / "build_falkordb_native.sh"
+            subprocess.run(["bash", str(build_script)], check=False)
 
-    # LaunchAgents on Darwin
-    if os.uname().sysname == "Darwin":
+    import platform
+
+    sys_name = platform.system()
+    if sys_name == "Darwin":
         launch_dir = home / "Library" / "LaunchAgents"
         launch_dir.mkdir(parents=True, exist_ok=True)
+
+        # Unload and remove legacy *cerebrum* and redundant watcher LaunchAgents (PostToolUse hook handles incremental re-indexing)
+        for stale_plist in list(launch_dir.glob("*cerebrum*.plist")) + list(launch_dir.glob("*kortext.watcher*.plist")):
+            try:
+                subprocess.run(["launchctl", "unload", str(stale_plist)], check=False, capture_output=True)
+                stale_plist.unlink(missing_ok=True)
+                print(f"🧹 Unloaded and removed redundant/legacy LaunchAgent: {stale_plist.name}")
+            except Exception as e:
+                print(f"⚠️ Could not remove {stale_plist}: {e}")
+
         daemons_dir = INTEGRATIONS_DIR / "daemons"
         if daemons_dir.is_dir():
+            venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
+            py_exec = str(venv_py) if venv_py.is_file() else sys.executable
+            redis_bin = shutil.which("redis-server") or "/opt/homebrew/bin/redis-server"
+            dotenv_vals = _load_dotenv_dict(KORTEXT_ROOT / ".env")
+            embedded_qdrant = not bool(dotenv_vals.get("QDRANT_URL", "").strip())
             for plist in daemons_dir.glob("*.plist"):
                 target_plist = launch_dir / plist.name
-                shutil.copy(plist, target_plist)
-                print(f"📦 Installed LaunchAgent: {plist.name}")
+                if plist.name == "com.kortext.watcher.plist" or (embedded_qdrant and plist.name == "ai.kortext.qdrant.plist"):
+                    if target_plist.exists():
+                        subprocess.run(["launchctl", "unload", str(target_plist)], check=False, capture_output=True)
+                        target_plist.unlink(missing_ok=True)
+                    print(f"🔒 Skipped {plist.name} (PostToolUse hook & Sole Custodian active)")
+                    continue
+                content = (
+                    plist.read_text(encoding="utf-8")
+                    .replace("{{HOME}}", str(home))
+                    .replace("{{PROJECT_DIR}}", str(KORTEXT_ROOT))
+                    .replace("{{PYTHON_BIN}}", py_exec)
+                    .replace("{{REDIS_BIN}}", redis_bin)
+                )
+                target_plist.write_text(content, encoding="utf-8")
+                print(f"📦 Installed substrate LaunchAgent: {plist.name}")
+    elif sys_name == "Linux":
+        systemd_dir = home / ".config" / "systemd" / "user"
+        systemd_dir.mkdir(parents=True, exist_ok=True)
+        venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
+        py_exec = str(venv_py) if venv_py.is_file() else sys.executable
+        redis_bin = shutil.which("redis-server") or "/usr/bin/redis-server"
+        falkor_unit = systemd_dir / "kortext-falkordb.service"
+        falkor_unit.write_text(
+            f"[Unit]\nDescription=Kortext FalkorDB Graph Substrate\nAfter=network.target\n\n"
+            f"[Service]\nExecStart={redis_bin} {home}/.kortext/config/falkordb.conf --daemonize no\n"
+            f"WorkingDirectory={home}/.kortext\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n",
+            encoding="utf-8",
+        )
+        dash_unit = systemd_dir / "kortext-dashboard.service"
+        dash_unit.write_text(
+            f"[Unit]\nDescription=Kortext Web Dashboard\nAfter=network.target\n\n"
+            f"[Service]\nExecStart={py_exec} -m kortext.dashboard.app\n"
+            f"WorkingDirectory={KORTEXT_ROOT}\nEnvironment=PYTHONPATH={KORTEXT_ROOT}\nRestart=always\n\n"
+            f"[Install]\nWantedBy=default.target\n",
+            encoding="utf-8",
+        )
+        print(f"📦 Installed Linux systemd user units in: {systemd_dir}")
 
     install_plugin()
 
 
+def _enable_plugin_sidecars(gemini_root: Path) -> None:
+    """Configures kortext sidecars in ~/.gemini/config/config.json: dream enabled on projectId, watcher disabled when PostToolUse hook is active."""
+    config_json_path = gemini_root / "config" / "config.json"
+    config_json_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {}
+    if config_json_path.is_file():
+        try:
+            data = json.loads(config_json_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+    sidecars = data.get("sidecars")
+    if not isinstance(sidecars, dict):
+        sidecars = {}
+    sidecars["kortext/kortext-dream"] = {"enabled": True}
+    sidecars["kortext/kortext-watcher"] = {"enabled": False}
+    data["sidecars"] = sidecars
+    config_json_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print(f"⚙️  Configured kortext sidecars (dream=True, watcher=False) in: {config_json_path}")
+
+
 def main():
     import sys
+
     print(f"🧠 Installing Kortext Antigravity Plugin from {KORTEXT_ROOT}...")
     if "--all" in sys.argv:
         install_all()
     else:
         install_plugin()
+    _enable_plugin_sidecars(Path.home() / ".gemini")
     print("🎉 Kortext Antigravity Plugin installed and synchronized dynamically!")
 
 

@@ -1,6 +1,6 @@
 /**
  * Kortext Dashboard - UI Utilities, Modals, Toasts, and Tab Routing
- * Accessible UI management with WCAG AA compliance.
+ * Accessible UI management with WCAG AA compliance and DOM XSS sanitization.
  */
 
 import { state } from './state.js';
@@ -13,6 +13,15 @@ export function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+export function sanitizeTooltipHtml(htmlStr) {
+  if (!htmlStr) return '';
+  return String(htmlStr)
+    .replace(/<\s*(script|iframe|object|embed|svg|math|form|input|button|style|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*\/?\s*(script|iframe|object|embed|svg|math|form|input|button|style|link|meta)[^>]*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript\s*:/gi, '');
 }
 
 export function formatDate(isoStr) {
@@ -33,7 +42,7 @@ export function createVisTooltip(titleContent) {
   const el = document.createElement('div');
   el.className = 'vis-custom-tooltip text-xs space-y-1';
   if (typeof titleContent === 'string' && (titleContent.includes('<') || titleContent.includes('&'))) {
-    el.innerHTML = titleContent;
+    el.innerHTML = sanitizeTooltipHtml(titleContent);
   } else {
     el.textContent = String(titleContent);
   }

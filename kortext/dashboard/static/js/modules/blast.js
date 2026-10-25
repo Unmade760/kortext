@@ -8,6 +8,10 @@ import * as api from './api.js';
 import { formatEdgesNonOverlapping } from './graph.js';
 import { toast, escapeHtml, createVisTooltip } from './ui.js';
 
+function safeDomId(val) {
+  return encodeURIComponent(String(val || '')).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 export async function initBlastTab() {
   await loadBlastAutocomplete();
   const input = document.getElementById('blast-target-input');
@@ -45,7 +49,7 @@ export async function executeBlastAnalysis() {
   }
 
   try {
-    const data = await api.getSymbolImpact(target, direction, depth);
+    const data = await api.getSymbolImpact(target, direction, depth, state.activeProject);
     if (data.status !== 'ok') {
       if (treeContainer) treeContainer.innerHTML = `<div class="p-3 text-rose-400 text-xs font-mono">Analysis failed: ${escapeHtml(data.message)}</div>`;
       return;
@@ -93,17 +97,17 @@ export function renderBlastGraph(nodes, edges) {
 
   const formattedNodes = nodes.map(n => {
     let icon = '•';
-    let bg = '#1e1b4b', border = '#6366f1', hiBg = '#312e81', hiBorder = '#818cf8', fontColor = '#f8fafc';
-    let shadowColor = 'rgba(99, 102, 241, 0.35)';
+    let border = '#6366f1';
+    let shadowColor = 'rgba(99, 102, 241, 0.25)';
 
     if (n.level === 0 || n.group === 'target') {
-      icon = '🎯'; bg = '#2e1065'; border = '#818cf8'; hiBg = '#3b0764'; hiBorder = '#c7d2fe'; fontColor = '#ffffff'; shadowColor = 'rgba(129, 140, 248, 0.45)';
+      icon = '🎯'; border = '#818cf8'; shadowColor = 'rgba(129, 140, 248, 0.45)';
     } else if (n.level === 1) {
-      icon = '💥'; bg = '#450a0a'; border = '#f43f5e'; hiBg = '#7f1d1d'; hiBorder = '#fda4af'; fontColor = '#ffe4e6'; shadowColor = 'rgba(244, 63, 94, 0.4)';
+      icon = '💥'; border = '#f43f5e'; shadowColor = 'rgba(244, 63, 94, 0.35)';
     } else if (n.level === 2) {
-      icon = '⚡'; bg = '#2a1406'; border = '#f97316'; hiBg = '#3d1d09'; hiBorder = '#fb923c'; fontColor = '#fed7aa'; shadowColor = 'rgba(249, 115, 22, 0.35)';
+      icon = '⚡'; border = '#fb923c'; shadowColor = 'rgba(251, 146, 60, 0.35)';
     } else {
-      icon = '🌐'; bg = '#082f49'; border = '#38bdf8'; hiBg = '#0c4a6e'; hiBorder = '#bae6fd'; fontColor = '#e0f2fe'; shadowColor = 'rgba(56, 189, 248, 0.3)';
+      icon = '📦'; border = '#38bdf8'; shadowColor = 'rgba(56, 189, 248, 0.3)';
     }
 
     const labelText = n.label || n.id;
@@ -115,10 +119,21 @@ export function renderBlastGraph(nodes, edges) {
       title: createVisTooltip(n.title),
       shape: 'box',
       shapeProperties: { borderRadius: 6 },
-      color: { background: bg, border, highlight: { background: hiBg, border: hiBorder } },
-      font: { color: fontColor, face: 'ui-monospace, monospace', size: n.level === 0 ? 12 : 11, bold: true },
+      color: {
+        background: '#0a0f1d',
+        border: border,
+        highlight: { background: '#1e293b', border: '#ffffff' },
+        hover: { background: '#1e293b', border: border },
+      },
+      font: {
+        color: '#ffffff',
+        face: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        size: 12,
+        bold: true,
+      },
       margin: n.level === 0 ? 10 : 8,
-      borderWidth: n.level === 0 ? 2.5 : 1.8,
+      borderWidth: n.level === 0 ? 2.5 : 2,
+      borderWidthSelected: 2.5,
       shadow: { enabled: true, color: shadowColor, size: 12, x: 0, y: 3 },
     };
   });
@@ -126,7 +141,15 @@ export function renderBlastGraph(nodes, edges) {
   state.blast.nodesDataSet = new vis.DataSet(formattedNodes);
   state.blast.edgesDataSet = new vis.DataSet(formatEdgesNonOverlapping(edges));
 
+  const BLAST_GROUPS_SPEC = {
+    useDefaultGroups: false,
+    target: { color: { background: '#0a0f1d', border: '#818cf8', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    file: { color: { background: '#0a0f1d', border: '#38bdf8', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+    symbol: { color: { background: '#0a0f1d', border: '#10b981', highlight: { background: '#1e293b', border: '#ffffff' } }, font: { color: '#ffffff', face: 'ui-monospace, monospace', size: 12, bold: true } },
+  };
+
   const options = {
+    groups: BLAST_GROUPS_SPEC,
     physics: {
       solver: 'barnesHut',
       barnesHut: { gravitationalConstant: -16000, centralGravity: 0.08, springLength: 170, springConstant: 0.035, damping: 0.16, avoidOverlap: 1.0 },
@@ -135,6 +158,9 @@ export function renderBlastGraph(nodes, edges) {
     interaction: { hover: true, tooltipDelay: 150 },
   };
 
+  if (state.blast.network && typeof state.blast.network.destroy === 'function') {
+    state.blast.network.destroy();
+  }
   state.blast.network = new vis.Network(container, { nodes: state.blast.nodesDataSet, edges: state.blast.edgesDataSet }, options);
 
   state.blast.network.on('stabilizationIterationsDone', () => {
@@ -151,7 +177,7 @@ export function renderBlastGraph(nodes, edges) {
   state.blast.network.on('click', (params) => {
     if (params.nodes.length > 0) {
       const nodeId = params.nodes[0];
-      const row = document.getElementById(`blast-row-${btoa(nodeId).replace(/=/g, '')}`);
+      const row = document.getElementById(`blast-row-${safeDomId(nodeId)}`);
       if (row) {
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         row.classList.add('bg-slate-800');
@@ -176,18 +202,20 @@ export function renderBlastTree(treeItems) {
     const isHigh = item.risk === 'HIGH';
     const isMed = item.risk === 'MEDIUM';
     const badgeColor = isHigh ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : (isMed ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-sky-500/20 text-sky-300 border-sky-500/40');
-    const rowId = `blast-row-${btoa(item.source || item.file_path || item.name).replace(/=/g, '')}`;
-    const displayPath = (item.file_path || item.source || item.name || '').split('/').slice(-2).join('/');
+    const targetRef = item.source || item.file_path || item.name || '';
+    const safeTargetAttr = escapeHtml(String(targetRef));
+    const rowId = `blast-row-${safeDomId(targetRef)}`;
+    const displayPath = targetRef.split('/').slice(-2).join('/');
 
     return `
-      <div id="${rowId}" onclick="focusBlastNode('${escapeHtml(item.source || item.file_path || item.name)}')" class="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition cursor-pointer space-y-1 font-mono text-xs">
+      <div id="${rowId}" data-node-id="${safeTargetAttr}" onclick="focusBlastNode(this.dataset.nodeId)" class="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition cursor-pointer space-y-1 font-mono text-xs">
         <div class="flex items-center justify-between">
           <span class="font-bold text-white truncate max-w-[180px]">${escapeHtml(item.name || displayPath)}</span>
           <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeColor} font-bold">${escapeHtml(item.risk)}</span>
         </div>
         <div class="flex items-center justify-between text-[10px] text-slate-400">
           <span class="text-indigo-400 font-semibold">${escapeHtml(item.relation)}</span>
-          ${item.line ? `<span class="text-slate-400">Line ${item.line}</span>` : ''}
+          ${item.line ? `<span class="text-slate-400">Line ${escapeHtml(item.line)}</span>` : ''}
         </div>
         <div class="text-[10px] text-slate-400 truncate" title="${escapeHtml(item.file_path || item.source || '')}">
           ${escapeHtml(item.file_path || item.source || '')}

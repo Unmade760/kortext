@@ -27,12 +27,13 @@ export function initRelationshipPalette(edges) {
   container.innerHTML = uniqueRels.map(rel => {
     const style = getEdgeStyle(rel, false);
     const count = state.graph.relCounts[rel] || 0;
+    const safeRel = escapeHtml(rel);
     return `
       <label class="flex items-center justify-between p-1.5 rounded hover:bg-slate-800/60 cursor-pointer select-none transition group">
         <div class="flex items-center gap-2">
-          <input type="checkbox" id="filter-rel-${rel}" checked onchange="toggleRelFilter('${rel}', this.checked)" class="rounded border-slate-700 text-indigo-500 w-3 h-3">
-          <span class="w-3 h-0.5" style="background-color: ${style.color};"></span>
-          <span class="text-slate-300 group-hover:text-white font-mono text-[10px]">${rel}</span>
+          <input type="checkbox" id="filter-rel-${safeRel}" checked onchange="toggleRelFilter('${safeRel}', this.checked)" class="rounded border-slate-700 text-indigo-500 w-3 h-3">
+          <span class="w-3 h-0.5" style="background-color: ${escapeHtml(style.color)};"></span>
+          <span class="text-slate-300 group-hover:text-white font-mono text-[10px]">${safeRel}</span>
         </div>
         <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-semibold">${count}</span>
       </label>
@@ -92,26 +93,34 @@ export function openDrawer(node) {
   const incoming = connectedEdges.filter(e => e.to === node.id);
 
   const renderRel = (e, isOut) => {
-    const otherId = isOut ? e.to : e.from;
+    const otherId = String(isOut ? e.to : e.from);
     const displayName = otherId.split('/').slice(-2).join('/');
+    const safeOtherId = escapeHtml(otherId);
+    const safeDisplay = escapeHtml(displayName);
+    const safeLabel = escapeHtml(e.label || '');
     return `
       <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/70 border border-slate-800 text-[11px] font-mono">
-        <span class="text-indigo-400 font-bold shrink-0">${isOut ? '→' : '←'} ${e.label}</span>
-        <span class="text-slate-300 truncate max-w-[120px]" title="${otherId}">${displayName}</span>
-        <button onclick="flyToNode('${otherId}')" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded text-[10px]">Focus</button>
+        <span class="text-indigo-400 font-bold shrink-0">${isOut ? '→' : '←'} ${safeLabel}</span>
+        <span class="text-slate-300 truncate max-w-[120px]" title="${safeOtherId}">${safeDisplay}</span>
+        <button data-node-id="${safeOtherId}" onclick="flyToNode(this.dataset.nodeId)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded text-[10px]">Focus</button>
       </div>
     `;
   };
 
+  const safeFullName = escapeHtml(node.full_name || node.id || '');
+  const safeNodeLabel = escapeHtml(node.label || node.id || '');
+  const safeNodeId = escapeHtml(node.id || '');
+  const safeCluster = escapeHtml(node.cluster_name || 'Core');
+
   content.innerHTML = `
     <div class="space-y-2.5">
       <div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1 font-mono text-xs">
-        <div class="font-bold text-white truncate" title="${node.full_name || node.id}">${node.label || node.id}</div>
-        <div class="text-[10px] text-slate-400 truncate">ID: ${node.id}</div>
+        <div class="font-bold text-white truncate" title="${safeFullName}">${safeNodeLabel}</div>
+        <div class="text-[10px] text-slate-400 truncate">ID: ${safeNodeId}</div>
         <div class="flex justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-800">
-          <span>Subsystem:</span> <span class="text-indigo-400 font-semibold">${node.cluster_name || 'Core'}</span>
+          <span>Subsystem:</span> <span class="text-indigo-400 font-semibold">${safeCluster}</span>
         </div>
-        <button onclick="isolateNeighborhood('${node.id}')" class="w-full mt-2 py-1.5 rounded bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/50 text-indigo-300 text-xs font-semibold">
+        <button data-node-id="${safeNodeId}" onclick="isolateNeighborhood(this.dataset.nodeId)" class="w-full mt-2 py-1.5 rounded bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/50 text-indigo-300 text-xs font-semibold">
           Isolate Neighborhood
         </button>
       </div>
@@ -142,16 +151,18 @@ export function openClusterDrawer(clusterId) {
     badge.className = 'text-[9px] font-mono px-2 py-0.5 rounded uppercase font-semibold border bg-indigo-950/80 text-indigo-300 border-indigo-500/50';
     badge.classList.remove('hidden');
   }
-  const cleanId = clusterId.replace('cluster:', '');
+  const cleanId = String(clusterId || '').replace('cluster:', '');
   const count = state.graph.network ? state.graph.network.getNodesInCluster(clusterId).length : 0;
+  const safeCleanId = escapeHtml(cleanId);
+  const safeClusterAttr = escapeHtml(String(clusterId || ''));
   if (content) {
     content.innerHTML = `
       <div class="space-y-2.5 font-mono text-xs">
         <div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
-          <div class="font-bold text-white">📦 Subsystem: ${cleanId}</div>
+          <div class="font-bold text-white">📦 Subsystem: ${safeCleanId}</div>
           <div class="text-[10px] text-slate-400">Contains ${count} components.</div>
         </div>
-        <button onclick="state.graph.network.openCluster('${clusterId}')" class="w-full py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">
+        <button data-cluster-id="${safeClusterAttr}" onclick="window.dashboardState.graph.network.openCluster(this.dataset.clusterId)" class="w-full py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">
           Expand This Subsystem
         </button>
       </div>

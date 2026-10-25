@@ -1,102 +1,84 @@
 #!/usr/bin/env python3
 """
-Kortext PreInvocation Hook: Injects ambient symbol priming and enforces Task DAG delegation.
+Antigravity PreInvocation Hook (thin wrapper delegating to kortext.hooks.runner).
 """
 from __future__ import annotations
 
-import re
+import json
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+for p in (str(SCRIPT_DIR), str(REPO_ROOT)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 from common import (
-    KORTEXT_ROOT,
     check_http_health,
     check_tcp_port,
     check_unix_socket,
     emit_hook_response,
     get_hook_payload,
 )
+from kortext._home import get_kortext_home
+from kortext.hooks.context import HookContext
+import kortext.hooks.pipelines.pre_invoke as _pre_invoke_mod
+from kortext.hooks.pipelines.pre_invoke import _check_qdrant_ready
+from kortext.hooks.runner import emit_response, run_hook
 
-INVARIANTS_FILE = KORTEXT_ROOT / "journal" / "invariants.md"
-
-
-def get_active_invariants(max_count: int = 3) -> list:
-    if not INVARIANTS_FILE.is_file():
-        return []
-    try:
-        text = INVARIANTS_FILE.read_text(encoding="utf-8")
-        pattern = re.compile(
-            r"###\s+Invariant\s+\[(.*?)\]\s*\n\*\*Rule:\*\*\s*(.*?)(?=\n\*\*Rationale:|\n###|\Z)",
-            re.DOTALL,
-        )
-        invariants = []
-        for match in pattern.finditer(text):
-            topic = match.group(1).strip()
-            rule = match.group(2).strip().replace("\n", " ")
-            invariants.append(f"• **[{topic}]**: {rule}")
-            if len(invariants) >= max_count:
-                break
-        return invariants
-    except Exception:
-        return []
+_ORIG_HTTP_HEALTH = check_http_health
 
 
 def check_falkordb_status(timeout_sec: float = 0.2) -> bool:
-    """Check FalkorDB UDS socket at ~/.kortext/run/falkordb.sock with TCP :6379 fallback."""
-    falkor_sock = Path.home() / ".kortext" / "run" / "falkordb.sock"
-    if check_unix_socket(falkor_sock, timeout_sec=timeout_sec):
-        return True
-
-    legacy_sock = Path.home() / ".cerebrum" / "run" / "falkordb.sock"
-    if check_unix_socket(legacy_sock, timeout_sec=timeout_sec):
-        return True
-
-    return check_tcp_port("127.0.0.1", 6379, timeout_sec=timeout_sec) or check_tcp_port("localhost", 6379, timeout_sec=timeout_sec)
+    """Checks FalkorDB health via Unix Domain Socket first, then TCP fallback."""
+    env_sock = os.environ.get("FALKORDB_SOCKET_PATH")
+    if env_sock:
+        candidate_socks = [Path(env_sock)]
+    else:
+        home_sock = Path.home() / ".kortext" / "run" / "falkordb.sock"
+        kh_sock = get_kortext_home() / "run" / "falkordb.sock"
+        candidate_socks = [home_sock] if home_sock == kh_sock else [home_sock, kh_sock]
+    for sock_path in candidate_socks:
+        if check_unix_socket(sock_path, timeout_sec=timeout_sec):
+            return True
+    port = int(os.environ.get("FALKORDB_PORT", "6379"))
+    host = os.environ.get("FALKORDB_HOST", "127.0.0.1")
+    return check_tcp_port(host, port, timeout_sec=timeout_sec)
 
 
 def check_qdrant_status(timeout_sec: float = 0.2) -> bool:
-    """Check Qdrant HTTP health at :6333 using timeout of 0.2s."""
-    return check_http_health("127.0.0.1", 6333, path="/healthz", timeout_sec=timeout_sec) or check_http_health("localhost", 6333, path="/healthz", timeout_sec=timeout_sec)
+    """Checks Qdrant readiness across embedded mode (~/.kortext/qdrant) and HTTP endpoint."""
+    if check_http_health is not _ORIG_HTTP_HEALTH:
+        return bool(check_http_health("127.0.0.1", 6333, "/healthz", timeout_sec=timeout_sec))
+    return _check_qdrant_ready(get_kortext_home(), timeout_sec=timeout_sec)
 
 
-def main():
+_ORIG_STATUS_CHECKS = (check_falkordb_status, check_qdrant_status)
+
+
+def main() -> None:
     payload = get_hook_payload()
-    invocation_num = payload.get("invocationNum", 0)
-
-    # Ambient Substrate Health Checks (FalkorDB UDS/TCP, Qdrant HTTP :6333)
-    services_up = {
-        "FalkorDB": check_falkordb_status(timeout_sec=0.2),
-        "Qdrant": check_qdrant_status(timeout_sec=0.2),
-    }
-
-    down_services = [s for s, ok in services_up.items() if not ok]
-
-    if down_services:
-        message = (
-            f"⚠️ [Kortext Health Alert] Offline services detected: {', '.join(down_services)}.\n"
-            "Run `kortext start` to bring memory and inference substrates online."
-        )
-        print(message, file=sys.stderr)
-        emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
-        return
-
-    # Turn 0 and periodic refresher (turn % 10 == 0): Ambient Grounding & Architectural Directives
-    if invocation_num == 0 or (invocation_num > 0 and invocation_num % 10 == 0):
-        invariants = get_active_invariants(max_count=3)
-        inv_str = "\n".join(invariants) if invariants else "• Invariants synchronized."
-        message = (
-            "🧠 [Kortext Cognitive OS Initialized] (Cortex)\n"
-            "Active Protocols:\n"
-            "1. ANTI-RIPGREP MANDATE: Do NOT run `rg` or `grep_search` to find symbols. Use `seek_symbol`.\n"
-            "2. DELEGATION MANDATE: For multi-file changes (Complexity >= 4), initialize DAG via `manage_tasks`.\n"
-            "3. PERSISTENCE MANDATE: Record outcomes via `record_system_outcome` before session stop.\n\n"
-            f"Active Invariants:\n{inv_str}"
-        )
-        emit_hook_response({"injectSteps": [{"ephemeralMessage": message}]})
-        return
-
-    emit_hook_response({})
+    ctx = HookContext.from_stdin(raw_text=json.dumps(payload), event="pre_invoke")
+    if (check_falkordb_status, check_qdrant_status) != _ORIG_STATUS_CHECKS:
+        f_ok = bool(check_falkordb_status(timeout_sec=0.05))
+        q_ok = bool(check_qdrant_status(timeout_sec=0.05))
+        orig_u = _pre_invoke_mod._check_unix_socket
+        orig_t = _pre_invoke_mod._check_tcp
+        orig_q = _pre_invoke_mod._check_qdrant_ready
+        try:
+            _pre_invoke_mod._check_unix_socket = lambda *_a, **_kw: f_ok
+            _pre_invoke_mod._check_tcp = lambda *_a, **_kw: f_ok
+            _pre_invoke_mod._check_qdrant_ready = lambda *_a, **_kw: q_ok
+            res = run_hook("pre_invoke", ctx)
+        finally:
+            _pre_invoke_mod._check_unix_socket = orig_u
+            _pre_invoke_mod._check_tcp = orig_t
+            _pre_invoke_mod._check_qdrant_ready = orig_q
+    else:
+        res = run_hook("pre_invoke", ctx)
+    emit_response(event="pre_invoke", decision=res.decision, reason=res.reason, data=res.data)
 
 
 if __name__ == "__main__":

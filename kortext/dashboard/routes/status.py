@@ -2,10 +2,13 @@
 Status, health checks, substrate telemetry, TCP/HTTP checkers, and collection point stats.
 Invariant 3 compliance: Read-only inspection of embedded Qdrant files; no secondary QdrantClient(path=...).
 """
+import logging
+logger = logging.getLogger(__name__)
 
 import asyncio
 import json
 import os
+import re
 import socket
 import time
 from datetime import datetime
@@ -85,7 +88,7 @@ async def get_cache_stats():
         chunk_stats = chunk_cache.get_stats()
         ingest_cache = IngestCache()
         default_col = os.getenv("KORTEXT_COLLECTION", os.getenv("QDRANT_COLLECTION", "kortext_codebase"))
-        all_files = ingest_cache.get_all_cached_files(default_col) or ingest_cache.get_all_cached_files("cerebrum_codebase")
+        all_files = ingest_cache.get_all_cached_files(default_col)
         return {
             "status": "ok",
             "chunk_cache": chunk_stats,
@@ -144,10 +147,146 @@ async def clear_quarantine():
                 f.unlink(missing_ok=True)
                 count += 1
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
         return {"status": "ok", "cleared_count": count}
     except Exception as e:
         return {"status": "error", "message": str(e), "cleared_count": 0}
+
+
+@router.get("/api/instincts")
+async def get_instincts(project: Optional[str] = None):
+    """Returns learned instincts from InstinctStore with trust_level, confidence, and evidence_count."""
+    from kortext._home import get_kortext_home
+    from kortext.learning.instincts import InstinctStore
+
+    try:
+        store = InstinctStore(storage_path=get_kortext_home() / "instincts.json")
+        items = store.get_active_instincts(min_confidence=0.0, project=project if project and project != "all" else None)
+        return {"status": "ok", "count": len(items), "instincts": items}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "count": 0, "instincts": []}
+
+
+@router.post("/api/instincts/promote")
+async def promote_instinct(payload: Dict[str, Any]):
+    """Approves/promotes an instinct to user_approved trust_level and high confidence."""
+    from kortext._home import get_kortext_home
+    from kortext.learning.instincts import InstinctStore
+
+    try:
+        instinct_id = str(payload.get("id") or "").strip()
+        if not instinct_id:
+            return {"status": "error", "message": "instinct 'id' is required"}
+        store = InstinctStore(storage_path=get_kortext_home() / "instincts.json")
+        updated = store.approve_instinct(instinct_id)
+        if not updated:
+            return {"status": "error", "message": f"Instinct '{instinct_id}' not found"}
+        return {"status": "ok", "instinct": updated}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/api/invariants/grounded")
+async def get_grounded_invariants():
+    """Returns AST-grounded invariants and their live SHA-256 AST body hash drift status."""
+    try:
+        from kortext.invariants import InvariantGroundingEngine
+
+        engine = InvariantGroundingEngine(host=FALKORDB_HOST, port=FALKORDB_PORT, db_name=FALKORDB_DB)
+        audit = await asyncio.to_thread(engine.audit_invariant_drift, False)
+        journal_root = Path(__file__).resolve().parents[3] / "journal"
+        grounded_file = journal_root / "grounded_invariants.json"
+        records: List[Dict[str, Any]] = []
+        if grounded_file.is_file():
+            try:
+                raw = json.loads(grounded_file.read_text(encoding="utf-8"))
+                if isinstance(raw, list):
+                    records = raw
+            except Exception:
+                records = []
+        return {
+            "status": "ok",
+            "drift_audit": audit,
+            "grounded_invariants": records,
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "drift_audit": {}, "grounded_invariants": []}
+
+
+@router.get("/api/context/telemetry")
+async def get_context_telemetry():
+    """
+    Returns Live Session Context & Token Burn Telemetry:
+    - Real-time context window usage vs 25% compaction ceiling (~200k-250k tokens on 1M window)
+    - Token savings estimator (seek_symbol vs raw grep/cat)
+    - Active pre-compaction handoff batons (~/.kortext/handoffs/*.json)
+    """
+    from kortext._home import get_kortext_home
+    from kortext.hooks.transcript_tokens import resolve_session_token_state
+
+    try:
+        home = get_kortext_home()
+        tok = resolve_session_token_state(kortext_home=home)
+        tok_dict = tok.to_dict()
+
+        seek_calls = 0
+        telemetry_jsonl = home / "telemetry" / "tools.jsonl"
+        if telemetry_jsonl.is_file():
+            try:
+                raw_lines = telemetry_jsonl.read_text(encoding="utf-8", errors="replace").splitlines()
+                for line in raw_lines[-500:]:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                        t_name = str(d.get("tool_name") or "").lower()
+                        if "seek_symbol" in t_name or "trace_symbol_impact" in t_name:
+                            seek_calls += 1
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+        spool_dir = home / "spool" / "telemetry"
+        if spool_dir.is_dir():
+            for f in list(spool_dir.glob("*.json"))[-100:]:
+                try:
+                    d = json.loads(f.read_text(encoding="utf-8"))
+                    t_name = str(d.get("tool_name") or "").lower()
+                    if "seek_symbol" in t_name or "trace_symbol_impact" in t_name:
+                        seek_calls += 1
+                except Exception:
+                    continue
+
+        handoffs_dir = home / "handoffs"
+        batons: List[Dict[str, Any]] = []
+        if handoffs_dir.is_dir():
+            for hf in sorted(handoffs_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:10]:
+                try:
+                    b_data = json.loads(hf.read_text(encoding="utf-8"))
+                    batons.append({
+                        "filename": hf.name,
+                        "task_id": b_data.get("task_id") or hf.stem,
+                        "target_agent": b_data.get("target_agent", "orchestrator"),
+                        "current_scope": str(b_data.get("current_scope") or b_data.get("summary") or "")[:160],
+                        "completed_at": b_data.get("completed_at") or b_data.get("created_at"),
+                    })
+                except Exception:
+                    continue
+
+        estimated_tokens_saved = seek_calls * 1850
+        return {
+            "status": "ok",
+            "context_window": tok_dict,
+            "compaction_threshold_tokens": 200_000,
+            "soft_budget_tokens": 150_000,
+            "seek_symbol_calls": seek_calls,
+            "estimated_tokens_saved": estimated_tokens_saved,
+            "handoff_batons": batons,
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "context_window": {}, "handoff_batons": []}
 
 
 @router.get("/api/telemetry")
@@ -162,15 +301,10 @@ async def get_telemetry():
         lat_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         falkor_ok = True
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception")
 
-    env_home = os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")
-    if env_home:
-        kortext_home = Path(env_home)
-    else:
-        k_dir = Path.home() / ".kortext"
-        c_dir = Path.home() / ".cerebrum"
-        kortext_home = k_dir if k_dir.exists() or not c_dir.exists() else c_dir
+    from kortext._home import get_kortext_home
+    kortext_home = get_kortext_home()
     q_dir = kortext_home / "quarantine"
     q_count = len(list(q_dir.glob("*.json"))) if q_dir.exists() else 0
 
@@ -179,7 +313,7 @@ async def get_telemetry():
         proc = psutil.Process(os.getpid())
         rss_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception")
 
     embed_url = os.getenv("EMBED_BASE_URL")
     embedder_desc = f"Remote API ({embed_url})" if embed_url else "FastEmbed (Local 384d)"
@@ -197,23 +331,22 @@ async def get_telemetry():
     if falkor_ok:
         try:
             client = get_shared_falkordb_client(host=FALKORDB_HOST, port=FALKORDB_PORT)
-            r = client.get_redis()
             # Symbols & Files
-            s_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (s:Symbol) RETURN count(s)")
+            s_res = client.query("kortext_symbols", "MATCH (s:Symbol) RETURN count(s)", read_only=True)
             if s_res and len(s_res) > 1 and s_res[1]:
                 sym_count = int(s_res[1][0][0])
-            f_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (f:File) RETURN count(f)")
+            f_res = client.query("kortext_symbols", "MATCH (f:File) RETURN count(f)", read_only=True)
             if f_res and len(f_res) > 1 and f_res[1]:
                 file_count = int(f_res[1][0][0])
             # Subsystems
-            sub_res = r.execute_command("GRAPH.QUERY", "kortext_symbols", "MATCH (sub:Subsystem) RETURN count(sub)")
+            sub_res = client.query("kortext_symbols", "MATCH (sub:Subsystem) RETURN count(sub)", read_only=True)
             if sub_res and len(sub_res) > 1 and sub_res[1]:
                 sub_count = int(sub_res[1][0][0])
             # Episodic outcomes and facts
-            e_res = r.execute_command("GRAPH.QUERY", FALKORDB_DB, "MATCH (e:Episodic) RETURN count(e)")
+            e_res = client.query(FALKORDB_DB, "MATCH (e:Episodic) RETURN count(e)", read_only=True)
             if e_res and len(e_res) > 1 and e_res[1]:
                 ep_count = int(e_res[1][0][0])
-            rel_res = r.execute_command("GRAPH.QUERY", FALKORDB_DB, "MATCH ()-[r:RELATES_TO]->() RETURN count(r)")
+            rel_res = client.query(FALKORDB_DB, "MATCH ()-[r:RELATES_TO]->() RETURN count(r)", read_only=True)
             if rel_res and len(rel_res) > 1 and rel_res[1]:
                 rel_count = int(rel_res[1][0][0])
         except Exception:
@@ -230,7 +363,7 @@ async def get_telemetry():
         collections = discover_vector_collections()
         total_vectors = sum(c.get("points_count", 0) for c in collections)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception")
     tier1_status = "Active" if qdrant_online else "Offline"
     tier3_status = "Active" if (falkor_ok and qdrant_online) else "Degraded"
 
@@ -261,7 +394,7 @@ async def get_telemetry():
                     "description": doc,
                 })
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception")
 
     # Dynamic Invariants Count
     active_inv_count = 0
@@ -278,7 +411,7 @@ async def get_telemetry():
                 if isinstance(g_data, list):
                     active_inv_count += len(g_data)
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception")
     except Exception:
         active_inv_count = 14
 
@@ -288,7 +421,25 @@ async def get_telemetry():
         import importlib.metadata
         version_str = importlib.metadata.version("kortext")
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception")
+
+    # Live Context Window & Learned Instincts Telemetry
+    context_telemetry: Dict[str, Any] = {}
+    try:
+        from kortext.hooks.transcript_tokens import resolve_session_token_state
+
+        tok_state = resolve_session_token_state(kortext_home=kortext_home)
+        context_telemetry = tok_state.to_dict()
+    except Exception:
+        logger.debug("Context telemetry resolution skipped")
+
+    instincts_count = 0
+    try:
+        from kortext.learning.instincts import InstinctStore
+
+        instincts_count = len(InstinctStore(storage_path=kortext_home / "instincts.json").load_all())
+    except Exception:
+        logger.debug("Instincts count skipped")
 
     return {
         "status": "ok",
@@ -298,9 +449,11 @@ async def get_telemetry():
             "falkordb_latency_ms": lat_ms,
             "falkordb_healthy": falkor_ok,
             "quarantine_count": q_count,
+            "instincts_count": instincts_count,
+            "context_window": context_telemetry,
             "weibull_retention_floor": 0.05,
-            "weibull_beta": 0.85,
-            "weibull_lambda": 168.0,
+            "weibull_beta": 0.65,
+            "weibull_lambda": 72.0,
             "active_invariants": max(active_inv_count, 6),
             "memory_tiers": {
                 "tier_0": {
@@ -318,7 +471,7 @@ async def get_telemetry():
                 "tier_2": {
                     "name": "FalkorDB Episodic Graph",
                     "status": tier2_status,
-                    "metrics": f"{ep_count:,} episodes, {rel_count:,} facts",
+                    "metrics": f"{ep_count:,} episodes, {rel_count:,} facts, {instincts_count} instincts",
                     "type": "Temporal & Causal Knowledge Graph",
                 },
                 "tier_3": {

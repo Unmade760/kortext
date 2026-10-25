@@ -229,6 +229,9 @@ def extract_symbols_and_references(
 
         # Unwrap Python decorated definitions & JS/TS exports
         if node.type == "decorated_definition":
+            for c in reversed(node.children):
+                if c.type == "decorator":
+                    stack.append((c, current_class, current_function))
             for c in node.children:
                 if c.type in (
                     "function_definition", "class_definition", "async_function_definition",
@@ -349,15 +352,14 @@ def extract_symbols_and_references(
             rec_node = actual.child_by_field_name("receiver")
             rec_type = None
             if rec_node:
-                def _find_type_ident(n: TSNode) -> Optional[str]:
-                    if n.type == "type_identifier":
-                        return node_str(n)
-                    for c in n.children:
-                        res = _find_type_ident(c)
-                        if res:
-                            return res
-                    return None
-                rec_type = _find_type_ident(rec_node)
+                rec_stack: List[TSNode] = [rec_node]
+                while rec_stack:
+                    curr_r = rec_stack.pop()
+                    if curr_r.type == "type_identifier":
+                        rec_type = node_str(curr_r)
+                        break
+                    for rc in reversed(curr_r.children):
+                        rec_stack.append(rc)
             body = get_body_node(actual)
             sig = get_signature_text(actual, body, source_bytes)
             doc = extract_first_docstring_text(actual, source_bytes)
@@ -427,21 +429,32 @@ def extract_symbols_and_references(
                                 stack.append((child, current_class, fn_name))
             continue
 
-        # ── 3. References (calls & instantiations) ──────────────────────────────
+        # ── 3. References (calls, instantiations, macros & decorators) ──────────
         elif actual.type in (
             "call", "call_expression", "new_expression",
             "method_invocation", "object_creation_expression", "invocation_expression",
+            "macro_invocation", "decorator",
         ):
             fn_node = (
                 actual.child_by_field_name("function")
+                or actual.child_by_field_name("macro")
                 or actual.child_by_field_name("name")
                 or actual.child_by_field_name("type")
             )
             if not fn_node and len(actual.children) > 0:
-                fn_node = actual.children[1] if (actual.type in ("new_expression", "object_creation_expression") and len(actual.children) > 1) else actual.children[0]
+                if actual.type == "decorator":
+                    fn_node = next((c for c in actual.children if c.type not in ("@", "at")), actual.children[0])
+                elif actual.type in ("new_expression", "object_creation_expression") and len(actual.children) > 1:
+                    fn_node = actual.children[1]
+                else:
+                    fn_node = actual.children[0]
 
             called_ident = None
             if fn_node:
+                if fn_node.type in ("call", "call_expression"):
+                    inner_fn = fn_node.child_by_field_name("function") or (fn_node.children[0] if fn_node.children else None)
+                    if inner_fn:
+                        fn_node = inner_fn
                 if fn_node.type in ("attribute", "member_expression"):
                     prop = fn_node.child_by_field_name("attribute") or fn_node.child_by_field_name("property")
                     if prop:
@@ -466,15 +479,23 @@ def extract_symbols_and_references(
                     elif len(fn_node.children) > 1:
                         called_ident = get_identifier(fn_node.children[-1], source_bytes)
                 else:
-                    called_ident = get_identifier(fn_node, source_bytes)
+                    called_ident = get_identifier(fn_node, source_bytes) or (
+                        node_str(fn_node).lstrip("@").split("(")[0].strip() if actual.type in ("macro_invocation", "decorator") else None
+                    )
 
             if called_ident and len(called_ident) > 1:
+                caller_id = (
+                    f"{current_class}.{current_function}"
+                    if (current_class and current_function)
+                    else (current_function or current_class)
+                )
+                ref_kind = "macro" if actual.type == "macro_invocation" else ("decorator" if actual.type == "decorator" else "call")
                 references.append({
                     "symbol": called_ident,
                     "line": get_line(actual.start_byte),
-                    "kind": "call",
+                    "kind": ref_kind,
                     "file_path": file_path,
-                    "caller": current_function or current_class,
+                    "caller": caller_id,
                 })
 
         for child in reversed(actual.children):

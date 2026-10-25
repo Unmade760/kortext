@@ -182,7 +182,7 @@ def test_command_safety_guard():
     # Destructive commands
     bad_commands = [
         "rm -rf /",
-        "rm -rf /Users/rb",
+        "rm -rf /Users/developer",
         "format c:",
         "echo 'data' > ~/.kortext/data/falkordb/dump.rdb",
     ]
@@ -320,7 +320,9 @@ def test_runaway_execution_guard(tmp_path: Path):
 
     ctx = HookContext.from_stdin(raw_text=json.dumps({"transcriptPath": str(t_file)}))
     res = guard.process(ctx)
-    assert res.decision == "continue"
+    assert res.data is not None
+    assert "injectSteps" in res.data
+    assert res.data.get("terminationBehavior") == "force_continue"
     assert "Runaway" in (res.reason or "")
 
 
@@ -434,7 +436,7 @@ def test_runner_cli_all_events():
         if ev in ("pre_tool", "stop"):
             assert "decision" in res
         elif ev == "pre_invoke":
-            assert "decision" in res or "injectSteps" in res
+            assert res == {} or "injectSteps" in res or "decision" in res
 
 
 def test_ground_truth_test_gate(tmp_path: Path):

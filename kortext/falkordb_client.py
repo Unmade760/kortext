@@ -2,37 +2,70 @@
 Canonical FalkorDB Client & Token-Safe Cypher Query Engine for Kortext.
 
 Provides:
-1. Resilient Redis connection lifecycle and reconnect logic.
+1. Thread-safe, connection-pooled Redis connection lifecycle and reconnect logic.
 2. Token-safe Cypher parameter interpolation using word boundaries
-   and length-descending key sorting (eliminating prefix collision vulnerabilities).
+   and identifier validation (preventing Cypher injection and prefix collisions).
 3. Schema index verification for Symbol, File, Document, Tag, and Concept nodes.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
 import re
+import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
-from falkordb.helpers import stringify_param_value
-import redis
+
+try:
+    from falkordb.helpers import stringify_param_value
+except Exception:
+    def stringify_param_value(val: Any) -> str:
+        if val is None:
+            return "null"
+        return json.dumps(val)
+
+try:
+    import redis
+except Exception:
+    redis = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-
 from kortext._home import KORTEXT_HOME, get_kortext_home
+
+_CYPHER_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class FalkorDBQueryError(RuntimeError):
+    """Typed exception raised when a FalkorDB Cypher query fails and raise_on_error is enabled."""
+
+
+def _validate_cypher_identifier(key: Any) -> str:
+    """Validates a Cypher parameter or map key against strict identifier syntax."""
+    if not isinstance(key, str) or not _CYPHER_IDENT_RE.fullmatch(key):
+        raise ValueError(
+            f"Invalid Cypher identifier/parameter key {key!r}: must match ^[A-Za-z_][A-Za-z0-9_]*$"
+        )
+    return key
 
 
 def get_default_socket() -> Path:
-    sock = get_kortext_home() / "run" / "falkordb.sock"
-    if not (os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")) and not sock.exists():
-        legacy_sock = Path.home() / ".cerebrum" / "run" / "falkordb.sock"
-        if legacy_sock.exists():
-            return legacy_sock
-    return sock
+    env_sock = os.getenv("FALKORDB_SOCKET", "").strip()
+    if env_sock:
+        env_path = Path(env_sock).expanduser()
+        if env_path.is_socket():
+            return env_path
+    candidate = get_kortext_home() / "run" / "falkordb.sock"
+    if candidate.is_socket() or os.getenv("KORTEXT_HOME") or os.getenv("PLUGIN_DATA"):
+        return candidate
+    for home_cand in (Path.home(), Path(__file__).resolve().parents[2]):
+        fallback = home_cand / ".kortext" / "run" / "falkordb.sock"
+        if fallback.is_socket():
+            return fallback
+    return candidate
 
 
-CEREBRUM_HOME = KORTEXT_HOME
 DEFAULT_SOCKET = get_default_socket()
 
 FALKORDB_HOST = os.getenv("FALKORDB_HOST", "127.0.0.1")
@@ -46,8 +79,15 @@ def build_cypher_params_header(params: Optional[Dict[str, Any]]) -> str:
         return ""
     parts = []
     for k, v in params.items():
-        parts.append(f"`{k}`={stringify_param_value(v)}")
+        safe_k = _validate_cypher_identifier(k)
+        if isinstance(v, dict):
+            for map_k in v.keys():
+                _validate_cypher_identifier(map_k)
+        parts.append(f"`{safe_k}`={stringify_param_value(v)}")
     return "CYPHER " + " ".join(parts) + " "
+
+
+_format_params_header = build_cypher_params_header
 
 
 def _format_cypher_val(v: Any) -> str:
@@ -62,7 +102,7 @@ def _format_cypher_val(v: Any) -> str:
         escaped_v = v.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
         return f"'{escaped_v}'"
     if isinstance(v, dict):
-        elements = [f"{k}: {_format_cypher_val(val)}" for k, val in v.items()]
+        elements = [f"{_validate_cypher_identifier(k)}: {_format_cypher_val(val)}" for k, val in v.items()]
         return "{" + ", ".join(elements) + "}"
     if isinstance(v, (list, tuple, set)):
         elements = [_format_cypher_val(item) for item in v]
@@ -86,6 +126,9 @@ def format_cypher_query(cypher: str, params: Optional[Dict[str, Any]] = None) ->
     if not params:
         return cypher
 
+    for k in params.keys():
+        _validate_cypher_identifier(k)
+
     def _replace_token(match: re.Match[str]) -> str:
         param_name = match.group("param")
         if param_name is not None and param_name in params:
@@ -95,12 +138,13 @@ def format_cypher_query(cypher: str, params: Optional[Dict[str, Any]] = None) ->
     return _CYPHER_TOKEN_PATTERN.sub(_replace_token, cypher)
 
 
-
 _USE_DEFAULT_SOCKET = object()
 
 
 class FalkorDBClient:
-    """Canonical FalkorDB Redis client with robust query execution and indexing."""
+    """Canonical FalkorDB Redis client with thread-safe connection pooling and indexing."""
+
+    _is_live_falkor_client = True
 
     def __init__(
         self,
@@ -108,74 +152,63 @@ class FalkorDBClient:
         port: int = FALKORDB_PORT,
         password: Optional[str] = FALKORDB_PASS,
         socket_path: Any = _USE_DEFAULT_SOCKET,
+        max_connections: int = 32,
     ):
         self.host = host
         self.port = port
         self.password = password or None
         self.socket_path = get_default_socket() if socket_path is _USE_DEFAULT_SOCKET else socket_path
+        self.max_connections = max_connections
         self._r: Optional[redis.Redis] = None
+        self._lock = threading.RLock()
         self._verified_indexes: Set[Tuple[str, str, str]] = set()
         self._resolved_graphs: Dict[str, str] = {}
 
     def get_redis(self) -> redis.Redis:
-        """Returns active Redis client connection, preferring Unix domain socket."""
-        if self._r is not None:
+        """Returns active thread-safe Redis client connection, preferring Unix domain socket."""
+        with self._lock:
+            if self._r is not None:
+                return self._r
+
+            # Attempt 1: Unix Domain Socket (Ultra-low latency IPC)
+            if self.socket_path and Path(self.socket_path).is_socket():
+                try:
+                    uds_kwargs: Dict[str, Any] = {
+                        "unix_socket_path": str(self.socket_path),
+                        "password": self.password,
+                        "decode_responses": True,
+                        "socket_timeout": 5.0,
+                    }
+                    if self.max_connections != 32:
+                        uds_kwargs["max_connections"] = self.max_connections
+                    r = redis.Redis(**uds_kwargs)
+                    r.ping()
+                    self._r = r
+                    return self._r
+                except Exception as exc:
+                    logger.debug("UDS connection fallback to TCP: %s", exc)
+
+            # Attempt 2: TCP Loopback / Remote Endpoint with connection pool
+            tcp_kwargs: Dict[str, Any] = {
+                "host": self.host,
+                "port": self.port,
+                "password": self.password,
+                "decode_responses": True,
+                "socket_timeout": 5.0,
+            }
+            if self.max_connections != 32:
+                tcp_kwargs["max_connections"] = self.max_connections
+            self._r = redis.Redis(**tcp_kwargs)
             return self._r
 
-        # Attempt 1: Unix Domain Socket (Ultra-low latency IPC)
-        if self.socket_path and Path(self.socket_path).is_socket():
-            try:
-                r = redis.Redis(
-                    unix_socket_path=str(self.socket_path),
-                    password=self.password,
-                    decode_responses=True,
-                    socket_timeout=5.0,
-                )
-                r.ping()
-                self._r = r
-                return self._r
-            except Exception:
-                pass
-
-        # Attempt 2: TCP Loopback / Remote Endpoint
-        self._r = redis.Redis(
-            host=self.host,
-            port=self.port,
-            password=self.password,
-            decode_responses=True,
-            socket_timeout=5.0,
-        )
-        return self._r
+    def _reset_redis(self) -> redis.Redis:
+        """Thread-safely resets and reconnects the underlying Redis client."""
+        with self._lock:
+            self._r = None
+            return self.get_redis()
 
     def resolve_graph_name(self, graph_name: str) -> str:
-        """Accept both 'kortext' and 'cerebrum' names for seamless backward-compatibility with existing on-disk data."""
-        if graph_name not in ("kortext", "cerebrum", "kortext_symbols", "cerebrum_symbols"):
-            return graph_name
-        if graph_name in self._resolved_graphs:
-            return self._resolved_graphs[graph_name]
-        try:
-            client = self.get_redis()
-            existing_graphs = client.execute_command("GRAPH.LIST")
-            if isinstance(existing_graphs, list):
-                existing_graphs_str = [g.decode() if isinstance(g, bytes) else str(g) for g in existing_graphs]
-                if graph_name in existing_graphs_str:
-                    self._resolved_graphs[graph_name] = graph_name
-                    return graph_name
-                if graph_name == "kortext" and "cerebrum" in existing_graphs_str:
-                    self._resolved_graphs[graph_name] = "cerebrum"
-                    return "cerebrum"
-                if graph_name == "kortext_symbols" and "cerebrum_symbols" in existing_graphs_str:
-                    self._resolved_graphs[graph_name] = "cerebrum_symbols"
-                    return "cerebrum_symbols"
-                if graph_name == "cerebrum" and "kortext" in existing_graphs_str:
-                    self._resolved_graphs[graph_name] = "kortext"
-                    return "kortext"
-                if graph_name == "cerebrum_symbols" and "kortext_symbols" in existing_graphs_str:
-                    self._resolved_graphs[graph_name] = "kortext_symbols"
-                    return "kortext_symbols"
-        except Exception:
-            pass
-        self._resolved_graphs[graph_name] = graph_name
+        """Returns the canonical graph name."""
         return graph_name
 
     def ensure_indexes(self, graph_name: str, indexes: List[Tuple[str, str]]):
@@ -184,15 +217,22 @@ class FalkorDBClient:
         indexes: list of (node_label, property_name)
         """
         resolved_graph = self.resolve_graph_name(graph_name)
+        if redis is None:
+            return []
         client = self.get_redis()
         for label, prop in indexes:
-            key = (resolved_graph, label, prop)
-            if key in self._verified_indexes:
+            if not _CYPHER_IDENT_RE.match(str(label)) or not _CYPHER_IDENT_RE.match(str(prop)):
+                logger.warning("Skipped invalid index identifier: %r.%r", label, prop)
                 continue
+            key = (resolved_graph, label, prop)
+            with self._lock:
+                if key in self._verified_indexes:
+                    continue
             try:
                 client.execute_command("GRAPH.QUERY", resolved_graph, f"CREATE INDEX FOR (n:{label}) ON (n.{prop})")
-                self._verified_indexes.add(key)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Index creation note on %s(%s.%s): %s", resolved_graph, label, prop, exc)
+            with self._lock:
                 self._verified_indexes.add(key)
 
     def query(
@@ -202,9 +242,11 @@ class FalkorDBClient:
         params: Optional[Dict[str, Any]] = None,
         attempts: int = 2,
         read_only: bool = False,
+        raise_on_error: bool = False,
     ) -> List[List[Any]]:
         """
-        Executes a Cypher query on the specified graph with native parameter binding and reconnect.
+        Executes a Cypher query on the specified graph with native parameter binding
+        and thread-safe reconnect. Raises FalkorDBQueryError when raise_on_error=True.
         """
         resolved_graph = self.resolve_graph_name(graph_name)
         if params and not cypher.lstrip().startswith("CYPHER "):
@@ -212,6 +254,8 @@ class FalkorDBClient:
         else:
             query_str = cypher
 
+        if redis is None:
+            return []
         client = self.get_redis()
         cmd = "GRAPH.RO_QUERY" if read_only else "GRAPH.QUERY"
 
@@ -219,18 +263,20 @@ class FalkorDBClient:
             try:
                 res = client.execute_command(cmd, resolved_graph, query_str)
                 return res if res and isinstance(res, list) else []
-            except (redis.ConnectionError, redis.TimeoutError):
-                self._r = None
-                client = self.get_redis()
+            except (redis.ConnectionError, redis.TimeoutError) as conn_err:
+                client = self._reset_redis()
                 if attempt == attempts - 1:
                     raise
             except Exception as e:
                 logger.error("[FalkorDBClient] Error executing query on '%s': %s", graph_name, e)
+                if raise_on_error:
+                    raise FalkorDBQueryError(f"FalkorDB query failed on '{graph_name}': {e}") from e
                 return []
         return []
 
 
 _SINGLETON_CLIENT: Optional[FalkorDBClient] = None
+_SINGLETON_LOCK = threading.Lock()
 
 
 def get_shared_falkordb_client(
@@ -238,8 +284,10 @@ def get_shared_falkordb_client(
     port: int = FALKORDB_PORT,
     password: Optional[str] = FALKORDB_PASS,
 ) -> FalkorDBClient:
-    """Returns singleton FalkorDBClient instance."""
+    """Returns thread-safe singleton FalkorDBClient instance."""
     global _SINGLETON_CLIENT
     if _SINGLETON_CLIENT is None:
-        _SINGLETON_CLIENT = FalkorDBClient(host=host, port=port, password=password)
+        with _SINGLETON_LOCK:
+            if _SINGLETON_CLIENT is None:
+                _SINGLETON_CLIENT = FalkorDBClient(host=host, port=port, password=password)
     return _SINGLETON_CLIENT

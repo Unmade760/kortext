@@ -1,10 +1,9 @@
 {
   "display_name": "Kortext Real-Time File Watcher",
   "description": "Continuous AST parsing and incremental vector synchronization daemon",
-  "command": "/Users/rb/kortext/.venv/bin/python3",
+  "command": "sh",
   "args": [
-    "-m",
-    "kortext.watcher"
+    "run.sh"
   ],
   "restart_policy": "always",
   "env": {

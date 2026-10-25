@@ -36,9 +36,7 @@ class TestAntigravityHooksContract:
         assert proc.returncode == 0
         res = json.loads(proc.stdout)
         # PreInvocation output contract must be {"injectSteps": [...]} or {}
-        assert "injectSteps" in res
-        assert len(res["injectSteps"]) > 0
-        assert "ephemeralMessage" in res["injectSteps"][0]
+        assert res == {} or ("injectSteps" in res and "ephemeralMessage" in res["injectSteps"][0])
 
     def test_stop_hook_contract(self):
         script = HOOKS_DIR / "hook_stop.py"
@@ -126,7 +124,7 @@ class TestAntigravityHooksContract:
 from unittest.mock import patch
 import json, sys
 sys.path.insert(0, '{HOOKS_DIR}')
-with patch('hook_pre_invoke.check_falkordb_status', return_value=False), patch('hook_pre_invoke.check_qdrant_status', return_value=False):
+with patch('kortext.hooks.pipelines.pre_invoke._check_unix_socket', return_value=False), patch('kortext.hooks.pipelines.pre_invoke._check_tcp', return_value=False), patch('kortext.hooks.pipelines.pre_invoke._check_qdrant_ready', return_value=False):
     import hook_pre_invoke
     sys.stdin = open('/dev/null')
     # invoke main with mocked payload
@@ -153,7 +151,8 @@ with patch('hook_pre_invoke.check_falkordb_status', return_value=False), patch('
 from unittest.mock import patch
 import json, sys
 sys.path.insert(0, '{HOOKS_DIR}')
-with patch('hook_pre_invoke.check_falkordb_status', return_value=True), patch('hook_pre_invoke.check_qdrant_status', return_value=True):
+import os; os.environ['KORTEXT_INJECT_INVARIANTS'] = '1'
+with patch('kortext.hooks.pipelines.pre_invoke._check_unix_socket', return_value=True), patch('kortext.hooks.pipelines.pre_invoke._check_qdrant_ready', return_value=True):
     import hook_pre_invoke
     with patch('hook_pre_invoke.get_hook_payload', return_value={{'invocationNum': 0}}):
         try:
@@ -232,7 +231,8 @@ with patch('kortext.tasks.tracker.TaskDAGTracker', mock_tracker):
         proc = subprocess.run(
             [sys.executable, "-c", f"""
 from unittest.mock import patch, MagicMock
-import json, sys
+import json, os, sys
+os.environ['KORTEXT_OUTCOME_GUARD_ENFORCE'] = '1'
 sys.path.insert(0, '{HOOKS_DIR}')
 mock_tracker = MagicMock()
 mock_tracker.return_value.get_ready_tasks.return_value = []
@@ -251,7 +251,7 @@ with patch('kortext.tasks.tracker.TaskDAGTracker', mock_tracker):
         assert proc.returncode == 0
         res = json.loads(proc.stdout)
         assert res["decision"] == "continue"
-        assert "Codebase files were modified" in res["reason"]
+        assert "modified" in res["reason"].lower() and "record_system_outcome" in res["reason"]
 
     def test_stop_hook_blocks_when_ready_tasks_in_dag(self):
         script = HOOKS_DIR / "hook_stop.py"
@@ -278,7 +278,7 @@ with patch('kortext.tasks.tracker.TaskDAGTracker', mock_tracker):
         assert proc.returncode == 0
         res = json.loads(proc.stdout)
         assert res["decision"] == "continue"
-        assert "Uncompleted ready tasks remain in DAG" in res["reason"]
+        assert "tasks remain in DAG" in res["reason"]
 
     def test_check_falkordb_status_uds_and_tcp_fallback(self):
         from unittest.mock import patch

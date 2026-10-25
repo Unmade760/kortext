@@ -3,19 +3,28 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner pre_invoke",
-        "timeout": 15
+        "command": "sh \"${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh\" pre_invoke",
+        "timeout": 5
+      }
+    ]
+  },
+  "kortext-runaway-guard": {
+    "PostInvocation": [
+      {
+        "type": "command",
+        "command": "sh \"${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh\" post_invoke",
+        "timeout": 5
       }
     ]
   },
   "kortext-safety-gate": {
     "PreToolUse": [
       {
-        "matcher": "run_command|replace_file_content|write_to_file",
+        "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|grep_search|find_by_name|view_file|replace_file_content|multi_replace_file_content|write_to_file)",
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner pre_tool",
+            "command": "sh \"${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh\" pre_tool",
             "timeout": 5
           }
         ]
@@ -25,11 +34,11 @@
   "kortext-cache-invalidation": {
     "PostToolUse": [
       {
-        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|write_to_file|replace_file_content|multi_replace_file_content|seek_symbol|trace_symbol_impact|manage_tasks|record_system_outcome)",
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner post_tool",
+            "command": "sh \"${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh\" post_tool",
             "timeout": 10
           }
         ]
@@ -40,7 +49,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "/Users/rb/kortext/.venv/bin/python3 -m kortext.hooks.runner stop",
+        "command": "sh \"${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh\" stop",
         "timeout": 15
       }
     ]

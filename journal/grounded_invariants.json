@@ -4,25 +4,29 @@
     "rule": "trace_symbol_impact must bound response tokens using progressive degradation",
     "rationale": "Prevents context window explosion for deep call trees",
     "symbol_name": "trace_symbol_impact",
-    "file_path": "/Users/rb/cortex/cortex/symbols/graph.py",
-    "ast_hash": "eef3a9881e3a476b743366972d863a5a22788e404d273d4ce7728cd62fb7158e",
-    "status": "orphaned_file",
+    "file_path": "kortext/symbols/graph_traversal.py",
+    "ast_hash": "8fdece71815b28f3fa27df1a78f2053c568105729da7eb592177f26ab75d3bb7",
+    "status": "verified",
     "trust_level": "tool_confirmed",
     "grounded_at": "2026-09-20T07:06:36.237359+00:00",
-    "last_verified": "2026-09-20T07:06:36.269825+00:00"
+    "last_verified": "2026-10-25T19:00:44.644993+00:00",
+    "signature_hash": "8fdece71815b28f3fa27df1a78f2053c568105729da7eb592177f26ab75d3bb7",
+    "body_hash": "9004db2668e2bad7575978055e5fa4a575b2c7fdb60cdccac33cdec56989ae16",
+    "body_modified": false
   },
   {
     "domain": "GRAPH_IMPACT",
     "rule": "trace_impact must bound response tokens using progressive degradation",
     "rationale": "Prevents context window explosion for deep call trees",
     "symbol_name": "trace_impact",
-    "file_path": "/Users/rb/cortex/cerebrum/symbols/seek.py",
-    "ast_hash": "fd50e1b1762b9578caf4bdb1651081022ad1a419afb3a36089ffd617b32c9f47",
-    "status": "orphaned_file",
+    "file_path": "kortext/symbols/seek.py",
+    "ast_hash": "ee1a98f0eb10e229c9cfbbfaf17160d8f35d89f00c12a4d843c2d343ed766cad",
+    "status": "verified",
     "trust_level": "tool_confirmed",
     "grounded_at": "2026-09-27T02:16:28.719731+00:00",
-    "last_verified": "2026-10-01T11:36:42.843538+00:00",
-    "drifted_at": "2026-10-08T05:35:10.855907+00:00",
-    "live_hash": "5c55c743c638031679e039ce96b5e193e9ad643286c65b635863915f9b1108f1"
+    "last_verified": "2026-10-25T19:00:44.644993+00:00",
+    "signature_hash": "ee1a98f0eb10e229c9cfbbfaf17160d8f35d89f00c12a4d843c2d343ed766cad",
+    "body_hash": "3da36fa12f7d9350f11e910535f7ef77d106946f294da44217af87947b3e7f9c",
+    "body_modified": false
   }
 ]

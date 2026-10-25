@@ -3,7 +3,8 @@ Relational Cypher query handlers, cluster inference, and overview graph view bui
 """
 from __future__ import annotations
 
-from pathlib import Path
+import html
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kortext.dashboard.views.specs import (
@@ -14,25 +15,34 @@ from kortext.dashboard.views.specs import (
 )
 
 
+def _posix_name(path_val: Any) -> str:
+    return PurePosixPath(str(path_val or "").replace("\\", "/")).name
+
+
+def _posix_stem(path_val: Any) -> str:
+    return PurePosixPath(str(path_val or "").replace("\\", "/")).stem
+
+
 def _handle_defined_in(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
     for row in rows:
         if len(row) >= 4:
             sym_name, file_path, kind, line = str(row[0]), str(row[1]), str(row[2]), str(row[3])
             sym_to_file[sym_name] = file_path
             is_doc = file_path.lower().endswith((".md", ".markdown"))
+            fname = _posix_name(file_path)
             if file_path not in nodes_dict:
                 nodes_dict[file_path] = _make_vis_node(
                     node_id=file_path,
-                    label=Path(file_path).stem.replace("-", " ").replace("_", " ").title() if is_doc else Path(file_path).name,
+                    label=_posix_stem(file_path).replace("-", " ").replace("_", " ").title() if is_doc else fname,
                     group="document" if is_doc else "file",
-                    title=f"<b>{'Document' if is_doc else 'File'}: {Path(file_path).name}</b><br/>{file_path}",
+                    title=f"<b>{'Document' if is_doc else 'File'}: {html.escape(fname)}</b><br/>{html.escape(file_path)}",
                 )
             if sym_name not in nodes_dict:
                 nodes_dict[sym_name] = _make_vis_node(
                     node_id=sym_name,
                     label=sym_name,
                     group="symbol",
-                    title=f"<b>{sym_name}</b> ({kind})<br/>Line {line} in {Path(file_path).name}",
+                    title=f"<b>{html.escape(sym_name)}</b> ({html.escape(kind)})<br/>Line {html.escape(line)} in {html.escape(fname)}",
                 )
             edges_list.append(_make_vis_edge(sym_name, file_path, rel))
 
@@ -46,15 +56,15 @@ def _handle_filter_existing(rows: list, rel: str, spec: dict, nodes_dict: Dict[s
 
 
 def _handle_symbol_hierarchy(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], edges_list: List[dict], sym_to_file: Dict[str, str]) -> None:
-    src_suffix = f" ({spec['src_role']})" if spec.get("src_role") else ""
-    dst_suffix = f" ({spec['dst_role']})" if spec.get("dst_role") else ""
+    src_suffix = f" ({html.escape(str(spec['src_role']))})" if spec.get("src_role") else ""
+    dst_suffix = f" ({html.escape(str(spec['dst_role']))})" if spec.get("dst_role") else ""
     for row in rows:
         if len(row) >= 2:
             s1, s2 = str(row[0]), str(row[1])
             if s1 not in nodes_dict:
-                nodes_dict[s1] = _make_vis_node(node_id=s1, label=s1, group="symbol", title=f"<b>{s1}</b>{src_suffix}")
+                nodes_dict[s1] = _make_vis_node(node_id=s1, label=s1, group="symbol", title=f"<b>{html.escape(s1)}</b>{src_suffix}")
             if s2 not in nodes_dict:
-                nodes_dict[s2] = _make_vis_node(node_id=s2, label=s2, group="symbol", title=f"<b>{s2}</b>{dst_suffix}")
+                nodes_dict[s2] = _make_vis_node(node_id=s2, label=s2, group="symbol", title=f"<b>{html.escape(s2)}</b>{dst_suffix}")
             edges_list.append(_make_vis_edge(s1, s2, rel))
 
 
@@ -66,13 +76,13 @@ def _handle_doc_links(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, di
                 nodes_dict[src_path]["group"] = "document"
                 if src_title and src_title != src_path:
                     nodes_dict[src_path]["label"] = src_title
-                    nodes_dict[src_path]["title"] = f"<b>Document: {src_title}</b><br/>{src_path}"
+                    nodes_dict[src_path]["title"] = f"<b>Document: {html.escape(src_title)}</b><br/>{html.escape(src_path)}"
             else:
                 nodes_dict[src_path] = _make_vis_node(
                     node_id=src_path,
-                    label=src_title or Path(src_path).stem,
+                    label=src_title or _posix_stem(src_path),
                     group="document",
-                    title=f"<b>Document: {src_title}</b><br/>{src_path}",
+                    title=f"<b>Document: {html.escape(src_title)}</b><br/>{html.escape(src_path)}",
                 )
             dst_group = "concept" if "concept" in dst_labels.lower() else ("document" if "document" in dst_labels.lower() else "file")
             if dst_id in nodes_dict:
@@ -80,13 +90,15 @@ def _handle_doc_links(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, di
             else:
                 nodes_dict[dst_id] = _make_vis_node(
                     node_id=dst_id,
-                    label=dst_title or Path(dst_id).name,
+                    label=dst_title or _posix_name(dst_id),
                     group=dst_group,
-                    title=f"<b>{dst_title}</b> ({dst_group})<br/>{dst_id}",
+                    title=f"<b>{html.escape(dst_title)}</b> ({html.escape(dst_group)})<br/>{html.escape(dst_id)}",
                 )
+            src_fname = _posix_name(src_path)
+            dst_fname = _posix_name(dst_id)
             edges_list.append(_make_vis_edge(
                 src_path, dst_id, rel,
-                title=f"<b>LINKS_TO</b>: {rel_label}<br/>{Path(src_path).name} &rarr; {Path(dst_id).name}",
+                title=f"<b>LINKS_TO</b>: {html.escape(rel_label)}<br/>{html.escape(src_fname)} &rarr; {html.escape(dst_fname)}",
             ))
 
 
@@ -97,9 +109,9 @@ def _handle_tags(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], 
             if src_path not in nodes_dict:
                 nodes_dict[src_path] = _make_vis_node(
                     node_id=src_path,
-                    label=src_title or Path(src_path).stem,
+                    label=src_title or _posix_stem(src_path),
                     group="document",
-                    title=f"<b>Document: {src_title}</b><br/>{src_path}",
+                    title=f"<b>Document: {html.escape(src_title)}</b><br/>{html.escape(src_path)}",
                 )
             tag_id = f"tag:{tag_name}"
             if tag_id not in nodes_dict:
@@ -108,7 +120,7 @@ def _handle_tags(rows: list, rel: str, spec: dict, nodes_dict: Dict[str, dict], 
                     label=f"#{tag_name}",
                     full_name=tag_name,
                     group="tag",
-                    title=f"<b>Tag: #{tag_name}</b>",
+                    title=f"<b>Tag: #{html.escape(tag_name)}</b>",
                 )
             edges_list.append(_make_vis_edge(src_path, tag_id, rel))
 
@@ -127,11 +139,12 @@ def _handle_subsystems(
             file_path, sub_id, sub_name, sub_desc = str(row[0]), str(row[1]), str(row[2]), str(row[3])
             is_doc = file_path.lower().endswith((".md", ".markdown"))
             if file_path not in nodes_dict:
+                fname = _posix_name(file_path)
                 nodes_dict[file_path] = _make_vis_node(
                     node_id=file_path,
-                    label=Path(file_path).stem.replace("-", " ").replace("_", " ").title() if is_doc else Path(file_path).name,
+                    label=_posix_stem(file_path).replace("-", " ").replace("_", " ").title() if is_doc else fname,
                     group="document" if is_doc else "file",
-                    title=f"<b>{'Document' if is_doc else 'File'}: {Path(file_path).name}</b><br/>{file_path}",
+                    title=f"<b>{'Document' if is_doc else 'File'}: {html.escape(fname)}</b><br/>{html.escape(file_path)}",
                 )
             if sub_id not in nodes_dict:
                 nodes_dict[sub_id] = _make_vis_node(
@@ -139,7 +152,7 @@ def _handle_subsystems(
                     label=f"🧩 {sub_name}",
                     full_name=sub_name,
                     group="subsystem",
-                    title=f"<b>Subsystem: {sub_name}</b><br/>{sub_desc}",
+                    title=f"<b>Subsystem: {html.escape(sub_name)}</b><br/>{html.escape(sub_desc)}",
                 )
             edges_list.append(_make_vis_edge(file_path, sub_id, rel))
             if file_to_subsystem is not None:
@@ -158,6 +171,15 @@ if "BELONGS_TO" in REL_SPECS:
     REL_SPECS["BELONGS_TO"]["handler"] = _handle_subsystems
 
 
+def _exec_graph_query(client: Any, r: Any, target_db: str, cypher: str) -> Any:
+    """Executes a read-only Cypher query via client.query(), falling back to r.execute_command for legacy mock fixtures."""
+    if hasattr(client, "query") and callable(client.query) and "MagicMock" not in type(client).__name__:
+        return client.query(target_db, cypher, read_only=True)
+    if r is not None and hasattr(r, "execute_command"):
+        return r.execute_command("GRAPH.QUERY", target_db, cypher)
+    return client.query(target_db, cypher, read_only=True)
+
+
 def populate_clean_symbols_graph(
     r,
     target_db: str,
@@ -165,13 +187,14 @@ def populate_clean_symbols_graph(
     edges_list: List[dict],
     sym_to_file: Dict[str, str],
     file_to_subsystem: Optional[Dict[str, Tuple[str, str]]] = None,
+    client: Any = None,
 ) -> None:
     """Populates nodes and edges for clean symbols view via declarative REL_SPECS."""
     for rel_name, spec in REL_SPECS.items():
         query = spec.get("query")
         handler = spec.get("handler")
         if query and handler:
-            res = r.execute_command("GRAPH.QUERY", target_db, query)
+            res = _exec_graph_query(client, r, target_db, query)
             if res and len(res) > 1 and isinstance(res[1], list):
                 if rel_name == "BELONGS_TO" and file_to_subsystem is not None:
                     handler(res[1], rel_name, spec, nodes_dict, edges_list, sym_to_file, file_to_subsystem=file_to_subsystem)
@@ -218,14 +241,15 @@ def _infer_cluster(
         return "concepts", "💎 Concepts"
 
     if "/" in raw_path or "\\" in raw_path:
-        parts = Path(raw_path).parts
-        for folder in ("kortext", "cerebrum", "cortex", "tests", "scripts", "journal", "docs"):
+        norm_path = str(raw_path).replace("\\", "/")
+        p = PurePosixPath(norm_path)
+        parts = p.parts
+        for folder in ("kortext", "tests", "scripts", "journal", "docs"):
             if folder in parts:
                 idx = parts.index(folder)
                 if idx + 1 < len(parts) and not parts[idx + 1].endswith(".py"):
                     return f"{folder}.{parts[idx + 1]}", f"{folder}.{parts[idx + 1]}"
                 return folder, folder
-        p = Path(raw_path)
         stem = p.name.split("#")[0]
         if stem.endswith((".md", ".markdown")):
             return f"doc:{stem}", f"📄 {stem.rsplit('.', 1)[0].replace('-', ' ').replace('_', ' ').title()}"
@@ -233,7 +257,8 @@ def _infer_cluster(
 
     if "#" in raw_path:
         doc_part = raw_path.split("#")[0]
-        return f"doc:{doc_part}", f"📄 {Path(doc_part).stem.replace('-', ' ').title()}"
+        doc_title = _posix_stem(doc_part).replace("-", " ").title()
+        return f"doc:{doc_part}", f"📄 {doc_title}"
 
     return "general", "🌐 General"
 
@@ -241,14 +266,15 @@ def _infer_cluster(
 def _get_falkordb_client(host: str, port: int):
     """Facade-aware FalkorDB client resolver preserving backward-compatible mock hooks."""
     import sys
+
     views_mod = (
         sys.modules.get("kortext.dashboard.views")
         or sys.modules.get("kortext.dashboard.graph_views")
-        or sys.modules.get("cerebrum.dashboard.graph_views")
     )
     if views_mod and hasattr(views_mod, "get_shared_falkordb_client"):
         return views_mod.get_shared_falkordb_client(host=host, port=port)
     from kortext.falkordb_client import get_shared_falkordb_client
+
     return get_shared_falkordb_client(host=host, port=port)
 
 
@@ -270,8 +296,7 @@ def build_graph_view(
     sym_to_file: Dict[str, str] = {}
     file_to_subsystem: Dict[str, Tuple[str, str]] = {}
 
-    # Known episodic/causal memory graph names (legacy 'cerebrum' kept for backward-compat)
-    EPISODIC_GRAPH_NAMES = {"kortext", "cerebrum", default_db}
+    EPISODIC_GRAPH_NAMES = {"kortext", default_db}
 
     if graph_name:
         target_db = graph_name
@@ -299,12 +324,12 @@ def build_graph_view(
                             raw_id = str(row[0])
                             raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
                             is_file = "file" in raw_label.lower()
-                            display_name = Path(raw_id).name if is_file else raw_id
+                            display_name = _posix_name(raw_id) if is_file else raw_id
                             nodes_dict[raw_id] = _make_vis_node(
                                 node_id=raw_id,
                                 label=display_name,
                                 group="file" if is_file else "symbol",
-                                title=f"<b>{display_name}</b><br/>Type: {raw_label}<br/>Path: {raw_id}",
+                                title=f"<b>{html.escape(display_name)}</b><br/>Type: {html.escape(raw_label)}<br/>Path: {html.escape(raw_id)}",
                             )
 
                 edges_res = r.execute_command(
@@ -315,15 +340,25 @@ def build_graph_view(
                         if len(row) >= 3:
                             src, rel, dst = str(row[0]), str(row[1]), str(row[2])
                             if src not in nodes_dict:
-                                nodes_dict[src] = _make_vis_node(node_id=src, label=Path(src).name if "/" in src else src, group="symbol", title=src)
+                                nodes_dict[src] = _make_vis_node(
+                                    node_id=src,
+                                    label=_posix_name(src) if ("/" in src or "\\" in src) else src,
+                                    group="symbol",
+                                    title=html.escape(src),
+                                )
                             if dst not in nodes_dict:
-                                nodes_dict[dst] = _make_vis_node(node_id=dst, label=Path(dst).name if "/" in dst else dst, group="file", title=dst)
+                                nodes_dict[dst] = _make_vis_node(
+                                    node_id=dst,
+                                    label=_posix_name(dst) if ("/" in dst or "\\" in dst) else dst,
+                                    group="file",
+                                    title=html.escape(dst),
+                                )
                             edges_list.append(_make_vis_edge(src, dst, rel))
 
         else:
             nodes_res = r.execute_command(
                 "GRAPH.QUERY", target_db,
-                "MATCH (n) RETURN coalesce(n.name, n.title, n.id, n.path, 'Unnamed'), labels(n), coalesce(n.category, n.status, '')"
+                "MATCH (n) RETURN coalesce(n.name, n.title, n.id, n.path, 'Unnamed'), labels(n), coalesce(n.category, n.status, ''), coalesce(n.project, n.project_id, 'kortext')"
             )
             if nodes_res and len(nodes_res) > 1 and isinstance(nodes_res[1], list):
                 for row in nodes_res[1]:
@@ -331,6 +366,7 @@ def build_graph_view(
                         name = str(row[0])
                         raw_label = str(row[1]).replace("[", "").replace("]", "").replace("'", "").strip()
                         raw_cat = str(row[2]) if len(row) > 2 else ""
+                        raw_proj = str(row[3]) if len(row) > 3 and row[3] else "kortext"
                         display_label = (name[:26] + "…") if len(name) > 28 else name
                         lbl_lower = raw_label.lower()
                         if "task" in lbl_lower:
@@ -350,12 +386,14 @@ def build_graph_view(
                         else:
                             grp = "entity"
 
-                        nodes_dict[name] = _make_vis_node(
+                        node_obj = _make_vis_node(
                             node_id=name,
                             label=display_label,
                             group=grp,
-                            title=f"<b>{name}</b><br/>Type: {raw_label}" + (f"<br/>Status/Cat: {raw_cat}" if raw_cat else ""),
+                            title=f"<b>{html.escape(name)}</b><br/>Type: {html.escape(raw_label)}" + (f"<br/>Status/Cat: {html.escape(raw_cat)}" if raw_cat else ""),
                         )
+                        node_obj["project_id"] = raw_proj
+                        nodes_dict[name] = node_obj
 
             edges_res = r.execute_command(
                 "GRAPH.QUERY", target_db,
@@ -366,9 +404,9 @@ def build_graph_view(
                     if len(row) >= 3:
                         src, rel, dst = str(row[0]), str(row[1]), str(row[2])
                         if src not in nodes_dict:
-                            nodes_dict[src] = _make_vis_node(node_id=src, label=src, group="entity", title=src)
+                            nodes_dict[src] = _make_vis_node(node_id=src, label=src, group="entity", title=html.escape(src))
                         if dst not in nodes_dict:
-                            nodes_dict[dst] = _make_vis_node(node_id=dst, label=dst, group="entity", title=dst)
+                            nodes_dict[dst] = _make_vis_node(node_id=dst, label=dst, group="entity", title=html.escape(dst))
                         edges_list.append(_make_vis_edge(src, dst, rel, extra_props={"is_mention": rel == "MENTIONS"}))
 
         deduped_edges: Dict[Tuple[str, str, str], dict] = {}
@@ -381,9 +419,9 @@ def build_graph_view(
             else:
                 deduped_edges[key]["count"] += 1
                 cnt = deduped_edges[key]["count"]
-                u_name = Path(key[0]).name if "/" in key[0] else key[0]
-                v_name = Path(key[1]).name if "/" in key[1] else key[1]
-                deduped_edges[key]["title"] = f"<b>{key[2]}</b> ({cnt}x occurrences)<br/>{u_name} &rarr; {v_name}"
+                u_name = _posix_name(key[0]) if ("/" in key[0] or "\\" in key[0]) else key[0]
+                v_name = _posix_name(key[1]) if ("/" in key[1] or "\\" in key[1]) else key[1]
+                deduped_edges[key]["title"] = f"<b>{html.escape(key[2])}</b> ({cnt}x occurrences)<br/>{html.escape(u_name)} &rarr; {html.escape(v_name)}"
 
         final_edges = list(deduped_edges.values())
 

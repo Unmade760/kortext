@@ -33,8 +33,8 @@ $$R(t) = \max\left(R_{\text{floor}}, \exp\left(-\left(\frac{\Delta t}{\lambda}\r
 
 Where:
 - $\Delta t$: Elapsed time in hours since the fact was created or last reinforced.
-- $\lambda = 168.0$: Scale parameter (1 week half-life window).
-- $k = 0.85$: Shape parameter (stretched sub-exponential curve modeling biological forgetting).
+- $\lambda = 72.0$: Nominal half-life scale parameter in hours (3-day baseline scaled by $\exp(\text{importance}/10)$).
+- $\beta = 0.65$: Shape parameter (stretched sub-exponential curve modeling biological forgetting).
 - $R_{\text{floor}} = 0.05$: Retention floor ensuring high-trust facts never decay to zero.
 
 ### Synaptic Pruning Rules

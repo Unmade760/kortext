@@ -1,70 +1,77 @@
 """
 Kortext FastMCP Server: Main integration point for AI agents and Knowledge OS.
-Exposes seven tools to Antigravity CLI agents via stdio transport:
+Exposes tools to Antigravity CLI agents via stdio transport:
 
   1. search_knowledge_and_memory: federated multi-tier memory and codebase retrieval (read)
   2. record_system_outcome: persist directly to FalkorDB KG and journal (write)
   3. trigger_dream_mode: on-demand synaptic pruning and community detection (write)
   4. index_directory: on-demand Qdrant ingest (write)
-  5. check_kortext_health: service health dashboard (read)
-  6. delete_or_supersede_fact: KG fact management (write)
-  7. trace_symbol_impact: blast radius and impact analysis (read)
+  5. list_vector_collections: list Qdrant collections and point counts (read)
+  6. check_kortext_health: service health dashboard (read)
+  7. delete_or_supersede_fact: KG fact management (write)
+  8. trace_symbol_impact: blast radius and impact analysis (read)
+  9. seek_symbol: deterministic AST symbol locator (read)
+  10. manage_tasks: Task DAG project management engine (read/write)
+  11. memory_session_handoff: cross-agent session handoff baton (read/write)
 """
+from __future__ import annotations
+
 import asyncio
+from contextlib import asynccontextmanager
+from datetime import datetime
 import json
 import logging
 import os
-import re
-import signal
-import sys
-
-def _sig_handler(signum, frame):
-    os._exit(0)
-
-try:
-    signal.signal(signal.SIGTERM, _sig_handler)
-    signal.signal(signal.SIGINT, _sig_handler)
-except Exception:
-    pass
-
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+import re
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 
 logger = logging.getLogger("kortext.server")
 
+# Deterministically load .env from KORTEXT_ROOT with override=True so .env settings
+# take precedence over stale environment blocks in mcp_config.json.
+KORTEXT_ROOT = Path(__file__).resolve().parent.parent
+KORTEXT_ENV_PATH = KORTEXT_ROOT / ".env"
+if KORTEXT_ENV_PATH.is_file():
+    load_dotenv(KORTEXT_ENV_PATH, override=True)
+load_dotenv()
+
+from kortext._env import get_configured_qdrant_url, is_qdrant_embedded_mode
+from kortext._home import get_kortext_home
+from kortext._qdrant import aclose_qdrant_clients
+from kortext.episodic import VALID_CATEGORIES, AgentNativeEpisodicDriver
+from kortext.handoff import HandoffManager
+from kortext.ingest import ingest as _ingest
 from kortext.retrieval import (
     RetrievalEngine,
     discover_vector_collections,
     resolve_workspace_root_for_collection,
 )
-from kortext.episodic import AgentNativeEpisodicDriver, VALID_CATEGORIES
-from kortext.handoff import HandoffManager
-from kortext.ingest import ingest as _ingest
+from kortext.server_helpers import (
+    FORBIDDEN_SYSTEM_PREFIXES,
+    SENSITIVE_DIR_NAMES,
+    _filter_untrusted_injection_chunks,
+    _format_federated_markdown,
+    _validate_index_path,
+)
 from kortext.symbols.graph import SymbolGraphManager
 from kortext.trust.sanitizer import CausalSanitizer, SecurityViolation
 
-# Deterministically load .env from KORTEXT_ROOT regardless of caller's CWD
-KORTEXT_ROOT = Path(__file__).resolve().parent.parent
-CEREBRUM_ROOT = KORTEXT_ROOT
-KORTEXT_ENV_PATH = KORTEXT_ROOT / ".env"
-if KORTEXT_ENV_PATH.is_file():
-    load_dotenv(KORTEXT_ENV_PATH)
-load_dotenv()
+# ── Singletons & Concurrency Guards (shared across tool calls) ─────────────
 
-# ── Singletons (shared across tool calls) ──────────────────────────────────
-
-retrieval    = RetrievalEngine()
-episodic     = AgentNativeEpisodicDriver()
+retrieval = RetrievalEngine()
+episodic = AgentNativeEpisodicDriver()
 symbol_graph = SymbolGraphManager()
+
+_ACTIVE_INDEX_TASKS: set[asyncio.Task[Any]] = set()
+_COLLECTION_INDEX_LOCKS: Dict[str, asyncio.Lock] = {}
 
 JOURNAL_DIR = Path(os.getenv("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")))
 JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-HANDOFFS_DIR = JOURNAL_DIR / "handoffs"
+HANDOFFS_DIR = get_kortext_home() / "handoffs"
 HANDOFFS_DIR.mkdir(parents=True, exist_ok=True)
 
 CATEGORY_DIRS: Dict[str, str] = {
@@ -79,41 +86,79 @@ CATEGORY_DIRS: Dict[str, str] = {
 }
 
 
+async def _consume_invalidation_spool_loop() -> None:
+    """Background consumer draining ~/.kortext/spool/invalidation/event_*.json using sole-custodian Qdrant client."""
+    from kortext.ingest import index_single_file
+
+    spool_dir = get_kortext_home() / "spool" / "invalidation"
+    while True:
+        try:
+            await asyncio.sleep(2.0)
+            if not spool_dir.is_dir():
+                continue
+            shared_client = getattr(retrieval, "_client", None)
+            for ev_file in sorted(spool_dir.glob("event_*.json"))[:25]:
+                try:
+                    payload = json.loads(ev_file.read_text(encoding="utf-8"))
+                    target_path = payload.get("path")
+                    if target_path and os.path.isfile(target_path):
+                        await index_single_file(
+                            file_path=Path(target_path),
+                            collection=payload.get("collection") or os.getenv("QDRANT_COLLECTION", "kortext_codebase"),
+                            target_symbols_db=payload.get("symbols_graph") or os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"),
+                            client=shared_client,
+                            symbol_mgr=symbol_graph,
+                            skip_ast_if_sha=payload.get("ast_synced_sha256"),
+                        )
+                except Exception as exc:
+                    logger.debug("Invalidation spool item %s skipped: %s", ev_file.name, exc)
+                finally:
+                    try:
+                        ev_file.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+        except asyncio.CancelledError:
+            break
+        except Exception as loop_exc:
+            logger.debug("Invalidation spool loop error ignored: %s", loop_exc)
+
 
 @asynccontextmanager
 async def lifespan(app):
-    try:
-        signal.signal(signal.SIGTERM, _sig_handler)
-        signal.signal(signal.SIGINT, _sig_handler)
-    except Exception:
-        pass
-
+    """Graceful FastMCP lifecycle manager ensuring clean substrate and WAL teardown."""
+    spool_task: Optional[asyncio.Task[Any]] = None
     try:
         await retrieval.initialize()
         if hasattr(episodic, "initialize"):
             await episodic.initialize()
+        spool_task = asyncio.create_task(_consume_invalidation_spool_loop())
         yield
     finally:
-        # Re-install OS-level signal handler so any SIGTERM received during or
-        # after loop teardown exits immediately with code 0 instead of resetting
-        # to SIG_DFL (which causes Go cmd.Wait() to receive 'signal: terminated').
-        try:
-            signal.signal(signal.SIGTERM, lambda s, f: os._exit(0))
-            signal.signal(signal.SIGINT, lambda s, f: os._exit(0))
-        except Exception:
-            pass
+        if spool_task is not None:
+            spool_task.cancel()
+            await asyncio.gather(spool_task, return_exceptions=True)
+        if _ACTIVE_INDEX_TASKS:
+            for t in list(_ACTIVE_INDEX_TASKS):
+                t.cancel()
+            await asyncio.gather(*_ACTIVE_INDEX_TASKS, return_exceptions=True)
+            _ACTIVE_INDEX_TASKS.clear()
 
         try:
-            await episodic.close()
-        except Exception:
-            pass
+            if hasattr(episodic, "close"):
+                await episodic.close()
+        except Exception as exc:
+            logger.debug("Episodic driver close ignored: %s", exc)
 
         try:
             if hasattr(retrieval, "close"):
                 await retrieval.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Retrieval engine close ignored: %s", exc)
 
+        try:
+            await aclose_qdrant_clients()
+        except Exception as exc:
+            logger.debug("Qdrant client pool close ignored: %s", exc)
 
 
 mcp = FastMCP(
@@ -121,9 +166,8 @@ mcp = FastMCP(
     instructions=(
         "Kortext Knowledge OS is your grounded memory, code intelligence, and retrieval base with four knowledge tiers: "
         "(0) AST Symbols & Backlinks, (1) Operational Facts & Decisions, (2) Viking Code Structure, (3) Qdrant Vectors. "
-        "ALWAYS call search_knowledge_and_memory before writing code or making architectural decisions. "
-        "ALWAYS call trace_symbol_impact before refactoring functions, classes, or interfaces. "
-        "ALWAYS call record_system_outcome after completing significant work or configuration changes."
+        "Prefer seek_symbol for known symbol definitions, trace_symbol_impact before refactoring shared interfaces, "
+        "search_knowledge_and_memory for conceptual or cross-tier context, and record_system_outcome after significant changes."
     ),
     lifespan=lifespan,
 )
@@ -134,9 +178,10 @@ mcp = FastMCP(
 @mcp.tool(
     description=(
         "Unified hybrid search across codebase knowledge, architecture outlines, episodic outcomes, "
-        "and AST symbols. Queries all memory tiers in parallel and returns structured Markdown context "
-        "respecting the token budget and detail level."
-    )
+        "and AST symbols. Queries all memory tiers in parallel and returns structured context "
+        "strictly respecting the token budget and detail level."
+    ),
+    meta={"antigravity/alwaysLoad": True},
 )
 async def search_knowledge_and_memory(
     query: str,
@@ -145,21 +190,22 @@ async def search_knowledge_and_memory(
     token_budget: int = 1500,
     detail_level: str = "balanced",
     project: Optional[str] = None,
+    include_markdown: bool = False,
 ) -> str:
     """
     Args:
-        query:          The coding task, architectural question, or query to retrieve context for.
-        collection:     Optional Qdrant collection name to search within (defaults to 'kortext_codebase', or 'all' for federation).
-        workspace_root: Optional workspace path to scope hierarchical structure to.
-        token_budget:   Maximum total estimated tokens across all memory tiers (default: 1500).
-        detail_level:   Context detail level: 'compact', 'balanced', or 'comprehensive'.
-        project:        Optional project scope, e.g. 'kortext', 'my_app', or 'all' to query across all projects. Defaults to active workspace/project.
+        query:            The coding task, architectural question, or query to retrieve context for.
+        collection:       Optional Qdrant collection name to search within (defaults to 'kortext_codebase', or 'all' for federation).
+        workspace_root:   Optional workspace path to scope hierarchical structure to.
+        token_budget:     Maximum total estimated tokens across all memory tiers (default: 1500).
+        detail_level:     Context detail level: 'compact', 'balanced', or 'comprehensive'.
+        project:          Optional project scope, e.g. 'kortext', 'my_app', or 'all' to query across all projects.
+        include_markdown: If True, also includes a pre-rendered 'markdown' string alongside the JSON arrays (default False to avoid token duplication).
     Returns:
-        Structured JSON envelope with 4 in-budget memory tiers (Tier 0: symbolic_context,
-        Tier 1: code_chunks, Tier 2: episodic_history, Tier 3: architectural_overview),
-        total_estimated_tokens, and clean human/agent-readable markdown formatting.
+        Compact JSON envelope with 4 in-budget memory tiers (Tier 0: symbolic_context,
+        Tier 1: code_chunks, Tier 2: episodic_history, Tier 3: architectural_overview) and total_estimated_tokens.
     """
-    if not workspace_root and collection:
+    if not workspace_root and collection and collection.strip().lower() != "all":
         workspace_root = await resolve_workspace_root_for_collection(collection)
 
     res = await retrieval.federated_query(
@@ -171,65 +217,10 @@ async def search_knowledge_and_memory(
         project=project,
     )
 
-    # Format clean Markdown view
-    md_lines = [
-        f"## Federated Memory Retrieval: {query}",
-        f"**Estimated Tokens:** {res.get('total_estimated_tokens', 0)} / {token_budget}\n",
-    ]
-
-    # Tier 0: AST Symbol Seek
-    sym_ctx = res.get("symbolic_context", [])
-    md_lines.append("### Tier 0: AST Symbol Declarations")
-    if sym_ctx:
-        for item in sym_ctx:
-            if isinstance(item, dict):
-                s_name = item.get("symbol") or item.get("name", "Unknown")
-                kind = item.get("kind", "symbol")
-                f_path = item.get("file") or item.get("file_path", "")
-                sig = item.get("signature", "")
-                lines = item.get("lines", [])
-                line_str = f":{lines[0]}" if lines else ""
-                md_lines.append(f"- **`{s_name}`** ({kind}) at `{f_path}{line_str}`")
-                if sig:
-                    md_lines.append(f"  - Signature: `{sig}`")
-            else:
-                md_lines.append(f"- {item}")
-    else:
-        md_lines.append("_No candidate symbol declarations located._")
-    md_lines.append("")
-
-    # Tier 1: Hybrid Codebase Chunks
-    code_chunks = res.get("code_chunks", [])
-    md_lines.append("### Tier 1: Hybrid Codebase Chunks")
-    if code_chunks:
-        for i, chunk in enumerate(code_chunks, 1):
-            md_lines.append(f"#### Reference {i}\n```\n{chunk}\n```")
-    else:
-        md_lines.append("_No relevant codebase chunks retrieved._")
-    md_lines.append("")
-
-    # Tier 2: Episodic History
-    episodic_history = res.get("episodic_history", [])
-    md_lines.append("### Tier 2: Episodic History & Decisions")
-    if episodic_history:
-        for fact in episodic_history:
-            md_lines.append(f"- {fact}")
-    else:
-        md_lines.append("_No historical episodic facts found._")
-    md_lines.append("")
-
-    # Tier 3: System Architecture Overview
-    arch_overview = res.get("architectural_overview")
-    if arch_overview:
-        md_lines.append("### Tier 3: System Architecture Overview")
-        md_lines.append(arch_overview)
-        md_lines.append("")
-
-    formatted_md = "\n".join(md_lines)
-
-    res_copy = dict(res)
-    res_copy["markdown"] = formatted_md
-    return json.dumps(res_copy, indent=2)
+    res_copy = _filter_untrusted_injection_chunks(res)
+    if include_markdown:
+        res_copy["markdown"] = _format_federated_markdown(res_copy, query=query, token_budget=token_budget)
+    return json.dumps(res_copy, separators=(",", ":"))
 
 
 # ── Tool 2: Record ─────────────────────────────────────────────────────────
@@ -239,10 +230,9 @@ async def search_knowledge_and_memory(
         "Record a significant technical decision, configuration change, or work outcome. "
         "Persists to: (1) FalkorDB episodic knowledge graph directly without intermediate LLM proxy, "
         "and (2) a dated Markdown journal file for human-readable audit trail. Old conflicting facts "
-        "are superseded, not deleted. Can accept structured entities/facts directly or raw narrative. "
-        "CALL THIS after: changing env vars / ports / dependencies, choosing an architecture, "
-        "fixing a non-trivial bug, or completing any substantial task."
-    )
+        "are superseded, not deleted."
+    ),
+    meta={"antigravity/alwaysLoad": True},
 )
 async def record_system_outcome(
     episode_name: str,
@@ -250,10 +240,11 @@ async def record_system_outcome(
     category: str = "implementation",
     tags: Optional[list[str]] = None,
     project: Optional[str] = None,
-    entities: Optional[list[dict[str, str]]] = None,
+    entities: Optional[list[Any]] = None,
     facts: Optional[list[dict[str, str]]] = None,
     supersedes: Optional[list[str]] = None,
     trust_level: str = "speculative",
+    ctx: Optional[Context] = None,
 ) -> str:
     """
     Args:
@@ -265,10 +256,29 @@ async def record_system_outcome(
         entities:     Optional structured entities [{'name': '...', 'type': '...', 'summary': '...'}]
         facts:        Optional structured facts [{'source': '...', 'relation': '...', 'target': '...', 'fact': '...'}]
         supersedes:   Optional list of patterns/facts superseded by this outcome
-        trust_level:  Trust anchor level: 'speculative' (0.50), 'tool_confirmed' (0.60), or 'user_approved' (1.00)
+        trust_level:  Trust anchor level: 'speculative' (0.50), 'tool_confirmed' (0.60), 'verified' (0.80), 'user_approved' (1.00), or 'system' (1.00)
+        ctx:          Optional FastMCP request context carrying Antigravity metadata (_meta['antigravity.google/root_conversation_id']).
     Returns:
         Confirmation with paths to KG and journal.
     """
+    root_conv_id: Optional[str] = None
+    if ctx is not None:
+        try:
+            req_ctx = getattr(ctx, "request_context", None)
+            meta = getattr(req_ctx, "meta", None)
+            if isinstance(meta, dict):
+                root_conv_id = meta.get("antigravity.google/root_conversation_id")
+            elif meta is not None:
+                root_conv_id = getattr(meta, "root_conversation_id", None) or getattr(
+                    getattr(meta, "model_extra", {}), "get", lambda *_: None
+                )("antigravity.google/root_conversation_id")
+        except Exception:
+            root_conv_id = None
+    if root_conv_id:
+        tags = list(tags or [])
+        conv_tag = f"root_conv:{root_conv_id}"
+        if conv_tag not in tags:
+            tags.append(conv_tag)
     if not isinstance(category, str) or category.lower().strip() not in VALID_CATEGORIES:
         raise ValueError(f"Invalid category '{category}'. Must be one of: {VALID_CATEGORIES}")
     cat = category.lower().strip()
@@ -277,14 +287,22 @@ async def record_system_outcome(
     if project:
         full_content = f"[Project: {project}]\n\n{content}"
 
-    # MINJA Adversarial Causal Sanitizer Gate
     sanitizer = CausalSanitizer()
-    if trust_level == "user_approved":
+    norm_trust = trust_level.lower().strip() if isinstance(trust_level, str) else "speculative"
+    if norm_trust == "tool_confirmed" and os.getenv("KORTEXT_VERIFY_TEST_PROOF", "0") == "1":
+        from kortext.hooks.pipelines.post_tool import has_recent_passing_test_run
+
+        if not has_recent_passing_test_run():
+            norm_trust = "speculative"
+            trust_level = "speculative"
+
+    if norm_trust in ("user_approved", "system"):
         source_tier = 1
-    elif trust_level == "tool_confirmed":
+    elif norm_trust in ("tool_confirmed", "verified"):
         source_tier = 2
     else:
         source_tier = 3
+
     try:
         sanitizer.sanitize(
             subject=episode_name,
@@ -292,6 +310,35 @@ async def record_system_outcome(
             fact=full_content,
             source_tier=source_tier,
         )
+        if entities:
+            for ent in entities:
+                if isinstance(ent, str):
+                    sanitizer.sanitize(
+                        subject=ent,
+                        relation="ENTITY",
+                        fact=ent,
+                        source_tier=source_tier,
+                    )
+                elif isinstance(ent, dict):
+                    sanitizer.sanitize(
+                        subject=str(ent.get("name", episode_name)),
+                        relation=str(ent.get("type", "ENTITY")),
+                        fact=str(ent.get("summary") or ent.get("name") or ""),
+                        source_tier=source_tier,
+                    )
+        if facts:
+            for f_item in facts:
+                if isinstance(f_item, dict):
+                    src = str(f_item.get("source") or f_item.get("subject") or episode_name)
+                    rel = str(f_item.get("relation", "RELATES_TO"))
+                    tgt = str(f_item.get("target") or f_item.get("object") or "")
+                    f_text = str(f_item.get("fact") or f"{src} {rel} {tgt}")
+                    sanitizer.sanitize(
+                        subject=src,
+                        relation=rel,
+                        fact=f"{tgt}: {f_text}" if tgt else f_text,
+                        source_tier=source_tier,
+                    )
     except SecurityViolation as sv:
         return f"🚨 BLOCKED BY MINJA CAUSAL SANITIZER: {sv}. Write operation rejected and quarantined."
 
@@ -299,7 +346,6 @@ async def record_system_outcome(
     today = datetime.now().strftime("%Y-%m-%d")
     now_time = datetime.now().strftime("%H:%M")
 
-    # Category folder and dedicated outcome markdown file
     cat_dir_name = CATEGORY_DIRS[cat]
     category_dir = JOURNAL_DIR / cat_dir_name
     outcome_file = category_dir / f"{today}_{safe_title}.md"
@@ -318,7 +364,6 @@ async def record_system_outcome(
     outcome_lines.extend(["\n## Outcome Description\n", full_content, "\n"])
     outcome_content = "\n".join(outcome_lines)
 
-    # Append to daily Markdown journal first (so data is never lost)
     journal_file = JOURNAL_DIR / f"{today}.md"
     entry_lines = [f"\n## {now_time} - {episode_name}\n", full_content]
     entry_lines.append(f"\n**Category:** {cat}")
@@ -334,14 +379,13 @@ async def record_system_outcome(
 
     def _write_journal():
         category_dir.mkdir(parents=True, exist_ok=True)
-        with open(outcome_file, "w") as f:
+        with open(outcome_file, "w", encoding="utf-8") as f:
             f.write(outcome_content)
-        with open(journal_file, "a") as f:
+        with open(journal_file, "a", encoding="utf-8") as f:
             f.write("\n".join(entry_lines))
 
     await asyncio.to_thread(_write_journal)
 
-    # Persist to FalkorDB KG directly (fast, agent-native, no middle proxy daemon)
     kg_status = "✅ FalkorDB Episodic Memory"
     try:
         res = await episodic.record_outcome(
@@ -355,7 +399,11 @@ async def record_system_outcome(
             trust_level=trust_level,
             category=cat,
         )
-        kg_status = f"✅ FalkorDB KG ({res.get('entities_written', 0)} entities, {res.get('facts_written', 0)} facts, {res.get('superseded_count', 0)} superseded, trust: {res.get('trust_level', 'speculative')} [{res.get('trust_score', 0.5)}])"
+        kg_status = (
+            f"✅ FalkorDB KG ({res.get('entities_written', 0)} entities, "
+            f"{res.get('facts_written', 0)} facts, {res.get('superseded_count', 0)} superseded, "
+            f"trust: {res.get('trust_level', 'speculative')} [{res.get('trust_score', 0.5)}])"
+        )
     except Exception as e:
         kg_status = f"⚠️ FalkorDB KG skipped ({type(e).__name__}: {e})"
 
@@ -376,7 +424,8 @@ async def record_system_outcome(
         "(2) Graph community detection (Louvain algorithm) clustering code symbols into subsystems, "
         "(3) Abstract invariant induction across codebase decisions, and "
         "(4) Generates a dated dream report in journal/dreams/."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
 async def trigger_dream_mode(
     project: str = "kortext",
@@ -400,6 +449,7 @@ async def trigger_dream_mode(
         Structured summary of the dream consolidation report.
     """
     from kortext.dream import KortextDreamEngine
+
     dream_engine = KortextDreamEngine()
     report = await dream_engine.run_dream_cycle(
         project=project,
@@ -430,16 +480,16 @@ async def trigger_dream_mode(
     description=(
         "Index a directory into the Qdrant vector store so its files become "
         "retrievable by search_knowledge_and_memory. Uses upsert semantics: "
-        "existing vectors are updated, not destroyed. Safe to run multiple times. "
-        "Use this when adding a new project or re-indexing after major refactors."
-    )
+        "existing vectors are updated, not destroyed. Safe to run multiple times."
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
 async def index_directory(
     path: str,
     collection: Optional[str] = None,
     symbols_graph: Optional[str] = None,
     exclude_patterns: Optional[list[str]] = None,
-    auto_dream: bool = True,
+    auto_dream: bool = False,
 ) -> str:
     """
     Args:
@@ -447,23 +497,45 @@ async def index_directory(
         collection:       Optional Qdrant collection name (defaults to 'kortext_codebase').
         symbols_graph:    Optional FalkorDB symbol graph name (defaults to '<collection>_symbols').
         exclude_patterns: Additional glob patterns to exclude (e.g. ['tests/', '*.spec.ts']).
-        auto_dream:       Whether to automatically consolidate memory via DreamEngine after ingest (default True).
+        auto_dream:       Whether to automatically consolidate memory via DreamEngine after ingest (default False).
     Returns:
-        Confirmation with document count.
+        Confirmation with background task details.
     """
-    if not Path(path).exists():
-        return f"❌ Path does not exist: {path}"
+    is_valid, err_msg, resolved_path = _validate_index_path(path)
+    if not is_valid or resolved_path is None:
+        return err_msg
+
     target_col = collection or os.getenv("KORTEXT_COLLECTION", os.getenv("QDRANT_COLLECTION", "kortext_codebase"))
     default_sym = os.getenv("KORTEXT_SYMBOLS_GRAPH", os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"))
-    target_sym = symbols_graph or (f"{target_col}_symbols" if target_col not in ("kortext_codebase", "cerebrum_codebase") else default_sym)
+    target_sym = symbols_graph or (f"{target_col}_symbols" if target_col != "kortext_codebase" else default_sym)
 
-    async def _run_indexing():
-        await _ingest(path, extra_excludes=exclude_patterns or [], collection=target_col, symbols_graph=target_sym)
-        if auto_dream:
-            from kortext.dream import DreamEngine
-            await DreamEngine().dream(project=target_col)
+    lock = _COLLECTION_INDEX_LOCKS.setdefault(target_col, asyncio.Lock())
+    if lock.locked():
+        return f"⏳ Indexing is already in progress for collection '{target_col}'."
 
-    asyncio.create_task(_run_indexing())
+    async def _run_indexing() -> None:
+        async with lock:
+            try:
+                ingest_kwargs: Dict[str, Any] = {
+                    "extra_excludes": exclude_patterns or [],
+                    "collection": target_col,
+                    "symbols_graph": target_sym,
+                }
+                shared_client = getattr(retrieval, "_client", None)
+                if shared_client is not None:
+                    ingest_kwargs["client"] = shared_client
+                await _ingest(str(resolved_path), **ingest_kwargs)
+                if auto_dream:
+                    from kortext.dream import DreamEngine
+
+                    engine = DreamEngine()
+                    await engine.run_dream_cycle(project=target_col)
+            except Exception as exc:
+                logger.error("Background indexing failed for '%s': %s", path, exc)
+
+    task = asyncio.create_task(_run_indexing())
+    _ACTIVE_INDEX_TASKS.add(task)
+    task.add_done_callback(_ACTIVE_INDEX_TASKS.discard)
     return f"🚀 Indexing started in background for '{path}' into Qdrant collection '{target_col}' and FalkorDB graph '{target_sym}'."
 
 
@@ -474,15 +546,14 @@ async def index_directory(
         "List all available Qdrant vector collections with their point counts and indexing status. "
         "Call this to discover active knowledge collections (e.g. 'kortext_codebase', 'Antigravity_Docs') "
         "before querying search_knowledge_and_memory with the 'collection' argument."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
 async def list_vector_collections() -> Dict[str, Any]:
     """
     Returns a dictionary of collections, point counts, vector configurations, and total collections.
     """
-    qdrant_url_env = os.getenv("QDRANT_URL")
-    if not qdrant_url_env or not qdrant_url_env.strip():
-        # Embedded mode discovery: directly inspect embedded storage via unified discovery
+    if is_qdrant_embedded_mode(probe_local=False):
         try:
             collections_data = await asyncio.to_thread(discover_vector_collections)
             return {
@@ -499,7 +570,8 @@ async def list_vector_collections() -> Dict[str, Any]:
             }
 
     import httpx
-    qdrant_url = qdrant_url_env.strip().replace("://localhost", "://127.0.0.1").rstrip("/")
+
+    qdrant_url = (get_configured_qdrant_url(probe_local=False) or "http://127.0.0.1:6333").rstrip("/")
     collections_data = []
 
     try:
@@ -523,8 +595,8 @@ async def list_vector_collections() -> Dict[str, Any]:
                                 "indexed_vectors_count": indexed_vectors,
                                 "status": status_str,
                             }
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Collection info fetch failed for '%s': %s", c_name, exc)
                     return {"name": c_name, "points_count": "unknown"}
 
                 collections_data = await asyncio.gather(*[_get_info(c) for c in raw_cols])
@@ -536,10 +608,10 @@ async def list_vector_collections() -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"Could not list collections via HTTP: {e}")
 
-    # Fallback via async Qdrant client
     client = None
     try:
         from qdrant_client import AsyncQdrantClient
+
         client = AsyncQdrantClient(url=qdrant_url)
         cols = await client.get_collections()
 
@@ -551,7 +623,8 @@ async def list_vector_collections() -> Dict[str, Any]:
                     "points_count": info.points_count,
                     "status": str(info.status),
                 }
-            except Exception:
+            except Exception as exc:
+                logger.debug("AsyncQdrantClient get_collection failed for '%s': %s", c.name, exc)
                 return {"name": c.name, "points_count": "unknown"}
 
         collections_data = await asyncio.gather(*[_client_info(c) for c in cols.collections])
@@ -566,8 +639,8 @@ async def list_vector_collections() -> Dict[str, Any]:
         if client:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("AsyncQdrantClient close ignored: %s", exc)
 
 
 # ── Tool 5: Health ─────────────────────────────────────────────────────────
@@ -577,45 +650,44 @@ async def list_vector_collections() -> Dict[str, Any]:
         "Check the health of all Kortext backend services. Returns a JSON status "
         "report for Qdrant, FalkorDB, the inference server (embeddings/reranker), and the dashboard. "
         "Call this if other Kortext tools return errors or time out."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
 async def check_kortext_health() -> str:
-    """Returns JSON with status of each service."""
+    """Returns compact JSON with status of each service."""
     from kortext.health import audit_kortext_health
 
     report = await audit_kortext_health(include_browser_ui=False, include_invariants=True)
-    return json.dumps(report, indent=2)
-
-
-@mcp.tool(
-    name="check_cerebrum_health",
-    description="Legacy alias for check_kortext_health.",
-)
-async def check_cerebrum_health() -> str:
-    """Returns JSON with status of each service (legacy alias)."""
-    return await check_kortext_health()
+    return json.dumps(report, separators=(",", ":"))
 
 
 # ── Tool 6: Delete / Supersede ─────────────────────────────────────────────
 
 @mcp.tool(
     description=(
-        "Mark a specific Graphiti fact as superseded (soft-delete). Use when a previously "
+        "Mark a specific Graphiti/FalkorDB fact as superseded (soft-delete). Use when a previously "
         "recorded fact is no longer valid, such as when a port changed, a dependency was removed, "
         "or a past decision was reversed. The fact is marked invalid with your reason, "
-        "preserving audit history. Requires the fact episode name or ID from a prior search."
-    )
+        "preserving audit history."
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
-async def delete_or_supersede_fact(fact_id: str, reason: str) -> str:
+async def delete_or_supersede_fact(
+    fact_id: str,
+    reason: str,
+    superseded_by: Optional[str] = None,
+) -> str:
     """
     Args:
-        fact_id: The episode name or ID of the fact to supersede.
-        reason:  Why this fact is no longer valid.
+        fact_id:       The episode name or ID of the fact to supersede.
+        reason:        Why this fact is no longer valid.
+        superseded_by: Optional ID or name of the new fact that supersedes it.
     Returns:
         Confirmation message.
     """
-    await episodic.delete_fact(fact_id, reason)
-    return f"✅ Fact '{fact_id}' marked as superseded.\nReason recorded: {reason}"
+    full_reason = f"{reason} (superseded by {superseded_by})" if superseded_by else reason
+    await episodic.delete_fact(fact_id, full_reason)
+    return f"✅ Fact '{fact_id}' marked as superseded.\nReason recorded: {full_reason}"
 
 
 # ── Tool 7: Blast-Radius / Impact Analysis ─────────────────────────────────
@@ -626,14 +698,16 @@ async def delete_or_supersede_fact(fact_id: str, reason: str) -> str:
         "Performs fast graph path traversal in FalkorDB over REFERENCES, IMPORTS, CALLS, and "
         "IMPLEMENTS edges with adaptive token budgeting (L1 signatures for 1-hop, L0 for 2-hop, "
         "aggregated counts for transitive). CALL THIS before refactoring or deleting a symbol."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": True},
 )
 async def trace_symbol_impact(
-    symbol: str,
+    symbol: Optional[str] = None,
     direction: str = "upstream",
     max_depth: int = 3,
     symbols_graph: Optional[str] = None,
     token_budget: Optional[int] = 1500,
+    symbol_name: Optional[str] = None,
 ) -> str:
     """
     Args:
@@ -642,14 +716,19 @@ async def trace_symbol_impact(
         max_depth:     Graph search depth hops (1 to 5, default: 3).
         symbols_graph: Optional FalkorDB graph name (defaults to 'kortext_symbols').
         token_budget:  Optional max tokens for the response (default: 1500).
+        symbol_name:   Optional alias for `symbol`.
     Returns:
-        Structured JSON report showing all impacted files, lines, relationships, and progressive summary.
+        Compact JSON report showing in-budget impacted files, lines, relationships, and progressive summary.
     """
+    target_symbol = (symbol or symbol_name or "").strip()
+    if not target_symbol:
+        raise ValueError("Either 'symbol' or 'symbol_name' must be provided.")
+
     def _do_trace() -> str:
         target_graph = symbols_graph or os.getenv("KORTEXT_SYMBOLS_GRAPH", os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"))
         mgr = symbol_graph if target_graph == symbol_graph.graph_name else SymbolGraphManager(graph_name=target_graph)
-        impact = mgr.trace_symbol_impact(symbol, direction=direction, max_depth=max_depth, token_budget=token_budget)
-        return json.dumps(impact, indent=2)
+        impact = mgr.trace_symbol_impact(target_symbol, direction=direction, max_depth=max_depth, token_budget=token_budget)
+        return json.dumps(impact, separators=(",", ":"))
 
     return await asyncio.to_thread(_do_trace)
 
@@ -661,7 +740,8 @@ async def trace_symbol_impact(
         "Deterministic symbol locator replacing brute-force ripgrep loops. "
         "Looks up exact symbol declaration, signature, docstring, callers, and callees "
         "directly from the compiler AST knowledge graph in FalkorDB in <2ms, consuming <150 tokens."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": True},
 )
 async def seek_symbol(
     symbol_name: str,
@@ -679,6 +759,7 @@ async def seek_symbol(
     """
     def _do_seek() -> str:
         from kortext.symbols.seek import SymbolSeekEngine
+
         seeker = SymbolSeekEngine()
         if detail_level != "skeleton":
             return seeker.seek_symbol(symbol_name, detail_level=detail_level, file_hint=file_hint)
@@ -692,9 +773,10 @@ async def seek_symbol(
 @mcp.tool(
     description=(
         "Graph-backed Task DAG state machine for multi-agent project decomposition. "
-        "Allows creating tasks, declaring strict dependencies, querying ready leaf tasks "
-        "for subagent delegation, and recording execution state."
-    )
+        "Allows creating tasks, declaring strict dependencies, claiming ready leaf tasks "
+        "atomically for subagent delegation, and recording execution state."
+    ),
+    meta={"antigravity/alwaysLoad": True},
 )
 async def manage_tasks(
     action: str = "get_ready",
@@ -703,63 +785,36 @@ async def manage_tasks(
     complexity: int = 1,
     assigned_to: str = "primary",
     depends_on: Optional[list[str]] = None,
+    dependencies: Optional[list[str]] = None,
     task_id: Optional[str] = None,
     status: Optional[str] = None,
     error: Optional[str] = None,
     project_id: Optional[str] = None,
     episode_name: Optional[str] = None,
+    tasks: Optional[list[dict[str, Any]]] = None,
+    target_files: Optional[list[str]] = None,
+    files_to_modify: Optional[list[str]] = None,
+    modified_files: Optional[list[str]] = None,
+    test_command: Optional[str] = None,
+    tests_passed: Optional[bool] = None,
+    base_commit: Optional[str] = None,
+    milestone_name: Optional[str] = None,
+    ctx: Optional[Context] = None,
 ) -> str:
-    """
-    Args:
-        action: 'create', 'get_ready', 'update_status', or 'list_all'.
-        title: Task title for 'create'.
-        description: Task requirements and verification criteria for 'create'.
-        complexity: Estimated complexity score 1-10.
-        assigned_to: Target subagent persona (e.g. 'kortext-task-runner').
-        depends_on: List of upstream prerequisite task IDs.
-        task_id: Target task ID for 'update_status'.
-        status: New state ('pending', 'ready', 'in_progress', 'completed', 'failed').
-        error: Failure explanation if status is 'failed'.
-        project_id: Optional project ID, e.g. 'kortext', 'my_app', or 'all'. Defaults to 'kortext' if unspecified.
-        episode_name: Optional episode name to link the completed task to via (:Task)-[:PRODUCED_OUTCOME]->(:Episodic).
-    Returns:
-        JSON response with task details, ready tasks, or operation confirmation.
-    """
+    """Manage Task DAG: create (single or batch `tasks`), get_ready, claim, complete_task, milestone_handoff, update_status, list_all."""
+    resolved_target_files = target_files if target_files is not None else files_to_modify
+
     def _do_manage() -> str:
         from kortext.tasks.tracker import TaskDAGTracker
-        tracker = TaskDAGTracker()
-        act = action.lower().strip()
-
-        if act == "create":
-            if not title:
-                return json.dumps({"error": "Missing 'title' for task creation"})
-            tid = tracker.create_task(
-                title=title,
-                description=description or "",
-                complexity=complexity,
-                assigned_to=assigned_to,
-                depends_on=depends_on,
-                project_id=project_id,
-            )
-            return json.dumps({"status": "created", "task_id": tid})
-
-        elif act in ("get_ready", "ready"):
-            ready = tracker.get_ready_tasks(project_id=project_id)
-            return json.dumps({"ready_tasks": ready}, indent=2)
-
-        elif act in ("list_all", "list"):
-            tasks = tracker.get_all_tasks(project_id=project_id)
-            return json.dumps({"tasks": tasks}, indent=2)
-
-        elif act == "update_status":
-            if not task_id or not status:
-                return json.dumps({"error": "Missing 'task_id' or 'status'"})
-            ok = tracker.update_task_status(task_id, status=status, error=error)
-            if episode_name and status == "completed":
-                tracker.link_task_to_outcome(task_id, episode_name)
-            return json.dumps({"task_id": task_id, "updated": ok, "status": status})
-
-        return json.dumps({"error": f"Unknown action: {action}"})
+        return TaskDAGTracker().execute_action(
+            action=action, title=title, description=description, complexity=complexity,
+            assigned_to=assigned_to, depends_on=depends_on, dependencies=dependencies,
+            task_id=task_id, status=status, error=error, project_id=project_id,
+            episode_name=episode_name, tasks=tasks, target_files=resolved_target_files,
+            modified_files=modified_files, test_command=test_command,
+            tests_passed=tests_passed, base_commit=base_commit,
+            milestone_name=milestone_name,
+        )
 
     return await asyncio.to_thread(_do_manage)
 
@@ -771,7 +826,8 @@ async def manage_tasks(
         "Manage cross-agent context handoff batons across session and agent boundaries. "
         "Allows Antigravity, Claude Code, Codex, and peer subagents to exchange "
         "open hypotheses, unresolved questions, active blast radius, and current scope without context loss."
-    )
+    ),
+    meta={"antigravity/alwaysLoad": False},
 )
 async def memory_session_handoff(
     action: str = "create",
@@ -784,62 +840,227 @@ async def memory_session_handoff(
 ) -> str:
     """
     Args:
-        action: 'create' to save a new handoff baton, 'read' to retrieve a baton,
-                'list' to see pending handoffs, or 'complete' to mark a baton consumed.
-        target_agent: Destination agent or role (e.g. 'claude-code', 'codex', 'subagent', 'antigravity').
-        current_scope: Active task, file scope, or objective.
-        open_hypotheses: Working hypotheses currently under investigation.
-        unresolved_questions: Open questions or decisions needed from the next agent.
-        active_blast_radius: List of modified or sensitive symbols/files.
-        baton_id: Specific baton identifier (for read or complete).
+        action:               'create', 'read', 'list', or 'complete'.
+        target_agent:         Target agent identifier (e.g. 'claude', 'codex', 'kortext-architect', or 'any').
+        current_scope:        Concise summary of the active task and architectural state.
+        open_hypotheses:      List of active debugging or implementation hypotheses.
+        unresolved_questions: List of open questions or blockers.
+        active_blast_radius:  List of modified or impacted files/symbols.
+        baton_id:             Specific baton ID to read or mark completed.
     Returns:
-        Structured handoff baton data or confirmation.
+        Formatted confirmation or JSON baton payload.
     """
-    return await asyncio.to_thread(
-        HandoffManager(HANDOFFS_DIR).execute,
-        action=action,
-        target_agent=target_agent,
-        current_scope=current_scope,
-        open_hypotheses=open_hypotheses,
-        unresolved_questions=unresolved_questions,
-        active_blast_radius=active_blast_radius,
-        baton_id=baton_id,
-    )
+    def _do_handoff() -> str:
+        manager = HandoffManager(HANDOFFS_DIR)
+        return manager.execute(
+            action=action,
+            target_agent=target_agent,
+            current_scope=current_scope,
+            open_hypotheses=open_hypotheses,
+            unresolved_questions=unresolved_questions,
+            active_blast_radius=active_blast_radius,
+            baton_id=baton_id,
+        )
+
+    return await asyncio.to_thread(_do_handoff)
 
 
-# ── Entry point ────────────────────────────────────────────────────────────
+# ── Tool 11: Grounded Prompt Boost (/kortext-boost) ──────────────────────
+
+@mcp.tool(
+    description=(
+        "Pre-execution prompt enhancer (/kortext-boost) that transforms an ambiguous or short task prompt "
+        "into a compact, AST-grounded execution brief (<600 tokens) with exact symbol signatures, "
+        "1-hop blast-radius callers, active invariants, and recommended multi-agent execution pattern."
+    ),
+    meta={"antigravity/alwaysLoad": False},
+)
+async def boost_prompt_context(
+    prompt: str,
+    workspace_root: Optional[str] = None,
+    token_budget: int = 600,
+    project: Optional[str] = None,
+) -> str:
+    """
+    Args:
+        prompt:         The raw user prompt or feature/bug description to ground.
+        workspace_root: Optional workspace directory path.
+        token_budget:   Maximum token budget for the grounded execution brief (default 600).
+        project:        Optional project identifier (default 'kortext').
+    Returns:
+        JSON execution brief with target_symbols, blast_radius, active_invariants, and recommended_pattern.
+    """
+    def _do_boost() -> str:
+        from kortext.chunking.ast_splitter import ASTCodeSplitter, LANG_MAP, PY_LANG
+        from kortext.invariants import InvariantGroundingEngine
+        from kortext.symbols.seek import SymbolSeekEngine, extract_symbol_candidates
+        from kortext.tasks.tracker import TaskDAGTracker
+
+        effective_ws = workspace_root or os.getcwd()
+        candidates = extract_symbol_candidates(prompt)
+        seeker = SymbolSeekEngine()
+        matched_symbols: List[Dict[str, Any]] = []
+        target_files: List[str] = []
+        file_skeletons: Dict[str, List[str]] = {}
+        callers_summary: List[str] = []
+
+        # 1. Resolve @file mentions and <file>:<line> comments (/codesearch & /diff) in prompt
+        at_mentions = re.findall(r"@([A-Za-z0-9_./\-]+\.[A-Za-z0-9]+)", prompt)
+        line_Refs = re.findall(r"([A-Za-z0-9_./\-]+\.[A-Za-z0-9]+):(\d+)", prompt)
+        file_line_map: Dict[str, int] = {}
+        for ref_fp, ref_ln in line_Refs[:5]:
+            if ref_fp not in at_mentions:
+                at_mentions.append(ref_fp)
+            try:
+                file_line_map[ref_fp] = int(ref_ln)
+            except ValueError:
+                pass
+
+        for mention in at_mentions[:5]:
+            cand_path = Path(mention)
+            if not cand_path.is_Absolute() if hasattr(cand_path, "is_Absolute") else not cand_path.is_absolute():
+                cand_path = (Path(effective_ws) / mention).resolve()
+            if cand_path.is_file():
+                fp_str = str(cand_path)
+                if fp_str not in target_files:
+                    target_files.append(fp_str)
+                ext = cand_path.suffix.lower()
+                if ext in LANG_MAP:
+                    try:
+                        src = cand_path.read_text(encoding="utf-8", errors="ignore")
+                        splitter = ASTCodeSplitter(language=LANG_MAP.get(ext, PY_LANG))
+                        ast_info = splitter.extract_symbols_and_references(src, file_path=fp_str)
+                        decls = ast_info.get("declarations") or []
+                        sigs = [
+                            str(d.get("signature") or d.get("name"))
+                            for d in decls[:8]
+                            if d.get("name")
+                        ]
+                        if sigs:
+                            file_skeletons[fp_str] = sigs
+                        target_ln = file_line_map.get(mention)
+                        if target_ln:
+                            for d in decls:
+                                d_start = int(d.get("line", 1))
+                                d_end = int(d.get("end_line", d_start))
+                                if d_start <= target_ln <= d_end and d.get("name"):
+                                    sym_n = str(d["name"])
+                                    if sym_n not in candidates:
+                                        candidates.insert(0, sym_n)
+                    except Exception:
+                        pass
+
+        # 2. Resolve AST symbol candidates + 1-hop callers
+        for sym in candidates[:5]:
+            try:
+                res = json.loads(seeker.seek_symbol(sym, detail_level="skeleton", workspace_root=effective_ws))
+                for m in res.get("matches", [])[:2]:
+                    fp = str(m.get("file") or m.get("file_path") or "")
+                    if fp and fp not in target_files:
+                        target_files.append(fp)
+                    ln = m.get("lines", [m.get("line", 1)])[0] if isinstance(m.get("lines"), list) and m.get("lines") else m.get("line", 1)
+                    callers = m.get("callers") or []
+                    for c_item in callers[:3]:
+                        if isinstance(c_item, dict) and c_item.get("caller"):
+                            c_str = f"{c_item.get('caller')} ({Path(str(c_item.get('file') or '')).name}:{c_item.get('line', 1)})"
+                            if c_str not in callers_summary:
+                                callers_summary.append(c_str)
+                    matched_symbols.append({
+                        "symbol": m.get("symbol") or sym,
+                        "kind": m.get("kind", "symbol"),
+                        "file": fp,
+                        "line": ln,
+                        "signature": m.get("signature", ""),
+                        "callers": callers[:4],
+                    })
+            except Exception:
+                continue
+
+        resolved_proj = project or (Path(effective_ws).name if effective_ws else "kortext") or "kortext"
+        tracker = TaskDAGTracker()
+        routing = tracker.recommend_execution_pattern(
+            symbols=[m["symbol"] for m in matched_symbols] or candidates[:4],
+            target_files=target_files,
+            complexity=5 if len(target_files) > 2 else 2,
+            project_id=resolved_proj,
+        )
+
+        invariants_summary: List[str] = []
+        try:
+            ige = InvariantGroundingEngine()
+            drift = ige.audit_invariant_drift(quarantine_drifted=False)
+            for item in drift.get("verified", [])[:4]:
+                invariants_summary.append(f"[{item.get('domain', 'INV')}] {item.get('rule', '')}")
+        except Exception:
+            pass
+
+        instincts_summary: List[str] = []
+        try:
+            from kortext.trust.instincts import InstinctStore
+
+            for inst in InstinctStore().get_active_instincts(min_confidence=0.65, project=resolved_proj)[:3]:
+                instincts_summary.append(
+                    f"[{inst.get('domain', 'general')}] {inst.get('pattern', '')} -> {inst.get('action', '')}"
+                )
+        except Exception:
+            pass
+
+        ws_path = Path(effective_ws) if effective_ws else KORTEXT_ROOT
+        if (ws_path / "Cargo.toml").is_file():
+            verify_cmd = "cargo test"
+        elif (ws_path / "go.mod").is_file():
+            verify_cmd = "go test ./..."
+        elif (ws_path / "package.json").is_file() and not (ws_path / "pyproject.toml").is_file():
+            verify_cmd = "npm test"
+        else:
+            verify_cmd = "uv run pytest -q"
+
+        md_lines = [
+            f"## Objective\n{prompt.strip()}",
+            "\n## Grounded AST Context & Target Files",
+        ]
+        if matched_symbols:
+            for ms in matched_symbols[:5]:
+                md_lines.append(f"- `{ms['signature'] or ms['symbol']}` → `{ms['file']}:{ms['line']}`")
+        if file_skeletons:
+            for fp_k, sig_list in file_skeletons.items():
+                md_lines.append(f"- File `{Path(fp_k).name}` skeleton: `{', '.join(sig_list[:5])}`")
+        if callers_summary:
+            md_lines.append(f"- 1-Hop Callers: {', '.join(callers_summary[:5])}")
+        if invariants_summary:
+            md_lines.append("\n## Active Grounded Invariants")
+            for inv_s in invariants_summary[:3]:
+                md_lines.append(f"- {inv_s}")
+        if instincts_summary:
+            md_lines.append("\n## Learned Project Instincts")
+            for inst_s in instincts_summary[:3]:
+                md_lines.append(f"- {inst_s}")
+        md_lines.append(
+            f"\n## Execution & Verification\n"
+            f"- Recommended Pattern: `{routing['recommended_pattern']}` (workspace: `{routing['recommended_workspace_mode']}`)\n"
+            f"- Verification Command: `{verify_cmd}`"
+        )
+
+        brief = {
+            "original_prompt": prompt,
+            "boosted_prompt": "\n".join(md_lines),
+            "target_symbols": matched_symbols,
+            "target_files": target_files,
+            "file_skeletons": file_skeletons,
+            "blast_radius_callers": callers_summary,
+            "execution_routing": routing,
+            "active_invariants": invariants_summary,
+            "active_instincts": instincts_summary,
+            "verification_command": verify_cmd,
+        }
+        return json.dumps(brief, separators=(",", ":"))
+
+    return await asyncio.to_thread(_do_boost)
+
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Kortext FastMCP Server")
-    parser.add_argument("--transport", default=os.getenv("MCP_TRANSPORT", "stdio"), choices=["stdio", "sse"], help="MCP transport protocol (stdio or sse)")
-    parser.add_argument("--port", type=int, default=int(os.getenv("MCP_PORT", os.getenv("KORTEXT_MCP_PORT", os.getenv("CEREBRUM_MCP_PORT", "8005")))), help="Port for SSE transport")
-    parser.add_argument("--host", default=os.getenv("MCP_HOST", "127.0.0.1"), help="Host address for SSE transport")
-    args, _ = parser.parse_known_args()
-
-    def _sig_handler(signum, frame):
-        os._exit(0)
-
-    try:
-        signal.signal(signal.SIGTERM, _sig_handler)
-        signal.signal(signal.SIGINT, _sig_handler)
-    except Exception:
-        pass
-
-    try:
-        if args.transport == "sse":
-            logger.info("[Kortext Server] Starting FastMCP on SSE transport at http://%s:%s", args.host, args.port)
-            mcp.run(transport="sse", host=args.host, port=args.port)
-        else:
-            mcp.run(transport="stdio")
-    except (KeyboardInterrupt, SystemExit):
-        pass
-    finally:
-        # Crucial for stdio transport: once the MCP session ends (e.g. stdin EOF or client disconnect),
-        # immediately terminate the process with exit code 0 via os._exit(0).
-        # This prevents hanging during Python interpreter thread joins (e.g. onnxruntime/anyio workers)
-        # which would cause Go MCP client's 5s timeout to elapse and trigger 'signal: terminated'.
-        os._exit(0)
+    """Starts the FastMCP stdio server allowing normal asyncio lifespan teardown on termination."""
+    mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

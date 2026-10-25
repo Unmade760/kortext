@@ -1,63 +1,22 @@
 #!/usr/bin/env python3
 """
-Kortext PreToolUse Hook: Safety gating for dangerous shell commands and AST complexity audit.
+Antigravity PreToolUse Hook (thin wrapper delegating to kortext.hooks.runner).
 """
-from __future__ import annotations
-
-import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import emit_hook_response, get_hook_payload
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-DANGEROUS_COMMANDS = [
-    r"\brm\s+-[a-zA-Z]*r[a-zA-Z]*f\s+[/~]",
-    r"\bgit\s+reset\s+--hard\b",
-    r"\bdrop\s+database\b",
-    r"\bformat\s+c:",
-    r":\(\)\s*\{\s*:\|:&\s*\};:",
-]
-
-CORE_ARCHITECTURAL_FILES = {
-    "server.py", "graph.py", "engine.py", "driver.py", "dream.py"
-}
+from kortext.hooks.context import HookContext
+from kortext.hooks.runner import emit_response, run_hook
 
 
-def main():
-    payload = get_hook_payload()
-    tool_call = payload.get("toolCall", {})
-    name = tool_call.get("name", "")
-    args = tool_call.get("args", {}) or {}
-
-    # Safety Gate for run_command
-    if name == "run_command":
-        cmd = args.get("CommandLine", "").strip()
-        for dangerous in DANGEROUS_COMMANDS:
-            if re.search(dangerous, cmd, re.IGNORECASE):
-                emit_hook_response({
-                    "decision": "ask",
-                    "reason": f"Execution blocked: Command contains forbidden dangerous pattern '{dangerous}'."
-                })
-                return
-
-        # Anti-Ripgrep Reminder
-        lower_cmd = cmd.lower()
-        if lower_cmd.startswith("rg ") or "grep " in lower_cmd:
-            if not any(f in lower_cmd for f in ("pytest", "log", "journal", "curl")):
-                emit_hook_response({
-                    "decision": "allow",
-                    "reason": "Tip: Use `seek_symbol` for exact code navigation to save context tokens."
-                })
-                return
-
-    elif name in ("write_to_file", "replace_file_content", "multi_replace_file_content"):
-        target_file = args.get("TargetFile", "")
-        file_name = target_file.split("/")[-1]
-        if file_name in CORE_ARCHITECTURAL_FILES and ("kortext/" in target_file or "cerebrum/" in target_file):
-            print(f"[Kortext PreTool] ℹ️ Modifying core architectural file {file_name}. Ensure trace_symbol_impact was run.", file=sys.stderr)
-
-    emit_hook_response({"decision": "allow"})
+def main() -> None:
+    ctx = HookContext.from_stdin(event="pre_tool")
+    res = run_hook("pre_tool", ctx)
+    emit_response(event="pre_tool", decision=res.decision, reason=res.reason, data=res.data)
 
 
 if __name__ == "__main__":

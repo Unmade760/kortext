@@ -47,20 +47,20 @@ Tasks transition through five deterministic states:
 
 ---
 
-## 3. The Subagent Delegation Invariant
+## 3. The Subagent Delegation Protocol (Jose Parreño Garcia Alignment)
 
-Whenever an engineering initiative modifies **2+ files** or has a **Cognitive Complexity Score $C \ge 4$**, primary agents **MUST NOT** edit code directly in the parent context. They MUST decompose the task into a DAG and delegate execution.
+Following Jose Parreño Garcia's Agent Teams framework, single-agent execution with deterministic AST tools (`seek_symbol`, `trace_symbol_impact`) is the **default** for small and medium tasks ($C < 7$, including 1–3 file edits). Multi-agent handoffs incur a coordination tax and are warranted only when **Cognitive Complexity Score $C \ge 7$** or when true parallel independence, context window saturation, or Red-Team separation occurs.
 
-### Complexity Scoring Rubric ($C$)
+### Complexity Scoring Rubric ($C \in [0, 10]$)
 
-| Dimension | Points (1-3) |
+| Dimension | Points (0–3) |
 |:---|:---|
-| **Files Affected** | 1 file = 1 pt \| 2-3 files = 2 pts \| 4+ files = 3 pts |
-| **Cross-Module Coupling** | Isolated logic = 1 pt \| Imports internal utils = 2 pts \| Crosses sub-packages = 3 pts |
-| **Substrate Interaction** | Pure in-memory = 1 pt \| Single substrate (Qdrant or FalkorDB) = 2 pts \| Dual-memory + IPC = 3 pts |
-| **Test Requirements** | Unit tests only = 1 pt \| Integration tests = 2 pts \| E2E substrate tests = 3 pts |
+| **Files Affected** | 1–2 files = 0 pts \| 3–4 files = 1 pt \| 5+ files = 3 pts |
+| **Cross-Module Coupling** | Single module = 0 pts \| Shared public API/protocol = 2 pts \| Schema/storage migration = 3 pts |
+| **Substrate Interaction** | Single layer = 0 pts \| Cross-layer (route + substrate + client) = 2 pts |
+| **Blast Radius & Risk** | Isolated change (<5 callers) = 0 pts \| Core abstraction (>10 upstream callers) = 2 pts |
 
-**Threshold:** If $C \ge 4$, initialize the Task DAG via `manage_tasks(action='create')` and delegate leaf tasks.
+**Threshold:** If $C \ge 7$, initialize the Task DAG via `manage_tasks(action='create')`, claim tasks atomically via `manage_tasks(action='claim')`, and delegate leaf tasks (using isolated Git worktrees `Workspace: "branch"` when running workers in parallel).
 
 ---
 

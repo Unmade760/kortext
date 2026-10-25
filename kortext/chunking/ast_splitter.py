@@ -74,7 +74,10 @@ from kortext.chunking.ast_extractor import (
 from kortext.chunking.skeleton import generate_skeleton_chunk
 
 
-class ASTCodeSplitter:
+from kortext.chunking.ast_oversized import ASTOversizedSplitterMixin
+
+
+class ASTCodeSplitter(ASTOversizedSplitterMixin):
     """
     Advanced AST-aware code splitter with token precision, contextual preambles,
     tiny-stub coalescing, statement sliding window overlap, and file skeleton generation.
@@ -83,28 +86,54 @@ class ASTCodeSplitter:
     def __init__(
         self,
         language: Language,
-        max_tokens: int = 512,
-        overlap_tokens: int = 64,
-        stub_threshold_tokens: int = 100,
+        max_tokens: int = 384,
+        overlap_tokens: int = 48,
+        stub_threshold_tokens: int = 80,
         coalesce_target_tokens: int = 384,
         max_chunk_size: Optional[int] = None,
         overlap: Optional[int] = None,
+        include_verbose_metadata: bool = False,
     ):
+        import os
+
+        if isinstance(language, str):
+            lang_key = language.lower().strip()
+            if not lang_key.startswith("."):
+                ext_alias = {
+                    "python": ".py",
+                    "py": ".py",
+                    "javascript": ".js",
+                    "js": ".js",
+                    "typescript": ".ts",
+                    "ts": ".ts",
+                    "tsx": ".tsx",
+                    "rust": ".rs",
+                    "rs": ".rs",
+                    "go": ".go",
+                    "golang": ".go",
+                }.get(lang_key, f".{lang_key}")
+            else:
+                ext_alias = lang_key
+            language = LANG_MAP.get(ext_alias, PY_LANG)
+
         self.language = language
         # Backward compatibility with character counts
-        if max_chunk_size is not None and max_tokens == 512:
+        if max_chunk_size is not None and max_tokens == 384:
             self.max_tokens = max(128, max_chunk_size // 4)
         else:
             self.max_tokens = max_tokens
 
-        if overlap is not None and overlap_tokens == 64:
+        if overlap is not None and overlap_tokens == 48:
             self.overlap_tokens = max(16, overlap // 4)
         else:
             self.overlap_tokens = overlap_tokens
 
         self.stub_threshold_tokens = stub_threshold_tokens
         self.coalesce_target_tokens = coalesce_target_tokens
-        self.parser = Parser(language)
+        self.include_verbose_metadata = bool(
+            include_verbose_metadata or os.getenv("KORTEXT_VERBOSE_PREAMBLE", "0") == "1"
+        )
+        self.parser = Parser(self.language)
 
     _get_identifier = staticmethod(get_identifier)
     _get_signature_text = staticmethod(get_signature_text)
@@ -121,6 +150,7 @@ class ASTCodeSplitter:
         dependencies: Optional[List[Dict[str, str]]] = None,
         test_targets: Optional[List[str]] = None,
         temporal_info: Optional[Dict[str, str]] = None,
+        include_verbose_metadata: bool = False,
     ) -> str:
         lines = [f"# File: {file_path}"]
         if module_summary:
@@ -132,13 +162,14 @@ class ASTCodeSplitter:
         if docstring:
             clean_doc = docstring.replace("\n", " ").strip()
             lines.append(f"# Docstring: {clean_doc}")
-        if dependencies:
-            dep_strs = [f"{d['symbol']} ({d['module']})" if d.get("module") else d["symbol"] for d in dependencies[:6]]
-            lines.append(f"# Depends On: {', '.join(dep_strs)}")
-        if test_targets:
-            lines.append(f"# Tests Target: {', '.join(test_targets[:4])}")
-        if temporal_info and temporal_info.get("commit_date"):
-            lines.append(f"# Last Modified: {temporal_info['commit_date']} ({temporal_info['commit_hash']}) - {temporal_info['commit_msg'][:50]}")
+        if include_verbose_metadata:
+            if dependencies:
+                dep_strs = [f"{d['symbol']} ({d['module']})" if d.get("module") else d["symbol"] for d in dependencies[:6]]
+                lines.append(f"# Depends On: {', '.join(dep_strs)}")
+            if test_targets:
+                lines.append(f"# Tests Target: {', '.join(test_targets[:4])}")
+            if temporal_info and temporal_info.get("commit_date"):
+                lines.append(f"# Last Modified: {temporal_info['commit_date']} ({temporal_info['commit_hash']}) - {temporal_info['commit_msg'][:50]}")
         if part_info:
             lines.append(f"# Note: {part_info}")
         return "\n".join(lines) + "\n\n"
@@ -233,8 +264,8 @@ class ASTCodeSplitter:
 
         chunks: List[Dict[str, Any]] = []
 
-        # 1. Extract temporal metadata and symbols/imports for dependency linking
-        temporal_info = get_file_temporal_info(file_path)
+        # 1. Extract temporal metadata (only when verbose metadata is enabled) and symbols/imports for dependency linking
+        temporal_info = get_file_temporal_info(file_path) if self.include_verbose_metadata else None
         if ast_info is None:
             if cached is not None and cached[2]:
                 ast_info = cached[2]
@@ -721,257 +752,6 @@ class ASTCodeSplitter:
 
         return chunks
 
-    def _split_oversized_function(
-        self,
-        node: TSNode,
-        actual_fn: TSNode,
-        scope: str,
-        signature: str,
-        fn_doc: Optional[str],
-        source_bytes: bytes,
-        file_path: str,
-        module_summary: Optional[str],
-        import_map: Optional[Dict[str, str]] = None,
-        ast_info: Optional[Dict[str, Any]] = None,
-        temporal_info: Optional[Dict[str, str]] = None,
-        parent_id: Optional[str] = None,
-        parent_scope: Optional[str] = None,
-        parent_text: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Splits a large function along AST statement boundaries with sliding-window overlap.
-        Preserves complete control flow (try/except, loops, conditions) and parent hierarchy.
-        """
-        import_map = import_map or {}
-        ast_info = ast_info or {}
-        if parent_id is None:
-            clean_scope = re.sub(r"[^A-Za-z0-9_]+", "_", scope).strip("_")
-            parent_id = f"{file_path}::{clean_scope}"
-            parent_scope = scope
-            parent_text = f"{signature}\n{fn_doc or ''}"[:2000]
-
-        decls = ast_info.get("declarations", [])
-        _get_deps = lambda txt: self._resolve_deps(txt, import_map)
-        _get_test_targets = lambda idn, txt: self._resolve_test_targets(idn, txt, file_path, import_map, decls)
-
-        body_node = self._get_body_node(actual_fn)
-        if not body_node or not body_node.children:
-            full_text = source_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
-            header = self._make_context_preamble(
-                file_path, module_summary, scope, signature, docstring=fn_doc, temporal_info=temporal_info
-            )
-            sub_chunks = self._subsplit_text_with_overlap(full_text, header, scope, node.start_byte)
-            for sc in sub_chunks:
-                sc["parent_id"] = parent_id
-                sc["parent_scope"] = parent_scope
-                sc["parent_text"] = parent_text
-                sc["commit_hash"] = temporal_info["commit_hash"] if temporal_info else "local"
-                sc["commit_date"] = temporal_info["commit_date"] if temporal_info else ""
-                sc["commit_msg"] = temporal_info["commit_msg"] if temporal_info else ""
-            return sub_chunks
-
-        # Filter meaningful statements (ignore braces, colons, docstrings if already extracted)
-        statements: List[TSNode] = []
-        for child in body_node.children:
-            if child.type in (":", "{", "}"):
-                continue
-            statements.append(child)
-
-        if not statements:
-            full_text = source_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
-            header = self._make_context_preamble(
-                file_path, module_summary, scope, signature, docstring=fn_doc, temporal_info=temporal_info
-            )
-            sub_chunks = self._subsplit_text_with_overlap(full_text, header, scope, node.start_byte)
-            for sc in sub_chunks:
-                sc["parent_id"] = parent_id
-                sc["parent_scope"] = parent_scope
-                sc["parent_text"] = parent_text
-                sc["commit_hash"] = temporal_info["commit_hash"] if temporal_info else "local"
-                sc["commit_date"] = temporal_info["commit_date"] if temporal_info else ""
-                sc["commit_msg"] = temporal_info["commit_msg"] if temporal_info else ""
-            return sub_chunks
-
-        chunks: List[Dict[str, Any]] = []
-        curr_stmts: List[TSNode] = []
-        curr_tokens = 0
-        part_idx = 1
-
-        for stmt in statements:
-            stmt_text = source_bytes[stmt.start_byte:stmt.end_byte].decode("utf-8", errors="replace")
-            stmt_toks = count_tokens(stmt_text)
-
-            # If a single statement exceeds max_tokens, sub-split it with text overlap
-            if stmt_toks > self.max_tokens:
-                if curr_stmts:
-                    c_text = source_bytes[curr_stmts[0].start_byte:curr_stmts[-1].end_byte].decode("utf-8", errors="replace")
-                    c_deps = _get_deps(c_text)
-                    c_targets = _get_test_targets(scope, c_text)
-                    chunks.append(self._build_statement_chunk(
-                        curr_stmts, source_bytes, file_path, module_summary, scope, signature, part_idx,
-                        docstring=fn_doc, dependencies=c_deps, test_targets=c_targets, temporal_info=temporal_info,
-                        parent_id=parent_id, parent_scope=parent_scope, parent_text=parent_text,
-                    ))
-                    part_idx += 1
-                    curr_stmts = []
-                    curr_tokens = 0
-
-                s_deps = _get_deps(stmt_text)
-                s_targets = _get_test_targets(scope, stmt_text)
-                sub_hdr = self._make_context_preamble(
-                    file_path, module_summary, scope, signature, part_info=f"Part {part_idx} (large statement)",
-                    docstring=fn_doc, dependencies=s_deps, test_targets=s_targets, temporal_info=temporal_info,
-                )
-                stmt_chunks = self._subsplit_text_with_overlap(stmt_text, sub_hdr, scope, stmt.start_byte)
-                for sc in stmt_chunks:
-                    sc["parent_id"] = parent_id
-                    sc["parent_scope"] = parent_scope
-                    sc["parent_text"] = parent_text
-                    sc["dependencies"] = s_deps
-                    sc["test_targets"] = s_targets
-                    sc["commit_hash"] = temporal_info["commit_hash"] if temporal_info else "local"
-                    sc["commit_date"] = temporal_info["commit_date"] if temporal_info else ""
-                    sc["commit_msg"] = temporal_info["commit_msg"] if temporal_info else ""
-                chunks.extend(stmt_chunks)
-                part_idx += len(stmt_chunks)
-                continue
-
-            if curr_tokens + stmt_toks > self.max_tokens and curr_stmts:
-                c_text = source_bytes[curr_stmts[0].start_byte:curr_stmts[-1].end_byte].decode("utf-8", errors="replace")
-                c_deps = _get_deps(c_text)
-                c_targets = _get_test_targets(scope, c_text)
-                chunks.append(self._build_statement_chunk(
-                    curr_stmts, source_bytes, file_path, module_summary, scope, signature, part_idx,
-                    docstring=fn_doc, dependencies=c_deps, test_targets=c_targets, temporal_info=temporal_info,
-                    parent_id=parent_id, parent_scope=parent_scope, parent_text=parent_text,
-                ))
-                part_idx += 1
-
-                # Calculate AST sliding-window overlap: retain last N statements <= overlap_tokens
-                overlap_stmts: List[TSNode] = []
-                overlap_accum = 0
-                for prev in reversed(curr_stmts):
-                    prev_text = source_bytes[prev.start_byte:prev.end_byte].decode("utf-8", errors="replace")
-                    prev_toks = count_tokens(prev_text)
-                    if overlap_accum + prev_toks <= self.overlap_tokens:
-                        overlap_stmts.insert(0, prev)
-                        overlap_accum += prev_toks
-                    else:
-                        break
-
-                curr_stmts = list(overlap_stmts)
-                curr_tokens = overlap_accum
-
-            curr_stmts.append(stmt)
-            curr_tokens += stmt_toks
-
-        if curr_stmts:
-            c_text = source_bytes[curr_stmts[0].start_byte:curr_stmts[-1].end_byte].decode("utf-8", errors="replace")
-            c_deps = _get_deps(c_text)
-            c_targets = _get_test_targets(scope, c_text)
-            chunks.append(self._build_statement_chunk(
-                curr_stmts, source_bytes, file_path, module_summary, scope, signature, part_idx,
-                docstring=fn_doc, dependencies=c_deps, test_targets=c_targets, temporal_info=temporal_info,
-                parent_id=parent_id, parent_scope=parent_scope, parent_text=parent_text,
-            ))
-
-        return chunks
-
-    def _build_statement_chunk(
-        self,
-        stmts: List[TSNode],
-        source_bytes: bytes,
-        file_path: str,
-        module_summary: Optional[str],
-        scope: str,
-        signature: str,
-        part_idx: int,
-        docstring: Optional[str] = None,
-        dependencies: Optional[List[Dict[str, str]]] = None,
-        test_targets: Optional[List[str]] = None,
-        temporal_info: Optional[Dict[str, str]] = None,
-        parent_id: Optional[str] = None,
-        parent_scope: Optional[str] = None,
-        parent_text: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        start_b = stmts[0].start_byte
-        end_b = stmts[-1].end_byte
-        body_text = source_bytes[start_b:end_b].decode("utf-8", errors="replace").strip()
-        part_info = f"Part {part_idx}" if part_idx > 1 else None
-        header = self._make_context_preamble(
-            file_path=file_path,
-            module_summary=module_summary,
-            scope=scope,
-            signature=signature,
-            part_info=part_info,
-            docstring=docstring,
-            dependencies=dependencies,
-            test_targets=test_targets,
-            temporal_info=temporal_info,
-        )
-        return {
-            "text": header + body_text,
-            "scope": f"{scope} ({part_info or 'full'})",
-            "chunk_type": "ast_code",
-            "start_char": start_b,
-            "end_char": end_b,
-            "signature": signature,
-            "docstring": docstring or "",
-            "dependencies": dependencies or [],
-            "test_targets": test_targets or [],
-            "parent_id": parent_id,
-            "parent_scope": parent_scope,
-            "parent_text": parent_text,
-            "commit_hash": temporal_info["commit_hash"] if temporal_info else "local",
-            "commit_date": temporal_info["commit_date"] if temporal_info else "",
-            "commit_msg": temporal_info["commit_msg"] if temporal_info else "",
-        }
-
-    def _subsplit_text_with_overlap(
-        self,
-        text: str,
-        header: str,
-        scope: str,
-        base_offset: int,
-    ) -> List[Dict[str, Any]]:
-        """Fallback line-based sub-splitter with token overlap."""
-        lines = text.splitlines(keepends=True)
-        chunks = []
-        curr_lines = []
-        curr_tokens = count_tokens(header)
-        curr_start = base_offset
-
-        for line in lines:
-            line_toks = count_tokens(line)
-            if curr_tokens + line_toks > self.max_tokens and curr_lines:
-                chunk_body = "".join(curr_lines).strip()
-                chunks.append({
-                    "text": header + chunk_body,
-                    "scope": scope,
-                    "chunk_type": "ast_code",
-                    "start_char": curr_start,
-                    "end_char": curr_start + len(chunk_body),
-                })
-                # Overlap last ~15% lines
-                overlap_lines = curr_lines[-3:] if len(curr_lines) >= 3 else []
-                curr_lines = list(overlap_lines)
-                curr_tokens = count_tokens(header) + sum(count_tokens(l) for l in curr_lines)
-                curr_start += sum(len(l) for l in curr_lines[:-3]) if len(curr_lines) > 3 else 0
-
-            curr_lines.append(line)
-            curr_tokens += line_toks
-
-        if curr_lines:
-            chunk_body = "".join(curr_lines).strip()
-            chunks.append({
-                "text": header + chunk_body,
-                "scope": scope,
-                "chunk_type": "ast_code",
-                "start_char": curr_start,
-                "end_char": curr_start + len(chunk_body),
-            })
-
-        return chunks
 
     def split_code(
         self,

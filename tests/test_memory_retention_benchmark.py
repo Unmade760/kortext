@@ -34,10 +34,10 @@ from kortext.retrieval.hipporag import HippoRAGPPR
 from kortext.symbols.seek import SymbolSeekEngine
 
 
-def _simulate_rg(cortex_root: Path, target_dir_rel: str, pattern: str) -> str:
+def _simulate_rg(project_root: Path, target_dir_rel: str, pattern: str) -> str:
     """Fallback text search simulating `rg --no-heading -n <pattern> <target_dir_rel>`."""
     lines = []
-    target_dir = cortex_root / target_dir_rel
+    target_dir = project_root / target_dir_rel
     try:
         regex = re.compile(pattern)
     except re.error:
@@ -47,7 +47,7 @@ def _simulate_rg(cortex_root: Path, target_dir_rel: str, pattern: str) -> str:
         if not p.is_file() or "__pycache__" in p.parts:
             continue
         try:
-            rel_str = str(p.relative_to(cortex_root))
+            rel_str = str(p.relative_to(project_root))
             with open(p, "r", encoding="utf-8", errors="ignore") as f:
                 for line_num, line in enumerate(f, start=1):
                     matched = regex.search(line) if regex is not None else (pattern in line)
@@ -681,7 +681,7 @@ class TestBiTemporalFactRetention:
 # ============================================================================
 
 class TestHippoRAGAssociativeRetention:
-    """Validates HippoRAG Personalized PageRank associative retrieval over cerebrum_symbols."""
+    """Validates HippoRAG Personalized PageRank associative retrieval over kortext_symbols."""
 
     @pytest.fixture(autouse=True)
     def setup_hipporag(self):
@@ -696,7 +696,7 @@ class TestHippoRAGAssociativeRetention:
         results = self.ppr.retrieve_associative_subgraph(
             seed_entities=seeds,
             top_k=15,
-            graph_name="cerebrum_symbols",
+            graph_name="kortext_symbols",
         )
 
         # Assert: Associative (non-seed) nodes must be discovered with non-trivial mass
@@ -716,7 +716,7 @@ class TestHippoRAGAssociativeRetention:
             self.ppr.retrieve_associative_subgraph(
                 seed_entities=seeds,
                 top_k=20,
-                graph_name="cerebrum_symbols",
+                graph_name="kortext_symbols",
             )
         )
 
@@ -740,7 +740,7 @@ class TestHippoRAGAssociativeRetention:
             self.ppr.retrieve_associative_subgraph(
                 seed_entities=["RetrievalEngine"],
                 top_k=10,
-                graph_name="cerebrum_symbols",
+                graph_name="kortext_symbols",
             )
             latencies_ms.append((time.perf_counter() - t0) * 1000.0)
 
@@ -805,7 +805,7 @@ class TestE2ETokenBudget:
     def test_aggregate_session_token_savings(self):
         """MR-6: Simulates 8 symbol queries with live rg vs seek_symbol, asserts overall savings >= 0.85 or 0.90."""
         # Arrange
-        cortex_root = Path(__file__).resolve().parent.parent
+        project_root = Path(__file__).resolve().parent.parent
         symbols = [
             "RetrievalEngine",
             "SymbolSeekEngine",
@@ -828,17 +828,17 @@ class TestE2ETokenBudget:
             if shutil.which("rg"):
                 rg_res = subprocess.run(
                     ["rg", "--no-heading", sym, pkg_dir],
-                    cwd=cortex_root,
+                    cwd=project_root,
                     capture_output=True,
                     text=True,
                 )
                 rg_text = rg_res.stdout
             else:
-                rg_text = _simulate_rg(cortex_root, pkg_dir, sym)
+                rg_text = _simulate_rg(project_root, pkg_dir, sym)
 
             matched_files = sorted({line.split(":", 1)[0] for line in rg_text.splitlines() if ":" in line})
             for f in matched_files:
-                fpath = cortex_root / f
+                fpath = project_root / f
                 if fpath.is_file():
                     rg_text += "\n" + fpath.read_text(encoding="utf-8")
 

@@ -26,7 +26,7 @@ def discover_vector_collections(qdrant_url: Optional[str] = None) -> List[Dict[s
         qdrant_url: Optional URL to remote Qdrant instance. If omitted, checks os.getenv("QDRANT_URL").
                    If set and non-empty, queries Qdrant via HTTP.
                    If unset or empty, operates in Zero-Docker / native embedded mode, inspecting
-                   ~/.cerebrum/qdrant/meta.json and collection storage.sqlite directly (read-only).
+                   ~/.kortext/qdrant/meta.json and collection storage.sqlite directly (read-only).
 
     Returns:
         List of collection metadata dictionaries.
@@ -79,8 +79,6 @@ def discover_vector_collections(qdrant_url: Optional[str] = None) -> List[Dict[s
     # Zero-Docker / native embedded mode
     kortext_home = get_kortext_home()
     qpath = kortext_home / "qdrant"
-    if not (os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")) and not qpath.exists() and (Path.home() / ".cerebrum" / "qdrant").exists():
-        qpath = Path.home() / ".cerebrum" / "qdrant"
     meta_file = qpath / "meta.json"
     if not meta_file.is_file():
         return []
@@ -117,7 +115,7 @@ def discover_vector_collections(qdrant_url: Optional[str] = None) -> List[Dict[s
                             try:
                                 conn.close()
                             except Exception:
-                                pass
+                                logger.debug("Suppressed non-fatal exception")
                     if found_count:
                         break
 

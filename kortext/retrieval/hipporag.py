@@ -6,7 +6,6 @@ Executes single-pass multi-hop associative retrieval in <30ms without iterative 
 from __future__ import annotations
 
 import logging
-import os
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -37,12 +36,13 @@ class HippoRAGPPR:
         self.max_iter = max_iterations
         self.tol = tolerance
         self.client = get_shared_falkordb_client()
+        self._ppr_cache: Dict[Any, Tuple[float, List[Tuple[str, float]]]] = {}
 
     def retrieve_associative_subgraph(
         self,
         seed_entities: List[str],
         top_k: int = 15,
-        graph_name: str = os.getenv("KORTEXT_DATABASE", os.getenv("FALKORDB_DATABASE", "kortext")),
+        graph_name: Optional[str] = None,
         symbols_graph: Any = _DEFAULT_SYMBOLS,
         edge_types: Optional[List[str]] = None,
     ) -> List[Tuple[str, float]]:
@@ -51,51 +51,71 @@ class HippoRAGPPR:
         Applies Inverse Degree Specificity (IDS) so that high-degree generic hubs are prevented
         from drowning out domain-specific needles.
 
-        When graph_name is 'kortext' (or legacy 'cerebrum') and AST relations/code symbols are queried,
-        traverses kortext_symbols (or legacy cerebrum_symbols) as well and merges associative edges into the PPR adjacency matrix.
-        Degrades gracefully if one of the graphs is empty or unavailable.
+        Traverses both episodic knowledge and AST code symbols, merging associative edges
+        into the unified PPR adjacency matrix. Degrades gracefully if one graph is offline.
         """
         if not seed_entities:
             return []
 
+        from kortext._env import get_falkordb_database, get_falkordb_symbols_graph
+
+        resolved_graph = graph_name or get_falkordb_database()
+
         if symbols_graph is _DEFAULT_SYMBOLS:
-            if graph_name in ("cerebrum", "cerebrum_codebase"):
-                symbols_graph = os.getenv("FALKORDB_SYMBOLS_GRAPH", "cerebrum_symbols")
-            else:
-                symbols_graph = os.getenv("KORTEXT_SYMBOLS_GRAPH", os.getenv("FALKORDB_SYMBOLS_GRAPH", "kortext_symbols"))
+            symbols_graph = get_falkordb_symbols_graph()
 
         t0 = time.perf_counter()
+        cache_key = (
+            id(self.client),
+             id(getattr(self.client, "query", None)),
+            tuple(seed_entities),
+            top_k,
+            resolved_graph,
+            str(symbols_graph),
+            tuple(edge_types or ()),
+        )
+        cached = self._ppr_cache.get(cache_key)
+        if cached is not None and (t0 - cached[0]) < 2.0:
+            return list(cached[1])
 
-        # Multi-Hop Association Cypher Query: Traverses entities and linked code symbols
+        # Multi-Hop Association Cypher Query: Traverses entities, code symbols, and files
         cypher = """
         MATCH (seed)
-        WHERE (seed:Entity OR seed:Symbol) AND seed.name IN $seeds
-        OPTIONAL MATCH (seed)-[r:RELATES_TO|CALLS|IMPORTS|DEFINED_IN|AFFECTS_SYMBOL]-(neighbor)
+        WHERE (seed:Entity OR seed:Symbol OR seed:File) AND (seed.name IN $seeds OR seed.path IN $seeds)
+        OPTIONAL MATCH (seed)-[r:RELATES_TO|CALLS|IMPORTS|DEFINED_IN|REFERENCES|AFFECTS_SYMBOL]-(neighbor)
         RETURN 
-            seed.name AS source, 
-            neighbor.name AS target, 
+            COALESCE(seed.name, seed.path) AS source, 
+            COALESCE(neighbor.name, neighbor.path) AS target, 
             CASE 
                 WHEN type(r) = 'CALLS' THEN 1.0
                 WHEN type(r) = 'DEFINED_IN' THEN 1.0
+                WHEN type(r) = 'REFERENCES' THEN 0.95
                 WHEN type(r) = 'AFFECTS_SYMBOL' THEN 0.9
                 ELSE 0.8 
             END AS weight
+        LIMIT 250
         UNION
         MATCH (seed)
-        WHERE (seed:Entity OR seed:Symbol) AND seed.name IN $seeds
-        MATCH (seed)-[:RELATES_TO|CALLS|AFFECTS_SYMBOL]-(neighbor)
-        MATCH (neighbor)-[r2:RELATES_TO|CALLS]-(second)
+        WHERE (seed:Entity OR seed:Symbol OR seed:File) AND (seed.name IN $seeds OR seed.path IN $seeds)
+        MATCH (seed)-[:RELATES_TO|CALLS|REFERENCES|AFFECTS_SYMBOL]-(neighbor)
+        WHERE NOT coalesce(neighbor.name, '') IN ['__init__', 'main', 'get', 'set']
+        MATCH (neighbor)-[r2:RELATES_TO|CALLS|REFERENCES]-(second)
         RETURN 
-            neighbor.name AS source, 
-            second.name AS target, 
+            COALESCE(neighbor.name, neighbor.path) AS source, 
+            COALESCE(second.name, second.path) AS target, 
             0.6 AS weight
+        LIMIT 250
         """
 
         ast_edge_types = {"CALLS", "IMPORTS", "DEFINED_IN", "REFERENCES"}
+        is_already_symbols = (
+            resolved_graph.endswith("_symbols")
+            or "symbol" in resolved_graph.lower()
+        )
         should_traverse_symbols = (
-            symbols_graph is not None
-            and symbols_graph != graph_name
-            and graph_name in ("kortext", "cerebrum")
+            not is_already_symbols
+            and symbols_graph is not None
+            and symbols_graph != resolved_graph
             and (
                 edge_types is None
                 or any(e.upper() in ast_edge_types for e in edge_types)
@@ -107,11 +127,11 @@ class HippoRAGPPR:
 
         # 1. Query primary graph (e.g. "kortext")
         try:
-            raw_primary = self.client.query(graph_name, cypher, {"seeds": seed_entities})
+            raw_primary = self.client.query(resolved_graph, cypher, {"seeds": seed_entities})
             if raw_primary and len(raw_primary) > 1 and raw_primary[1]:
                 raw_graphs.append(raw_primary)
         except Exception as e:
-            logger.debug(f"HippoRAG primary graph query failed on '{graph_name}': {e}")
+            logger.debug(f"HippoRAG primary graph query failed on '{resolved_graph}': {e}")
 
         # 2. Query code symbols graph (e.g. "kortext_symbols") if enabled
         if should_traverse_symbols and symbols_graph:
@@ -151,10 +171,12 @@ class HippoRAGPPR:
         if n == 0 or not edges:
             return [(s, 1.0 / len(seed_entities)) for s in seed_entities]
 
-        # 2. Build Column-Normalized Transition Matrix M (Sparse CSR)
+        # 2. Build Degree-Discounted Column-Normalized Transition Matrix M (Sparse CSR)
         out_degree = np.zeros(n, dtype=np.float32)
+        in_degree = np.zeros(n, dtype=np.float32)
         for src, tgt, wt in edges:
             out_degree[node_idx[src]] += wt
+            in_degree[node_idx[tgt]] += wt
 
         rows = []
         cols = []
@@ -162,19 +184,23 @@ class HippoRAGPPR:
         for src, tgt, wt in edges:
             u, v = node_idx[src], node_idx[tgt]
             if out_degree[u] > 0:
+                hub_discount = 1.0 / (1.0 + 0.15 * float(np.log1p(max(in_degree[v] - 1.0, 0.0))))
                 rows.append(v)
                 cols.append(u)
-                data.append(wt / out_degree[u])
+                data.append((wt * hub_discount) / out_degree[u])
 
         M = sp.csr_matrix((data, (rows, cols)), shape=(n, n), dtype=np.float32)
+        col_sums = np.array(M.sum(axis=0)).flatten()
+        col_sums[col_sums == 0.0] = 1.0
+        M = M.multiply(1.0 / col_sums).tocsr()
 
         # 3. Construct Inverse Degree Specificity (IDS) Seed Vector p0
         p0 = np.zeros(n, dtype=np.float32)
         for s in seed_entities:
             if s in node_idx:
                 idx = node_idx[s]
-                # Inverse Degree Specificity: rare nodes get higher initial probability mass
-                p0[idx] = 1.0 / max(out_degree[idx], 1.0)
+                # Inverse Degree Specificity: rare nodes get higher initial probability mass (quadratic hub penalty)
+                p0[idx] = 1.0 / (max(out_degree[idx], 1.0) ** 2.0)
 
         p0_sum = np.sum(p0)
         if p0_sum > 0:
@@ -194,6 +220,8 @@ class HippoRAGPPR:
         # 5. Extract and Rank Top-K Associative Nodes
         ranked_indices = np.argsort(-p)[:top_k]
         results = [(node_list[i], float(p[i])) for i in ranked_indices if p[i] > 1e-5]
+
+        self._ppr_cache[cache_key] = (time.perf_counter(), results)
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.debug(f"HippoRAG PPR completed in {elapsed_ms:.2f}ms across {n} nodes.")

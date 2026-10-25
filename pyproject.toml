@@ -6,7 +6,7 @@ readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
 authors = [
-  { name = "Supreme Knight", email = "realrajdeep09@gmail.com" }
+  { name = "Kortext Maintainers" }
 ]
 classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
@@ -22,8 +22,6 @@ keywords = [
 ]
 dependencies = [
   "fastmcp>=2.0",
-  "llama-index-core>=0.12",
-  "llama-index-embeddings-openai>=0.3",
   "qdrant-client>=1.12.0",
   "fastembed>=0.5.0",
   "redis>=5.0.0",
@@ -63,8 +61,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bravest-cat/cortex"
-Repository = "https://github.com/bravest-cat/cortex.git"
+Homepage = "https://github.com/kortext/kortext"
+Repository = "https://github.com/kortext/kortext.git"
 
 [project.scripts]
 kortext           = "kortext.cli:main"
@@ -72,12 +70,6 @@ kortext-server    = "kortext.server:main"
 kortext-ingest    = "kortext.ingest:main"
 kortext-watch     = "kortext.watcher:main"
 kortext-dashboard = "kortext.dashboard.app:main"
-# Legacy aliases
-cerebrum           = "kortext.cli:main"
-cerebrum-server    = "kortext.server:main"
-cerebrum-ingest    = "kortext.ingest:main"
-cerebrum-watch     = "kortext.watcher:main"
-cerebrum-dashboard = "kortext.dashboard.app:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -85,6 +77,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--import-mode=importlib"
 filterwarnings = [
     "always::DeprecationWarning",

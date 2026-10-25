@@ -136,21 +136,25 @@ class TestSymbolGraphAstParameterization:
         assert len(params_list[3]["declarations"]) == 1
         assert params_list[3]["declarations"][0]["name"] == "UserHandler"
 
+        # Check stub reconciliation query
+        assert "$declarations" in queries[4]
+        assert "unresolved::" in queries[4]
+
         # Check imports query
-        assert "$imports" in queries[4]
-        assert params_list[4]["path"] == "src/app.py"
-        assert len(params_list[4]["imports"]) == 1
-        assert params_list[4]["imports"][0]["name"] == "BaseHandler"
+        assert "$imports" in queries[5]
+        assert params_list[5]["path"] == "src/app.py"
+        assert len(params_list[5]["imports"]) == 1
+        assert params_list[5]["imports"][0]["name"] == "BaseHandler"
 
         # Check references query
-        assert "$references" in queries[5]
-        assert params_list[5]["path"] == "src/app.py"
-        assert len(params_list[5]["references"]) == 1
-        assert params_list[5]["references"][0]["name"] == "json_loads"
+        assert "$references" in queries[6]
+        assert params_list[6]["path"] == "src/app.py"
+        assert len(params_list[6]["references"]) == 1
+        assert params_list[6]["references"][0]["name"] == "json_loads"
 
         # Check orphan sweep query
-        assert "$names" in queries[6]
-        assert params_list[6]["names"] == ["ok"]
+        assert "$names" in queries[7]
+        assert params_list[7]["names"] == ["ok"]
 
     def test_save_markdown_ast_parameterized(self):
         mock_client = MagicMock(spec=FalkorDBClient)

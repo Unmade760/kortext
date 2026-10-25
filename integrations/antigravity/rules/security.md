@@ -1,7 +1,6 @@
 ---
-trigger: always_on
-description: "Mandatory security standards: zero secrets, input sanitization, injection defenses, and MINJA causal memory protection."
-globs: "**/*"
+trigger: model_decision
+description: "Activate when writing Cypher/SQL queries, handling external inputs, authentication, secrets, or MINJA causal memory sanitization."
 ---
 
 # Security Guidelines

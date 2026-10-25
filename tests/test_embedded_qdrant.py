@@ -19,7 +19,7 @@ class TestEmbeddedQdrant:
             yield engine
 
     def test_dual_vector_collection_creation(self, qdrant_engine):
-        col_name = "test_cerebrum_collection"
+        col_name = "test_kortext_collection"
         qdrant_engine.ensure_collection(col_name, embed_dim=4)
 
         assert qdrant_engine.client.collection_exists(col_name)

@@ -382,3 +382,34 @@ def test_build_symbol_impact_view_symbol_target():
         assert "BaseClass" in nodes_by_id
         assert nodes_by_id["BaseClass"]["level"] == 2
 
+
+def test_build_symbol_impact_view_with_real_graph_traversal():
+    """Verify build_symbol_impact_view executes SymbolGraphManager.trace_symbol_impact without NameError."""
+    from kortext.symbols.graph import SymbolGraphManager
+
+    mock_client = MagicMock()
+    mock_redis = MagicMock()
+    mock_client.get_redis.return_value = mock_redis
+    mock_client.query.return_value = [[], []]
+    mock_redis.execute_command.return_value = [[], []]
+
+    with patch("kortext.dashboard.views.impact._get_symbol_graph_manager") as mock_mgr_getter, \
+         patch("kortext.dashboard.views.impact._get_falkordb_client") as mock_client_getter:
+        mgr = SymbolGraphManager(client=mock_client)
+        mock_mgr_getter.return_value = mgr
+        mock_client_getter.return_value = mock_client
+
+        res = build_symbol_impact_view(
+            target="MySymbol",
+            file_path=None,
+            symbol=None,
+            direction="upstream",
+            max_depth=1,
+            host="localhost",
+            port=6379,
+        )
+
+        assert res["status"] == "ok"
+        assert res["summary"]["target"] == "MySymbol"
+        assert res["summary"]["type"] == "symbol"
+

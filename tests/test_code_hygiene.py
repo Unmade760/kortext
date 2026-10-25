@@ -3,7 +3,7 @@ Code hygiene and architectural invariant tests for Kortext.
 
 Enforces:
 1. FastMCP stdio transport safety: zero direct print() calls in server modules.
-2. Naming precedence invariant: no direct unprefixed CEREBRUM_* env var reads without KORTEXT_* precedence.
+2. Complete legacy purge: zero direct CEREBRUM_* or CORTEX_* environment reads.
 """
 
 import ast
@@ -64,44 +64,13 @@ def _is_env_call(node: ast.AST, prefix: str) -> Optional[str]:
     return None
 
 
-def _has_kortext_precedence(call_node: ast.Call) -> bool:
-    """
-    Traverse ancestor AST nodes to verify that a CEREBRUM_* env read has KORTEXT_* precedence:
-    - Passed as fallback/default argument to an enclosing getenv call checking KORTEXT_*.
-    - Part of a boolean Or expression where a preceding term checks KORTEXT_*.
-    """
-    curr = getattr(call_node, "parent", None)
-    child: ast.AST = call_node
-    while curr:
-        if isinstance(curr, ast.Call):
-            func = curr.func
-            if (
-                isinstance(func, ast.Attribute)
-                and func.attr in ("getenv", "get")
-                and len(curr.args) > 1
-                and any(child is arg for arg in curr.args[1:])
-            ):
-                first_arg = curr.args[0]
-                if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
-                    if first_arg.value.startswith("KORTEXT_"):
-                        return True
-        if isinstance(curr, ast.BoolOp) and isinstance(curr.op, ast.Or):
-            for val in curr.values:
-                if val is child:
-                    break
-                for sub in ast.walk(val):
-                    if _is_env_call(sub, "KORTEXT_"):
-                        return True
-        child = curr
-        curr = getattr(curr, "parent", None)
-    return False
 
 
-def test_no_unprefixed_cerebrum_env_vars():
+
+def test_zero_legacy_cerebrum_or_cortex_env_vars():
     """
-    Scan all .py files under kortext/ to verify that no direct os.getenv('CEREBRUM_...')
-    or os.environ.get('CEREBRUM_...') reads exist without KORTEXT_* precedence.
-    All env reads must use kortext._env or check KORTEXT_* first.
+    Scan all .py files under kortext/ to verify that ZERO direct os.getenv('CEREBRUM_...')
+    or os.getenv('CORTEX_...') reads exist anywhere in the codebase.
     """
     root = Path(__file__).resolve().parent.parent
     kortext_dir = root / "kortext"
@@ -109,23 +78,13 @@ def test_no_unprefixed_cerebrum_env_vars():
     violations: List[Tuple[str, int, str]] = []
 
     for py_file in sorted(kortext_dir.rglob("*.py")):
-        # kortext/_env.py is the centralized resolver itself, where fallback resolution is defined
-        if py_file.name == "_env.py":
-            continue
-
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
 
-        # Annotate AST nodes with parent references for hierarchy walking
-        for parent in ast.walk(tree):
-            for child in ast.iter_child_nodes(parent):
-                child.parent = parent
-
         for node in ast.walk(tree):
-            var_name = _is_env_call(node, "CEREBRUM_")
+            var_name = _is_env_call(node, "CEREBRUM_") or _is_env_call(node, "CORTEX_")
             if var_name:
-                if not _has_kortext_precedence(node):
-                    violations.append((str(py_file.relative_to(root)), node.lineno, var_name))
+                violations.append((str(py_file.relative_to(root)), node.lineno, var_name))
 
     assert not violations, (
-        f"Detected direct CEREBRUM_* environment reads without KORTEXT_* precedence: {violations}"
+        f"Detected legacy CEREBRUM_* or CORTEX_* environment reads: {violations}"
     )

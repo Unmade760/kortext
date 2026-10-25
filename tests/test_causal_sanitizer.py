@@ -70,6 +70,24 @@ class TestCausalSanitizer:
                 source_tier=3,
             )
 
+    def test_benign_engineering_words_allowed_at_tier3(self, sanitizer):
+        """Verifies that normal engineering notes containing words like 'protocol', 'must', 'always', 'never', or 'invariant' are NOT blocked at Tier 3."""
+        benign_facts = [
+            "Updated FastMCP stdio protocol handler to avoid blocking the event loop.",
+            "Verified that AST chunk hashes never collide when functions are renamed.",
+            "The cache key must match the SHA-256 digest of the normalized source.",
+            "Fixed loop invariant check in DreamEngine.run_dream_cycle.",
+            "Added compiler directive parsing for Rust macros.",
+            "Connection pooling is always enabled for FalkorDB UDS sockets.",
+        ]
+        for fact in benign_facts:
+            assert sanitizer.sanitize(
+                subject="EngineeringNote",
+                relation="RECORDED",
+                fact=fact,
+                source_tier=3,
+            ) is True
+
     def test_benign_curl_documentation_allowed(self, sanitizer):
         """Verifies that benign GET curl commands in technical documentation are not blocked."""
         assert sanitizer.sanitize(

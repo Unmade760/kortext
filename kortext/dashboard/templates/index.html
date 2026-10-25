@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kortext v1 - Local AI Memory & Observability</title>
+  <title>Kortext v2.0.0 - Local AI Memory & Observability</title>
   <script src="/static/vendor/tailwindcss.js"></script>
   <script src="/static/vendor/vis-network.min.js"></script>
   <script src="/static/vendor/lucide.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
   <link rel="stylesheet" href="/static/css/dashboard.css">
   <script>
     tailwind.config = {
@@ -27,10 +28,10 @@
   <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
       <div class="flex items-center space-x-3 shrink-0">
-        <span class="text-2xl">🧠</span>
+        <img src="/static/img/logo.svg" alt="Kortext Logo" class="w-9 h-9 rounded-xl shadow-lg shadow-indigo-500/20 border border-slate-700/60 object-contain hover:scale-105 transition-transform">
         <div>
           <h1 class="font-bold text-lg text-slate-100 tracking-tight flex items-center gap-2">
-            KORTEXT <span class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono border border-emerald-500/30">v1.0.0</span>
+            KORTEXT <span id="kortext-version" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono border border-emerald-500/30">v2.0.0</span>
           </h1>
         </div>
       </div>
@@ -65,7 +66,7 @@
         <i data-lucide="share-2" class="w-4 h-4"></i> Graph Explorer
       </button>
       <button onclick="setTab('tasks')" id="tab-btn-tasks" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
-        <i data-lucide="trello" class="w-4 h-4 text-emerald-400"></i> Task Board
+        <i data-lucide="kanban" class="w-4 h-4 text-emerald-400"></i> Task Board
       </button>
       <button onclick="setTab('blast')" id="tab-btn-blast" class="tab-btn py-3.5 px-2 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
         <i data-lucide="crosshair" class="w-4 h-4 text-rose-400"></i> Impact Analysis
@@ -232,7 +233,7 @@
               <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span> 💡 Episodic Decision</div>
             </div>
             <div id="legend-symbols" class="hidden flex items-center gap-4">
-              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> 📁 File</div>
+              <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]"></span> 📁 File</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> ⚡ Symbol</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span> 🧩 Subsystem</div>
               <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span> 📄 Document</div>
@@ -265,6 +266,10 @@
               <div class="flex justify-between text-slate-300">
                 <span class="text-slate-400">Active Invariants:</span>
                 <span class="text-indigo-400" id="hud-invariants">14 Verified</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span class="text-slate-400">Context Budget:</span>
+                <span class="text-emerald-400" id="hud-context-window">0% (25% ceil)</span>
               </div>
             </div>
           </div>
@@ -321,7 +326,7 @@
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-            <i data-lucide="trello" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG Board
+            <i data-lucide="kanban" class="w-5 h-5 text-emerald-400"></i> Autonomous Task DAG Board
           </h2>
           <p class="text-sm text-slate-400">Graph-backed task state machine with strict dependency gating and responsive Kanban execution.</p>
         </div>
@@ -329,7 +334,7 @@
           <!-- 3-Way View Switcher -->
           <div class="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl gap-1">
             <button id="btn-view-kanban" onclick="setTaskViewMode('kanban')" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium text-xs shadow flex items-center gap-1.5 transition">
-              <i data-lucide="trello" class="w-3.5 h-3.5"></i> Kanban
+              <i data-lucide="kanban" class="w-3.5 h-3.5"></i> Kanban
             </button>
             <button id="btn-view-dag" onclick="setTaskViewMode('dag')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-1.5 transition">
               <i data-lucide="git-branch" class="w-3.5 h-3.5 text-indigo-400"></i> DAG Topology
@@ -818,6 +823,78 @@
         </h3>
         <div id="hooks-status-list" class="flex flex-wrap gap-2">
           <!-- Populated by health.js renderHooksStatusUI -->
+        </div>
+      </div>
+
+
+      <!-- Live Session Context & Token Burn Telemetry (25% Compaction Window Monitor) -->
+      <div id="context-telemetry-card" class="pt-3 space-y-2">
+        <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="gauge" class="w-4 h-4 text-amber-400"></i> Live Session Context & 25% Compaction Window Telemetry
+        </h3>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+            <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+              <div class="text-slate-400">Active Context Usage:</div>
+              <div id="ctx-used-tokens" class="text-white font-bold text-sm">0 / 250,000 tok (25% ceil)</div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+              <div class="text-slate-400">Compaction Budget Status:</div>
+              <div id="ctx-compaction-pct" class="text-emerald-400 font-bold text-sm">0% of Compaction Ceiling</div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+              <div class="text-slate-400">AST Seek Token Savings:</div>
+              <div id="ctx-tokens-saved" class="text-indigo-300 font-bold text-sm">~0 tokens saved</div>
+            </div>
+          </div>
+          <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden">
+            <div id="ctx-compaction-bar" class="h-2 rounded-full bg-emerald-400 transition-all" style="width: 4%"></div>
+          </div>
+          <div class="space-y-1.5">
+            <div class="text-xs font-mono text-slate-400">Recent Pre-Compaction & Task Handoff Batons (`~/.kortext/handoffs/`):</div>
+            <div id="ctx-handoff-batons-list" class="space-y-1.5"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Continuous Learning (InstinctStore) & Grounded Invariants Manager -->
+      <div class="pt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="brain" class="w-4 h-4 text-indigo-400"></i> Continuous Learning (`InstinctStore`)
+            </h3>
+            <span id="instincts-count-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 font-bold">0 Learned</span>
+          </div>
+          <p class="text-xs text-slate-400">Error→Fix tool observations and cross-project patterns with provenance trust tiers (`tool_confirmed`, `user_approved`).</p>
+          <div id="instincts-manager-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="file-check-2" class="w-4 h-4 text-emerald-400"></i> AST-Grounded Invariants Audit
+            </h3>
+            <span id="invariants-drift-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold">0 Drifted</span>
+          </div>
+          <p class="text-xs text-slate-400">SHA-256 Tree-sitter symbol body hash grounding verifying architectural rules against live code drift.</p>
+          <div id="grounded-invariants-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <!-- MINJA Causal Sanitizer Quarantine Forensics -->
+      <div class="pt-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i> MINJA Causal Sanitizer Quarantine Log
+            <span id="quarantine-count-label" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">0 Violations Detected</span>
+          </h3>
+          <button onclick="clearQuarantine()" class="text-xs font-mono text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear Quarantine
+          </button>
+        </div>
+        <div id="quarantine-list" class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2 max-h-60 overflow-y-auto">
+          <div class="text-slate-400 py-6 text-center text-xs font-mono">No adversarial violations detected. Causal memory is clean.</div>
         </div>
       </div>
 

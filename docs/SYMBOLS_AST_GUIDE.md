@@ -80,7 +80,7 @@ result = await seek_symbol(symbol_name="RetrievalEngine")
 {
   "symbol": "RetrievalEngine",
   "kind": "class",
-  "file_path": "/Users/rb/kortext/kortext/retrieval/engine.py",
+  "file_path": "/path/to/project/kortext/retrieval/engine.py",
   "start_line": 42,
   "end_line": 218,
   "signature": "class RetrievalEngine(DenseEmbedderProtocol)",

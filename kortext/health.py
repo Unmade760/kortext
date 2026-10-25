@@ -4,7 +4,7 @@ Substrate health verification and observability engine for Kortext.
 Consolidates health checks across:
 - Qdrant Vector Store (Remote healthz vs Embedded Zero-Docker metadata discovery)
 - FalkorDB Graph Engine (Unix Domain Socket IPC first, with TCP :6379 fallback)
-- Inference server (oMLX embedding / chat endpoint)
+- Inference server (oMLX embedding / chat endpoint or local FastEmbed ONNX)
 - Dashboard UI (:8004/api/cache/stats)
 - FalkorDB Browser UI (:3000)
 - Architectural invariant drift audit (AST body grounding)
@@ -14,19 +14,22 @@ monitors NEVER instantiate QdrantClient(path=...) directly.
 """
 
 from __future__ import annotations
+import types
 
 import asyncio
 from datetime import datetime
-import json
 import logging
 import os
-from pathlib import Path
 import socket
 from typing import Any, Dict, List, Optional
-import warnings
 
 import httpx
 
+from kortext._env import (
+    get_configured_qdrant_url,
+    get_embed_base_url,
+    is_qdrant_embedded_mode,
+)
 from kortext._home import KORTEXT_HOME, get_kortext_home
 from kortext.falkordb_client import get_shared_falkordb_client
 from kortext.retrieval.discovery import discover_vector_collections
@@ -41,10 +44,6 @@ def _probe_falkordb_sync() -> Dict[str, Any]:
     """
     kortext_home = get_kortext_home()
     falkor_sock = kortext_home / "run" / "falkordb.sock"
-    if not (os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")) and not falkor_sock.exists():
-        legacy_sock = Path.home() / ".cerebrum" / "run" / "falkordb.sock"
-        if legacy_sock.exists():
-            falkor_sock = legacy_sock
     falkor_host = os.getenv("FALKORDB_HOST", "127.0.0.1")
     falkor_port = int(os.getenv("FALKORDB_PORT", "6379"))
 
@@ -104,7 +103,9 @@ def _probe_falkordb_sync() -> Dict[str, Any]:
 
 async def _probe_qdrant(client: httpx.AsyncClient) -> Dict[str, Any]:
     """Probe Qdrant vector store (remote HTTP or zero-docker embedded metadata discovery)."""
-    qdrant_url = os.getenv("QDRANT_URL")
+    embedded = is_qdrant_embedded_mode(probe_local=False)
+    qdrant_url = None if embedded else get_configured_qdrant_url(probe_local=False)
+
     if qdrant_url:
         target_url = qdrant_url.rstrip("/")
         status_code = None
@@ -142,9 +143,32 @@ async def _probe_qdrant(client: httpx.AsyncClient) -> Dict[str, Any]:
     else:
         kortext_home = get_kortext_home()
         qpath = kortext_home / "qdrant"
-        if not (os.getenv("KORTEXT_HOME") or os.getenv("CEREBRUM_HOME")) and not qpath.exists() and (Path.home() / ".cerebrum" / "qdrant").exists():
-            qpath = Path.home() / ".cerebrum" / "qdrant"
         meta_file = qpath / "meta.json"
+
+        if meta_file.is_file():
+            try:
+                import json
+
+                meta_raw = meta_file.read_text(encoding="utf-8")
+                parsed_meta = json.loads(meta_raw) if meta_raw.strip() else None
+                if not isinstance(parsed_meta, dict):
+                    return {
+                        "healthy": False,
+                        "status_display": "❌ CORRUPTED (meta.json invalid schema)",
+                        "service_status": "CORRUPTED",
+                        "port": "Embedded",
+                        "url": "#collections",
+                        "description": f"Embedded metadata file {meta_file} is not a JSON object",
+                    }
+            except Exception as meta_err:
+                return {
+                    "healthy": False,
+                    "status_display": f"❌ CORRUPTED (meta.json parse error: {type(meta_err).__name__})",
+                    "service_status": "CORRUPTED",
+                    "port": "Embedded",
+                    "url": "#collections",
+                    "description": f"Embedded metadata file {meta_file} is unreadable: {meta_err}",
+                }
 
         try:
             collections = await asyncio.to_thread(discover_vector_collections)
@@ -204,12 +228,13 @@ async def _probe_qdrant(client: httpx.AsyncClient) -> Dict[str, Any]:
 
 
 async def _probe_inference(client: httpx.AsyncClient) -> Dict[str, Any]:
-    """Probe inference server health."""
-    embed_url = os.getenv("EMBED_BASE_URL", "http://127.0.0.1:8000/v1")
-    base_host = embed_url.replace("/v1", "").rstrip("/")
+    """Probe inference server health (routing through kortext._env.get_embed_base_url())."""
+    embed_url = get_embed_base_url()
+    effective_url = embed_url or "http://127.0.0.1:8000/v1"
+    base_host = effective_url.replace("/v1", "").rstrip("/")
     inference_health = os.getenv(
         "INFERENCE_HEALTH_URL",
-        f"{base_host}/health" if ("localhost" in base_host or "127.0.0.1" in base_host) else embed_url,
+        f"{base_host}/health" if ("localhost" in base_host or "127.0.0.1" in base_host) else effective_url,
     )
     inference_health = inference_health.replace("://localhost", "://127.0.0.1")
 
@@ -234,6 +259,16 @@ async def _probe_inference(client: httpx.AsyncClient) -> Dict[str, Any]:
             "meta": omlx_data,
         }
     except Exception as e:
+        if embed_url is None:
+            return {
+                "healthy": True,
+                "status_display": "✅ FASTEMBED (Local ONNX 384-d)",
+                "service_status": "FASTEMBED",
+                "port": "Local ONNX",
+                "url": base_host,
+                "description": "Zero-config local FastEmbed ONNX provider",
+                "meta": None,
+            }
         return {
             "healthy": False,
             "status_display": f"❌ DOWN ({type(e).__name__})",
@@ -320,16 +355,8 @@ async def audit_kortext_health(
 
     Compatible with both FastMCP tool (top-level service string keys) and
     FastAPI status endpoint ('services' list and 'timestamp').
-
-    Args:
-        include_browser_ui: When True, probes FalkorDB Browser on :3000.
-        include_invariants: When True, runs AST grounding invariant drift audit.
-
-    Returns:
-        Structured health report dictionary.
     """
     async with httpx.AsyncClient(timeout=3.0) as client:
-        # Launch concurrent probes
         probe_coros: List[Any] = [
             _probe_qdrant(client),
             _probe_inference(client),
@@ -367,7 +394,6 @@ async def audit_kortext_health(
         "falkordb": falkor_res["status_display"],
         "inference_server": inf_res["status_display"],
         "kortext_dashboard": dash_res["status_display"],
-        "cerebrum_dashboard": dash_res["status_display"],
     }
 
     if include_invariants:
@@ -387,7 +413,6 @@ async def audit_kortext_health(
                     f"Run trigger_dream_mode() to review and consolidate."
                 )
 
-    # Compile structured services list for dashboard / UI consumers
     services: List[Dict[str, Any]] = [
         {
             "name": "Qdrant Vector Store",
@@ -434,7 +459,6 @@ async def audit_kortext_health(
     report["services"] = services
     report["timestamp"] = datetime.now().isoformat()
 
-    # Overall recommendation
     if any(
         "❌ DOWN" in str(v)
         for k, v in report.items()
@@ -449,24 +473,3 @@ async def audit_kortext_health(
         report["recommendation"] = "✅ All core Kortext services are operational."
 
     return report
-
-
-async def audit_cerebrum_health(
-    include_browser_ui: bool = False,
-    include_invariants: bool = True,
-    *args: Any,
-    **kwargs: Any,
-) -> Dict[str, Any]:
-    """Deprecated alias for audit_kortext_health."""
-    warnings.warn(
-        "audit_cerebrum_health is deprecated, use audit_kortext_health instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return await audit_kortext_health(
-        include_browser_ui=include_browser_ui,
-        include_invariants=include_invariants,
-        *args,
-        **kwargs,
-    )
-

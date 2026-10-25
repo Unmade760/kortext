@@ -162,14 +162,14 @@ class TestExtractSymbolCandidates:
 
         # If EmbeddedQdrantEngine were instantiated, raise an error
         mock_init = MagicMock(side_effect=AssertionError("EmbeddedQdrantEngine must never be instantiated directly!"))
-        monkeypatch.setattr("cerebrum.retrieval.qdrant_engine.EmbeddedQdrantEngine.__init__", mock_init)
+        monkeypatch.setattr("kortext.retrieval.qdrant_engine.EmbeddedQdrantEngine.__init__", mock_init)
 
         # Query consisting only of stop words produces no regex candidates
         cands = extract_symbol_candidates("what does it do", qdrant_engine=None)
         assert cands == []
         mock_init.assert_not_called()
 
-    def test_sole_custodian_uses_injected_qdrant_engine_with_cerebrum_codebase(self):
+    def test_sole_custodian_uses_injected_qdrant_engine_with_kortext_codebase(self):
         from kortext.symbols.seek import extract_symbol_candidates
 
         mock_engine = MagicMock()
@@ -183,10 +183,10 @@ class TestExtractSymbolCandidates:
         cands = extract_symbol_candidates("what does it do", qdrant_engine=mock_engine)
         assert "CustomInjectedSymbol" in cands
         mock_engine.client.query_points.assert_called_once_with(
-            collection_name="cerebrum_codebase", limit=2
+            collection_name="kortext_codebase", limit=2
         )
 
-    def test_sole_custodian_fallback_to_codebase_alias_when_cerebrum_codebase_absent(self):
+    def test_sole_custodian_fallback_to_codebase_alias_when_default_absent(self):
         from kortext.symbols.seek import extract_symbol_candidates
 
         mock_engine = MagicMock()
@@ -214,16 +214,16 @@ class TestFormatImpactReport:
         from kortext.symbols.formatter import format_impact_report
 
         definitions = [
-            {"name": "MyEngine", "kind": "class", "file_path": "cerebrum/engine.py", "line": 10, "signature": "class MyEngine"}
+            {"name": "MyEngine", "kind": "class", "file_path": "kortext/engine.py", "line": 10, "signature": "class MyEngine"}
         ]
         direct_impacts = [
-            {"source_file": "cerebrum/app.py", "relation": "IMPORTS", "line": 5, "target_symbol": "MyEngine"}
+            {"source_file": "kortext/app.py", "relation": "IMPORTS", "line": 5, "target_symbol": "MyEngine"}
         ]
         type_hierarchies = [
-            {"symbol": "BaseEngine", "relation": "IMPLEMENTS", "file_path": "cerebrum/base.py"}
+            {"symbol": "BaseEngine", "relation": "IMPLEMENTS", "file_path": "kortext/base.py"}
         ]
         transitive_impacts = [
-            {"source_file": "cerebrum/main.py", "depth": 2, "symbol": "MyEngine", "relation": "TRANSITIVE_CALLER"}
+            {"source_file": "kortext/main.py", "depth": 2, "symbol": "MyEngine", "relation": "TRANSITIVE_CALLER"}
         ]
 
         report = format_impact_report(
@@ -246,16 +246,16 @@ class TestFormatImpactReport:
         assert report["detail_levels_applied"]["l0_compact"] == 1  # transitive
         assert report["detail_levels_applied"]["aggregated_count"] == 0
         assert "Symbol blast radius: `MyEngine`" in report["formatted_summary"]
-        assert "cerebrum/app.py:5" in report["formatted_summary"]
+        assert "kortext/app.py:5" in report["formatted_summary"]
 
     def test_format_impact_report_budget_overflow(self):
         from kortext.symbols.formatter import format_impact_report
 
         definitions = [
-            {"name": "PopularFunc", "kind": "function", "file_path": "cerebrum/core.py", "line": 42}
+            {"name": "PopularFunc", "kind": "function", "file_path": "kortext/core.py", "line": 42}
         ]
         direct_impacts = [
-            {"source_file": f"cerebrum/module_{i}.py", "relation": "CALLS", "line": i * 10, "target_symbol": "PopularFunc"}
+            {"source_file": f"kortext/module_{i}.py", "relation": "CALLS", "line": i * 10, "target_symbol": "PopularFunc"}
             for i in range(50)
         ]
 
@@ -758,7 +758,7 @@ def standalone_compute(x: int) -> int:
             {
                 "name": "MyEngine",
                 "kind": "class",
-                "file_path": "cerebrum/engine.py",
+                "file_path": "kortext/engine.py",
                 "line": 10,
                 "signature": "class MyEngine",
                 "docstring": "Core engine docstring.",

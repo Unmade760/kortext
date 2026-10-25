@@ -1,7 +1,7 @@
 ---
-trigger: always_on
+trigger: glob
 description: "Core coding style standards: immutability, file organization, error handling, input validation, and code quality."
-globs: "**/*"
+globs: "**/*.{py,ts,tsx,js,rs,go}"
 ---
 
 # Coding Style
