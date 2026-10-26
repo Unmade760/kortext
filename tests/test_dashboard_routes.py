@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from kortext._env import get_embed_dimension
 from starlette.testclient import TestClient
 
 import kortext.dashboard.app as app_module
@@ -390,7 +391,7 @@ def test_action_create_collection_meta_json_safe(tmp_path, monkeypatch):
         # Check meta.json has the collection definition
         updated_meta = json.loads(meta_path.read_text(encoding="utf-8"))
         assert "safe_vector_col" in updated_meta["collections"]
-        assert updated_meta["collections"]["safe_vector_col"]["vectors"]["text-dense"]["size"] == 4096
+        assert updated_meta["collections"]["safe_vector_col"]["vectors"]["text-dense"]["size"] == get_embed_dimension()
 
 
 def test_action_create_collection_sole_custodian_safe(tmp_path, monkeypatch):
