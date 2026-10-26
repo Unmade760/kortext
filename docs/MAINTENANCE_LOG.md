@@ -54,3 +54,11 @@ Test-suite repairs on branch `fix/test-failures`, starting from commit fb1c115 (
 ## Final state
 
 Every test file run separately: 690 passed, 0 failed (baseline 656 passed, 8 failed, 1 collection error).
+
+## 7. Tests installing Kortext into the developer's Antigravity config
+
+- Symptom: after a test run, `~/.gemini/config/plugins/kortext` linked to the repo, a `kortext` server sat in `~/.gemini/config/mcp_config.json`, and `kortext/*` sidecars were enabled in `~/.gemini/config/config.json`. Every `agy` session then loaded the Kortext hooks.
+- Root cause: `test_cli_setup_parser` and `test_cli_setup_parser_skip_binaries` run the real `kortext setup`. Its step 7 calls `install_plugin()` and `_enable_plugin_sidecars()` under `Path.home()`. `test_run_diagnostics` also passed only because a real `~/.kortext` existed.
+- Change: an autouse fixture in `tests/test_setup_wizard.py` points `HOME` and `KORTEXT_HOME` at each test's `tmp_path` and creates `.kortext` there.
+- Files: `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
+- Result: the full suite run under a throwaway `HOME` passes (690) and writes nothing under that home's `.gemini`. Other files still create `~/.kortext` (data only, no Antigravity config); an autouse `HOME` fixture in `conftest.py` would cover those too.
