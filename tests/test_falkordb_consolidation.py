@@ -173,10 +173,10 @@ class TestSymbolGraphAstParameterization:
                 "heading_path": "Introduction"
             }],
             declarations=[{
-                "name": "Introduction",
+                "name": "Details",
                 "kind": "section",
-                "line": 1,
-                "signature": "# Introduction",
+                "line": 3,
+                "signature": "## Details",
                 "docstring": "",
                 "parent": ""
             }],
@@ -202,7 +202,7 @@ class TestSymbolGraphAstParameterization:
         # 3. Declarations
         assert "$declarations" in queries[2]
         assert len(params_list[2]["declarations"]) == 1
-        assert params_list[2]["declarations"][0]["name"] == "Introduction"
+        assert params_list[2]["declarations"][0]["name"] == "Details"
 
         # 4. Resolved links
         assert "$links" in queries[3]
