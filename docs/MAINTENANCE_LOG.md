@@ -23,7 +23,7 @@ Test-suite repairs on branch `fix/test-failures`, starting from commit fb1c115 (
 
 - Symptom: `test_benchmark_embedded_qdrant_latency` failed with `shapes (0,384) and (4096,) not aligned`. After fix 1, `test_action_create_collection_meta_json_safe` failed with `384 == 4096`.
 - Root cause: both tests assume the 4096-dim remote embedding model. The code takes the dimension from `get_embed_dimension()`, which gives 384 (local FastEmbed) unless `EMBED_BASE_URL` or `EMBED_DIMENSION` is set. Nothing leaked from the environment: no `EMBED_*` or `KORTEXT_*` variables, no `.env` in the repo, and nothing in `~/.kortext` sets them. The 4096 comes from the test code itself.
-- Change: both tests use `get_embed_dimension()`, so they hold under either configuration.
+- Change: the benchmark reads the vector size from the `Antigravity_Docs` collection it queries, since that size was fixed by whatever config created the store. The dashboard test clears `EMBED_DIMENSION`, `EMBED_BASE_URL` and their `KORTEXT_` forms, then asserts the literal 384 fallback. Comparing against `get_embed_dimension()` broke when the route's raw `os.getenv("EMBED_DIMENSION")` and the helper disagreed. Both pass with `EMBED_DIMENSION=999` set.
 - Files: `tests/test_empirical_benchmarks.py`, `tests/test_dashboard_routes.py`.
 - Result: both files pass.
 
@@ -31,7 +31,7 @@ Test-suite repairs on branch `fix/test-failures`, starting from commit fb1c115 (
 
 - Symptom: `test_save_markdown_ast_parameterized` expected `$declarations` in the third Cypher query and found the links query.
 - Root cause: `SymbolGraphManager.save_markdown_ast` deliberately skips declarations that match a section by name and line (added in fb1c115, with a code comment). The test passed a declaration named "Introduction" at line 1, the same as its section, so it was skipped.
-- Change: the test declaration is now "Details" at line 3, so it is not a duplicate. No code change.
+- Change: the test passes the duplicate "Introduction" at line 1 plus a new "Details" at line 3, and asserts that only "Details" is written. That keeps a check on the dedup: with the skip disabled in `graph.py`, the test fails. No code change.
 - Files: `tests/test_falkordb_consolidation.py`.
 - Result: 12 passed.
 

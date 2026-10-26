@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kortext._env import get_embed_dimension
 from kortext.falkordb_client import get_shared_falkordb_client
 from kortext.retrieval.hipporag import HippoRAGPPR
 from kortext.retrieval.qdrant_engine import EmbeddedQdrantEngine
@@ -97,7 +96,9 @@ def test_benchmark_hipporag_ppr_latency(benchmark_store):
 def test_benchmark_embedded_qdrant_latency():
     """Benchmark 2.4: Embedded Qdrant query_points Latency."""
     qdrant_engine = EmbeddedQdrantEngine()
-    vec = [0.01] * get_embed_dimension()
+    # Size the query from the stored collection: it was fixed by whatever embed config created it.
+    dim = qdrant_engine.client.get_collection("Antigravity_Docs").config.params.vectors["text-dense"].size
+    vec = [0.01] * dim
     for _ in range(3):
         qdrant_engine.client.query_points(collection_name="Antigravity_Docs", query=vec, using="text-dense", limit=10)
 

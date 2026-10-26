@@ -173,6 +173,13 @@ class TestSymbolGraphAstParameterization:
                 "heading_path": "Introduction"
             }],
             declarations=[{
+                "name": "Introduction",
+                "kind": "section",
+                "line": 1,
+                "signature": "# Introduction",
+                "docstring": "",
+                "parent": ""
+            }, {
                 "name": "Details",
                 "kind": "section",
                 "line": 3,
@@ -201,8 +208,8 @@ class TestSymbolGraphAstParameterization:
 
         # 3. Declarations
         assert "$declarations" in queries[2]
-        assert len(params_list[2]["declarations"]) == 1
-        assert params_list[2]["declarations"][0]["name"] == "Details"
+        # The "Introduction"@1 declaration duplicates a section and must be skipped
+        assert [d["name"] for d in params_list[2]["declarations"]] == ["Details"]
 
         # 4. Resolved links
         assert "$links" in queries[3]
