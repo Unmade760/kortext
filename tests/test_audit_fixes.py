@@ -158,7 +158,7 @@ def test_fix11_task_tracker_modularity_review_gate_and_token_budget(tmp_path: Pa
     from kortext.tasks.tracker import TaskDAGTracker
     from kortext.tasks.graph_view import format_visjs_graph_data
 
-    tracker_lines = len(Path("/Users/rb/kortext/kortext/tasks/tracker.py").read_text(encoding="utf-8").splitlines())
+    tracker_lines = len((Path(__file__).resolve().parents[1] / "kortext/tasks/tracker.py").read_text(encoding="utf-8").splitlines())
     assert tracker_lines < 800, f"Expected tracker.py < 800 lines, got {tracker_lines}"
 
     tracker = TaskDAGTracker()
@@ -337,7 +337,7 @@ def test_fix_section_4c4_shallow_module_detection_and_glossary():
     """Audit 4.C.4: Verifies SubsystemClusterer.detect_shallow_modules and GLOSSARY.md presence."""
     from kortext.symbols.clustering import SubsystemClusterer
 
-    glossary_path = Path("/Users/rb/kortext/GLOSSARY.md")
+    glossary_path = Path(__file__).resolve().parents[1] / "GLOSSARY.md"
     assert glossary_path.is_file()
     assert "Sole Custodian" in glossary_path.read_text(encoding="utf-8")
 
