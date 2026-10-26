@@ -18,6 +18,15 @@ from kortext.setup import (
 from kortext.cli import main
 
 
+@pytest.fixture(autouse=True)
+def _isolated_home(tmp_path, monkeypatch):
+    """`kortext setup` installs the Antigravity plugin, MCP server and sidecars
+    under Path.home(); keep every test in this file out of the real ~/.gemini."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".kortext").mkdir()
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path / ".kortext"))
+
+
 def test_get_kortext_home():
     home = get_kortext_home()
     assert isinstance(home, Path)
@@ -106,7 +115,6 @@ def test_provision_binaries_mocked(tmp_path):
 
 
 def test_start_substrates_mocked(tmp_path):
-    from kortext.setup import start_substrates
     home = tmp_path / ".kortext"
 
     with patch("kortext.setup.get_kortext_home", return_value=home), \
@@ -133,7 +141,6 @@ def test_start_substrates_mocked(tmp_path):
 
 
 def test_stop_substrates_mocked(tmp_path):
-    from kortext.setup import stop_substrates
     home = tmp_path / ".kortext"
     run_dir = home / "run"
     run_dir.mkdir(parents=True, exist_ok=True)

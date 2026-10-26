@@ -59,7 +59,7 @@ class TestRetrievalPipeline:
 
     def test_signal_weights(self):
         """Verifies 5-signal RRF weights match architectural specification and sum to 1.0."""
-        from kortext.retrieval.engine import W_AST, W_BM25, W_DENSE, W_HIPPO, W_TEMPORAL
+        from kortext.retrieval.engine import W_BM25, W_HIPPO, W_TEMPORAL
         assert W_AST == 0.30
         assert W_BM25 == 0.20
         assert W_DENSE == 0.25
