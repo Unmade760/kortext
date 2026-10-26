@@ -106,7 +106,6 @@ def test_provision_binaries_mocked(tmp_path):
 
 
 def test_start_substrates_mocked(tmp_path):
-    from kortext.setup import start_substrates
     home = tmp_path / ".kortext"
 
     with patch("kortext.setup.get_kortext_home", return_value=home), \
@@ -133,7 +132,6 @@ def test_start_substrates_mocked(tmp_path):
 
 
 def test_stop_substrates_mocked(tmp_path):
-    from kortext.setup import stop_substrates
     home = tmp_path / ".kortext"
     run_dir = home / "run"
     run_dir.mkdir(parents=True, exist_ok=True)

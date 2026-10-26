@@ -42,3 +42,15 @@ Test-suite repairs on branch `fix/test-failures`, starting from commit fb1c115 (
 - Change: added `networkx>=3.0` to `dependencies` and updated `uv.lock`.
 - Files: `pyproject.toml`, `uv.lock`.
 - Result: `tests/test_subsystem_clustering.py` 3 passed.
+
+## 6. Lint cleanups (no behavior change)
+
+- Symptom: `ruff check` with the error rules (E9, F63, F7, F82, F811, F821, F823) reported an undefined name and five redundant imports.
+- Change: imported `Tuple` in `kortext/episodic/driver.py` (used in a local annotation; harmless at runtime because of `from __future__ import annotations`, but undefined). Removed the second `generate_skeleton_chunk` import at the end of `kortext/chunking/ast_splitter.py` (the top-level import already serves `__all__`). Removed unused duplicate imports in `tests/test_retrieval_pipeline.py` and `tests/test_setup_wizard.py`.
+- Left alone: ruff B023 on the `embed_batch` closure in `kortext/ingest.py` is a false positive, since the closure is awaited by `asyncio.gather` inside the same loop pass.
+- Files: `kortext/episodic/driver.py`, `kortext/chunking/ast_splitter.py`, `tests/test_retrieval_pipeline.py`, `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
+- Result: ruff reports no errors under those rules. Affected test files pass.
+
+## Final state
+
+Every test file run separately: 690 passed, 0 failed (baseline 656 passed, 8 failed, 1 collection error).

@@ -770,7 +770,6 @@ class ASTCodeSplitter(ASTOversizedSplitterMixin):
         )
 
 
-from kortext.chunking.skeleton import generate_skeleton_chunk
 from kortext.chunking.node_parser import SmartCodeNodeParser
 from kortext.chunking.config_splitter import ConfigSectionSplitter
 from kortext.chunking.markdown_splitter import MarkdownSectionSplitter
