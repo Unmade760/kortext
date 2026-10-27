@@ -433,7 +433,7 @@ async def test_unicode_nfkc_zero_width_sanitizer_and_episodic_enforcement(tmp_pa
     assert filtered["episodic_history"] == ["Normal memory"]
 
 
-def test_hooks_schema_quote_aware_shell_parser_and_pre_compaction_baton(tmp_path, monkeypatch):
+def test_hooks_schema_quote_aware_shell_parser_and_pre_compaction_baton(tmp_path, monkeypatch, seeded_symbol_graph):
     """Audit Issues 4 & 5: hooks.json uses PreInvocation/PostInvocation, quote-aware shell splitting, and 75% baton."""
     from kortext.hooks.context import HookContext
     from kortext.hooks.pipelines.pre_tool import AntiRipgrepGate
