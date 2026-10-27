@@ -4,8 +4,6 @@ description: Autonomous research and codebase exploration specialist that querie
 subagent: true
 mainAgent: false
 model: flash
-mcpServers:
-  - kortext
 tools:
   - view_file
   - write_to_file

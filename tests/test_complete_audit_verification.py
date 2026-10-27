@@ -50,7 +50,8 @@ def test_audit1_2b_antigravity_manifests_subagents_and_skills_schema():
 
     for agent_md in sorted((KORTEXT_ROOT / "integrations" / "antigravity" / "agents").glob("*.md")):
         text = agent_md.read_text(encoding="utf-8")
-        assert "mcpServers:" in text and "- kortext" in text, f"{agent_md.name} missing mcpServers: [kortext]"
+        # agy's loader wants McpServerYaml objects here; a bare "- kortext" string makes it skip the agent.
+        assert "mcpServers:" not in text, f"{agent_md.name}: string mcpServers entries make agy skip the agent"
         assert "- seek_symbol" in text, f"{agent_md.name} missing seek_symbol"
         assert "- trace_symbol_impact" in text, f"{agent_md.name} missing trace_symbol_impact"
 

@@ -4,8 +4,6 @@ description: Clean execution worker that takes an isolated leaf task from the Ta
 subagent: true
 mainAgent: false
 model: flash
-mcpServers:
-  - kortext
 tools:
   - view_file
   - list_dir
