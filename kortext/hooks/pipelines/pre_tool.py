@@ -151,7 +151,12 @@ def _auto_seek_symbol_hint(pattern: str) -> str:
     if not sym:
         return ""
     try:
+        from kortext._home import get_kortext_home
+        from kortext.hooks.pipelines.pre_invoke import _check_unix_socket, _is_raw_falkor_reachable
         from kortext.symbols.seek import SymbolSeekEngine
+
+        if not (_check_unix_socket(get_kortext_home() / "run" / "falkordb.sock", 0.02) or _is_raw_falkor_reachable()):
+            return ""
 
         engine = SymbolSeekEngine()
         res = engine.seek_symbol(sym, detail_level="interface")

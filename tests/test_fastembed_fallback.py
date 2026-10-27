@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 import redis
@@ -247,6 +247,8 @@ class TestFalkorDBSubstrateResilience:
                 password=None,
                 decode_responses=True,
                 socket_timeout=5.0,
+                socket_connect_timeout=0.5,
+                retry=ANY,
             )
             mock_instance.ping.assert_called_once()
 
@@ -314,6 +316,8 @@ class TestFalkorDBSubstrateResilience:
                 password=None,
                 decode_responses=True,
                 socket_timeout=5.0,
+                socket_connect_timeout=0.5,
+                retry=ANY,
             )
 
 

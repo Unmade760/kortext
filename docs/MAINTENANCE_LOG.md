@@ -62,3 +62,13 @@ Every test file run separately: 690 passed, 0 failed (baseline 656 passed, 8 fai
 - Change: an autouse fixture in `tests/test_setup_wizard.py` points `HOME` and `KORTEXT_HOME` at each test's `tmp_path` and creates `.kortext` there.
 - Files: `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
 - Result: the full suite run under a throwaway `HOME` passes (690) and writes nothing under that home's `.gemini`. Other files still create `~/.kortext` (data only, no Antigravity config); an autouse `HOME` fixture in `conftest.py` would cover those too.
+
+## 8. `pre_tool` hook stalling 8 s when FalkorDB is down
+
+- Symptom: with FalkorDB not running, the `pre_tool` hook on `grep_search` took a median of 8.0 s (max 9.3 s over 20 runs), longer than its 5 s timeout in `hooks.json`. Every grep in an `agy` session waited that long.
+- Root cause: `_auto_seek_symbol_hint` in `kortext/hooks/pipelines/pre_tool.py` called `seek_symbol` without checking that FalkorDB was reachable. `FalkorDBClient.get_redis` used the redis-py 8 default retry policy, which backs off for about 4 s per command on a refused connection (20 sleeps across two commands, seen with cProfile).
+- Change: `get_redis` sets `socket_connect_timeout=0.5` and `Retry(ExponentialBackoff(cap=0.1, base=0.02), 2)` on both the Unix socket and TCP clients. `_auto_seek_symbol_hint` returns early unless the 20 ms socket probe already used by `_is_symbol_graph_empty` succeeds.
+- Files: `kortext/falkordb_client.py`, `kortext/hooks/pipelines/pre_tool.py`, `tests/test_fastembed_fallback.py` (the two exact-kwargs `redis.Redis` assertions now expect the new arguments), `docs/MAINTENANCE_LOG.md`.
+- Result: `pre_tool` median 116 ms with FalkorDB down, 122 ms with a live FalkorDB container (121 ms before the change, so no cost on the healthy path). Queries through the client against the live container work. Hook, FalkorDB, seek, server and regression test files pass, and `scripts/test_antigravity_hooks.py` passes.
+
+Other hook timings measured at the same baseline (median of 20 cold runs, FalkorDB down): `pre_invoke` 53 to 178 ms, `post_invoke` 52 ms, `post_tool` 152 ms, `stop` 153 ms.
