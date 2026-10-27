@@ -233,7 +233,8 @@ def test_cmd_impact_fallback_when_no_formatted_summary(capsys):
 
 def test_cmd_start_invokes_start_kortext():
     args = argparse.Namespace()
-    with patch("subprocess.run") as mock_run:
+    # Windows takes the start_substrates() path instead of the shell script.
+    with patch("platform.system", return_value="Linux"), patch("subprocess.run") as mock_run:
         cli.cmd_start(args)
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -243,7 +244,8 @@ def test_cmd_start_invokes_start_kortext():
 
 def test_cmd_stop_invokes_stop_kortext():
     args = argparse.Namespace()
-    with patch("subprocess.run") as mock_run:
+    # Windows takes the start_substrates() path instead of the shell script.
+    with patch("platform.system", return_value="Linux"), patch("subprocess.run") as mock_run:
         cli.cmd_stop(args)
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]

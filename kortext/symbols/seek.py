@@ -530,13 +530,16 @@ class SymbolSeekEngine:
                 except OSError:
                     logger.debug("Suppressed non-fatal exception")
 
-        # 1. Fast Path: Exact B-Tree indexed lookup on Symbol.name (Linear aggregation)
+        # 1. Fast Path: Exact B-Tree indexed lookup on Symbol.name (Linear aggregation).
+        # Null caller/callee maps are filtered out: FalkorDB panics (and the server exits) when a
+        # symbol with no definition or edges, such as an unresolved-reference stub, reaches this
+        # aggregation carrying `[{caller: NULL}]` beside the other null columns.
         fast_cypher = """
         MATCH (s:Symbol {name: $name})
         OPTIONAL MATCH (s)-[d:DEFINED_IN]->(f:File)
         WITH s, d, f
         OPTIONAL MATCH (caller:Symbol)-[c:CALLS]->(s)
-        WITH s, d, f, collect(DISTINCT {caller: caller.name, file: caller.file_path, line: c.line})[..6] AS callers
+        WITH s, d, f, [x IN collect(DISTINCT {caller: caller.name, file: caller.file_path, line: c.line}) WHERE x.caller IS NOT NULL][..6] AS callers
         OPTIONAL MATCH (s)-[out:CALLS]->(callee:Symbol)
         RETURN 
             s.name AS symbol,
@@ -547,7 +550,7 @@ class SymbolSeekEngine:
             d.signature AS signature,
             d.docstring AS docstring,
             callers,
-            collect(DISTINCT {callee: callee.name, file: callee.file_path})[..6] AS callees
+            [x IN collect(DISTINCT {callee: callee.name, file: callee.file_path}) WHERE x.callee IS NOT NULL][..6] AS callees
         LIMIT 5
         """
         params = {"name": symbol_name}
@@ -569,8 +572,8 @@ class SymbolSeekEngine:
                 d.end_line AS end_line,
                 d.signature AS signature,
                 d.docstring AS docstring,
-                collect(DISTINCT {caller: caller.name, file: caller.file_path, line: c.line})[..6] AS callers,
-                collect(DISTINCT {callee: callee.name, file: callee.file_path})[..6] AS callees
+                [x IN collect(DISTINCT {caller: caller.name, file: caller.file_path, line: c.line}) WHERE x.caller IS NOT NULL][..6] AS callers,
+                [x IN collect(DISTINCT {callee: callee.name, file: callee.file_path}) WHERE x.callee IS NOT NULL][..6] AS callees
             LIMIT 5
             """
             raw = self.client.query(target_graph, fallback_cypher, params)

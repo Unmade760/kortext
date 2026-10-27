@@ -170,6 +170,11 @@ class FalkorDBClient:
             if self._r is not None:
                 return self._r
 
+            # redis-py 8 retries a refused connect for ~4 s by default; hooks have a 5 s budget.
+            from redis.backoff import ExponentialBackoff
+            from redis.retry import Retry
+            fast_fail = {"socket_connect_timeout": 0.5, "retry": Retry(ExponentialBackoff(cap=0.1, base=0.02), 2)}
+
             # Attempt 1: Unix Domain Socket (Ultra-low latency IPC)
             if self.socket_path and Path(self.socket_path).is_socket():
                 try:
@@ -178,6 +183,7 @@ class FalkorDBClient:
                         "password": self.password,
                         "decode_responses": True,
                         "socket_timeout": 5.0,
+                        **fast_fail,
                     }
                     if self.max_connections != 32:
                         uds_kwargs["max_connections"] = self.max_connections
@@ -195,6 +201,7 @@ class FalkorDBClient:
                 "password": self.password,
                 "decode_responses": True,
                 "socket_timeout": 5.0,
+                **fast_fail,
             }
             if self.max_connections != 32:
                 tcp_kwargs["max_connections"] = self.max_connections

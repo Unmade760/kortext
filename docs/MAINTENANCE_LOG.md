@@ -62,3 +62,49 @@ Every test file run separately: 690 passed, 0 failed (baseline 656 passed, 8 fai
 - Change: an autouse fixture in `tests/test_setup_wizard.py` points `HOME` and `KORTEXT_HOME` at each test's `tmp_path` and creates `.kortext` there.
 - Files: `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
 - Result: the full suite run under a throwaway `HOME` passes (690) and writes nothing under that home's `.gemini`. Other files still create `~/.kortext` (data only, no Antigravity config); an autouse `HOME` fixture in `conftest.py` would cover those too.
+
+## 8. `pre_tool` hook stalling 8 s when FalkorDB is down
+
+- Symptom: with FalkorDB not running, the `pre_tool` hook on `grep_search` took a median of 8.0 s (max 9.3 s over 20 runs), longer than its 5 s timeout in `hooks.json`. Every grep in an `agy` session waited that long.
+- Root cause: `_auto_seek_symbol_hint` in `kortext/hooks/pipelines/pre_tool.py` called `seek_symbol` without checking that FalkorDB was reachable. `FalkorDBClient.get_redis` used the redis-py 8 default retry policy, which backs off for about 4 s per command on a refused connection (20 sleeps across two commands, seen with cProfile).
+- Change: `get_redis` sets `socket_connect_timeout=0.5` and `Retry(ExponentialBackoff(cap=0.1, base=0.02), 2)` on both the Unix socket and TCP clients. `_auto_seek_symbol_hint` returns early unless the 20 ms socket probe already used by `_is_symbol_graph_empty` succeeds.
+- Files: `kortext/falkordb_client.py`, `kortext/hooks/pipelines/pre_tool.py`, `tests/test_fastembed_fallback.py` (the two exact-kwargs `redis.Redis` assertions now expect the new arguments), `docs/MAINTENANCE_LOG.md`.
+- Result: `pre_tool` median 116 ms with FalkorDB down, 122 ms with a live FalkorDB container (121 ms before the change, so no cost on the healthy path). Queries through the client against the live container work. Hook, FalkorDB, seek, server and regression test files pass, and `scripts/test_antigravity_hooks.py` passes.
+
+Other hook timings measured at the same baseline (median of 20 cold runs, FalkorDB down): `pre_invoke` 53 to 178 ms, `post_invoke` 52 ms, `post_tool` 152 ms, `stop` 153 ms.
+
+## 9. LongMemEval benchmark scored a test-only answer function
+
+- Symptom: the SB-2 LongMemEval scores in `tests/test_standard_benchmarks.py` (extraction 0.86, knowledge updates 0.90, temporal 0.80, multi-session 0.47, abstention 0.88) did not describe what Kortext returns to an agent.
+- Root cause: `_query_seeded_facts` called `AgentNativeEpisodicDriver.query_entity_fact_answer`, which nothing in production called. It carried a synonym table and a stop list built from the words in `tests/fixtures/longmemeval_sample.json`, and special cases for "motorcycle", "prescription", "vacation", "[Session 1]", "[Session 2]" and "2024". The agent-facing path is `search_knowledge_and_memory` -> `fetch_tier2_episodic` -> `AgentNativeEpisodicDriver.search`.
+- Change: deleted `query_entity_fact_answer`. `_query_seeded_facts` now calls `search` (query = subject + question, `limit=1`, `max_hops=2`) and scores its top fact with the unchanged F1 code. `_session_fact_aliases` stays: `delete_fact` and `query_seeded_facts` use it. The tie-break test (SB-2f) ranks the subject's own facts from a 50-result window, because `search` has no subject filter and decays older facts by age. Thresholds lowered to just under the new values; production code was not tuned.
+- Files: `kortext/episodic/driver.py`, `tests/test_standard_benchmarks.py`, `docs/MAINTENANCE_LOG.md`.
+- Result: 16 passed, 1 xfailed. Metrics before and after (old threshold, new threshold):
+  - extraction F1: 0.8636 -> 0.2813 (0.30 -> 0.28)
+  - knowledge updates F1: 0.9000 -> 0.1368 (0.18 -> 0.13)
+  - temporal reasoning F1: 0.8000 -> 0.2627 (0.25, unchanged)
+  - multi-session F1: 0.4715 -> 0.0678 (0.20 -> 0.06)
+  - abstention rate: 0.875 -> 0.0. `search` has no abstention: it returns any fact sharing a token with the query, subject name included. The test keeps the 0.80 bar as a strict xfail, so it reports the gap and fails loudly once abstention exists.
+
+## 10. Tests that only passed against the FalkorDB emulator
+
+- Symptom: upstream CI runs real FalkorDB and Qdrant services and failed six tests that pass locally: `test_fix19_post_compaction_resumption_and_boost_grounding_file` (`TypeError: argument of type 'NoneType' is not iterable`), `test_ppr_retention_across_2_hops`, `test_ppr_seed_specificity_vs_hub_dilution` (RetrievalEngine 0.5 vs main 0.5), `test_seek_symbol_token_budget_under_150` (`not_found`), `test_detect_subsystems_excludes_markdown_and_path_labels` (0 subsystems) and `test_benchmark_embedded_qdrant_latency` (Qdrant 404). Reproduced locally with a FalkorDB container and a Qdrant server container.
+- Root cause, five tests: `tests/conftest.py` installs a regex FalkorDB emulator only when 127.0.0.1:6379 is unreachable, and the emulator pre-seeds `kortext_symbols` from `_SEED_SYMBOLS_DATA` (RetrievalEngine, main, and others). On an empty real database those symbols do not exist, so seek, PPR and clustering find nothing. The tests never wrote the data they read.
+- Root cause, Qdrant test: `EmbeddedQdrantEngine.__init__` created the default `Antigravity_Docs` collection only for embedded storage. When a server answers on :6333 the engine connects to it and skips provisioning, so the test's `get_collection` returned 404. This was a production gap.
+- Second production bug, found while fixing the above: `SymbolSeekEngine.seek_symbol` runs a Cypher query that returns `collect(DISTINCT {caller: caller.name, ...})`. For a Symbol node with no DEFINED_IN and no edges (the unresolved callee stubs that `save_file_ast` leaves behind) that returns `[{caller: NULL, ...}]` next to six null columns, and FalkorDB (latest image, 2026-10-27) panics at `src/reply.rs:668` and the server process exits. One `seek_symbol` call on a referenced-but-undefined name stops the database.
+- Change:
+  - `tests/conftest.py`: new fixture `seeded_symbol_graph`. If `RetrievalEngine` is not defined it writes `_SEED_SYMBOLS_DATA` through `SymbolGraphManager.save_file_ast` (declarations plus call references) and afterwards removes the files, the leftover callee stubs and their edges. It is a no-op under the emulator, which already holds the seeds. Used by the fix19 test, the `TestHippoRAGAssociativeRetention` class, `test_seek_symbol_token_budget_under_150` and the subsystem clustering test.
+  - `kortext/retrieval/qdrant_engine.py`: the default collection is now provisioned whenever the engine is built without an explicit `storage_path` or `url`, so it also covers a local Qdrant server.
+  - `kortext/symbols/seek.py`: callers and callees are collected with `[x IN collect(...) WHERE x.caller IS NOT NULL][..6]` (same for callees) in the fast and fallback queries. Symbols with no edges now report `[]` where they reported a list holding one null map.
+- No assertion was weakened and no test was marked xfail.
+- Files: `tests/conftest.py`, `tests/test_audit_fixes.py`, `tests/test_memory_retention_benchmark.py`, `tests/test_subsystem_clustering.py`, `kortext/retrieval/qdrant_engine.py`, `kortext/symbols/seek.py`, `docs/MAINTENANCE_LOG.md`.
+- Result, every test file run separately: with real FalkorDB and Qdrant server up (graphs flushed first), 689 passed, 1 xfailed; with both down (emulator), 689 passed, 1 xfailed. Before the seek fix, the leftover stubs crashed FalkorDB in `test_aggregate_session_token_savings`.
+- Not fixed: `delete_file_ast` leaves unresolved reference stubs behind. `test_audit_regressions.py` and `test_hooks.py` also leave nodes in `kortext_symbols` on a real database (2 and 4 nodes) and do not clean up.
+
+## 11. Session-wide HOME isolation for the test suite
+
+- Symptom: section 7 and earlier test runs showed tests creating files under the developer's real `~/.kortext` and, through `kortext setup`, `~/.gemini`. The fix in section 7 covered one file.
+- Root cause: `kortext._home.KORTEXT_HOME` and `qdrant_engine.DEFAULT_QDRANT_PATH` are computed at import time, so a fixture cannot redirect them reliably. The existing `_isolate_locked_live_qdrant_session` fixture redirected only when a live daemon held the Qdrant lock or the emulator was active, and used `os.environ.setdefault`, so it did nothing when `KORTEXT_HOME` was already set.
+- Change: `tests/conftest.py` creates a `tempfile.mkdtemp` directory at import, before any kortext import, sets `HOME` and `KORTEXT_HOME` (`<tmp>/.kortext`, with `qdrant/` created) and removes it at exit. `_isolate_locked_live_qdrant_session` no longer picks a second directory; it only closes pooled Qdrant clients at session end, so there is one home. The per-test `_isolated_home` fixture in `tests/test_setup_wizard.py` was removed: the file passes without it, and a single-process run of the whole suite (689 passed, 1 xfailed) shows no state leaking between setup tests and other files.
+- Files: `tests/conftest.py`, `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
+- Result: full suite run file by file with the real `HOME` (/home/ravi) and no database containers: 689 passed, 1 xfailed. `find /home/ravi/.kortext /home/ravi/.gemini -newer <marker>` printed nothing, and no `kortext_test_home_*` directory remained in `/tmp`.

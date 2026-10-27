@@ -292,7 +292,7 @@ def test_fix18_instinct_store_legacy_list_migration(tmp_path: Path):
     assert active[0]["id"] == "inst_1"
 
 
-def test_fix19_post_compaction_resumption_and_boost_grounding_file(tmp_path: Path):
+def test_fix19_post_compaction_resumption_and_boost_grounding_file(tmp_path: Path, seeded_symbol_graph):
     """Audit 4.A.3 & 4.C.3: Verifies '# Resuming from a compaction' detection and boost_grounding.md creation."""
     from kortext.hooks.context import HookContext
     from kortext.hooks.pipelines.pre_invoke import BoostPromptGroundingProbe, ContextBudgetAdvisor
