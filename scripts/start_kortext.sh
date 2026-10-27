@@ -18,9 +18,9 @@ mkdir -p "${RUN_DIR}" "${LOG_DIR}" "${CONF_DIR}" "${DATA_DIR}" "${BIN_DIR}"
 echo "=== Starting Kortext Native Substrates ==="
 
 # 1. Locate redis-server binary
-REDIS_SERVER_BIN=$(command -v redis-server || echo "/opt/homebrew/bin/redis-server")
-if [ ! -x "${REDIS_SERVER_BIN}" ]; then
-    echo "Error: redis-server binary not found. Please install via: brew install redis"
+REDIS_SERVER_BIN=$(command -v redis-server || true)
+if [ -z "${REDIS_SERVER_BIN}" ]; then
+    echo "Error: redis-server not found on PATH. Install Redis (for example: brew install redis, apt install redis-server)."
     exit 1
 fi
 

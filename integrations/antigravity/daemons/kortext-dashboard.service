@@ -1,0 +1,14 @@
+[Unit]
+Description=Kortext web dashboard
+After=network.target
+
+[Service]
+WorkingDirectory={{PROJECT_DIR}}
+Environment=PYTHONPATH={{PROJECT_DIR}}
+ExecStart={{PYTHON_BIN}} -m kortext.dashboard.app
+Restart=always
+StandardOutput=append:%h/.kortext/logs/dashboard.log
+StandardError=append:%h/.kortext/logs/dashboard.log
+
+[Install]
+WantedBy=default.target

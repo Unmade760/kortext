@@ -25,8 +25,6 @@ elif [ -f "$HOOK_DIR/../../pyproject.toml" ]; then
     PROJECT_ROOT="$(cd "$HOOK_DIR/../.." && pwd -P)"
 elif [ -f "$HOME/kortext/pyproject.toml" ]; then
     PROJECT_ROOT="$HOME/kortext"
-elif [ -f "$HOME/cortex/pyproject.toml" ]; then
-    PROJECT_ROOT="$HOME/cortex"
 else
     PROJECT_ROOT="$HOOK_DIR"
 fi

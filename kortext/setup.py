@@ -86,18 +86,10 @@ class SetupDiagnostics:
 
 
 def find_redis_binary() -> Optional[Path]:
-    """Locates redis-server binary across standard platform locations."""
+    """Locates the redis-server binary on PATH."""
     which_bin = shutil.which("redis-server")
     if which_bin:
         return Path(which_bin)
-    candidate_paths = [
-        Path("/opt/homebrew/bin/redis-server"),
-        Path("/usr/local/bin/redis-server"),
-        Path("/usr/bin/redis-server"),
-    ]
-    for p in candidate_paths:
-        if p.exists() and os.access(p, os.X_OK):
-            return p
     return None
 
 
