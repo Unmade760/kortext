@@ -279,10 +279,12 @@ class BoostPromptGroundingProbe:
             )
             inv_lines: List[str] = []
             try:
-                from kortext.invariants import GROUNDED_FILE
+                from kortext.invariants import grounded_read_path
 
-                if GROUNDED_FILE.is_file():
-                    g_items = json.loads(GROUNDED_FILE.read_text(encoding="utf-8"))
+                g_file = grounded_read_path()
+
+                if g_file.is_file():
+                    g_items = json.loads(g_file.read_text(encoding="utf-8"))
                     if isinstance(g_items, list):
                         t_fnames = {Path(f).name for f in target_files}
                         for g_inv in g_items:

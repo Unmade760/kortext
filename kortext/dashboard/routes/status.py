@@ -190,12 +190,11 @@ async def promote_instinct(payload: Dict[str, Any]):
 async def get_grounded_invariants():
     """Returns AST-grounded invariants and their live SHA-256 AST body hash drift status."""
     try:
-        from kortext.invariants import InvariantGroundingEngine
+        from kortext.invariants import InvariantGroundingEngine, grounded_read_path
 
         engine = InvariantGroundingEngine(host=FALKORDB_HOST, port=FALKORDB_PORT, db_name=FALKORDB_DB)
         audit = await asyncio.to_thread(engine.audit_invariant_drift, False)
-        journal_root = Path(__file__).resolve().parents[3] / "journal"
-        grounded_file = journal_root / "grounded_invariants.json"
+        grounded_file = grounded_read_path()
         records: List[Dict[str, Any]] = []
         if grounded_file.is_file():
             try:
@@ -404,7 +403,9 @@ async def get_telemetry():
         if inv_file.is_file():
             inv_text = inv_file.read_text(encoding="utf-8")
             active_inv_count += len(re.findall(r"###\s+Invariant\s+\[", inv_text))
-        grounded_file = journal_root / "grounded_invariants.json"
+        from kortext.invariants import grounded_read_path
+
+        grounded_file = grounded_read_path()
         if grounded_file.is_file():
             try:
                 g_data = json.loads(grounded_file.read_text(encoding="utf-8"))

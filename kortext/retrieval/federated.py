@@ -341,10 +341,12 @@ async def fetch_tier2_episodic(
 
         # Surface matching AST-grounded invariants from journal/grounded_invariants.json
         try:
-            from kortext.invariants import GROUNDED_FILE
+            from kortext.invariants import grounded_read_path
 
-            if GROUNDED_FILE.is_file():
-                g_items = json.loads(GROUNDED_FILE.read_text(encoding="utf-8"))
+            g_file = grounded_read_path()
+
+            if g_file.is_file():
+                g_items = json.loads(g_file.read_text(encoding="utf-8"))
                 if isinstance(g_items, list):
                     q_tokens = [t for t in re.split(r"\W+", query.lower()) if len(t) >= 3]
                     for g_inv in g_items[:15]:
