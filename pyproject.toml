@@ -63,8 +63,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kortext/kortext"
-Repository = "https://github.com/kortext/kortext.git"
+Homepage = "https://github.com/bravest-cat/kortext"
+Repository = "https://github.com/bravest-cat/kortext.git"
 
 [project.scripts]
 kortext           = "kortext.cli:main"
