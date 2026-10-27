@@ -84,4 +84,4 @@ Other hook timings measured at the same baseline (median of 20 cold runs, Falkor
   - knowledge updates F1: 0.9000 -> 0.1368 (0.18 -> 0.13)
   - temporal reasoning F1: 0.8000 -> 0.2627 (0.25, unchanged)
   - multi-session F1: 0.4715 -> 0.0678 (0.20 -> 0.06)
-  - abstention rate: 0.875 -> 0.0 (0.80 -> 0.0). `search` has no abstention: it returns any fact sharing a token with the query, subject name included, so the threshold no longer checks anything.
+  - abstention rate: 0.875 -> 0.0. `search` has no abstention: it returns any fact sharing a token with the query, subject name included. The test keeps the 0.80 bar as a strict xfail, so it reports the gap and fails loudly once abstention exists.

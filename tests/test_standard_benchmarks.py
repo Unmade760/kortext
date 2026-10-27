@@ -323,7 +323,7 @@ class TestLongMemEval:
         knowledge_updates:  F1 >= 0.13
         temporal_reasoning: F1 >= 0.25
         multi_session:      F1 >= 0.06
-        abstention:         rate >= 0.0
+        abstention:         rate >= 0.80 (xfail: search never abstains)
     """
 
     def test_lme_information_extraction(self, lme_samples, seeded_lme_sessions):
@@ -390,17 +390,20 @@ class TestLongMemEval:
             f"SB-2d: LME Multi-Session F1 = {mean_f1:.3f} < 0.06 (n={len(f1s)})"
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="episodic search returns any fact sharing a query token, so it never abstains (rate 0.0 on 2026-10-27)",
+    )
     def test_lme_abstention(self, lme_samples, seeded_lme_sessions):
-        """SB-2e: Abstention rate >= 0.0 for is_answerable=False questions."""
+        """SB-2e: Abstention rate >= 0.80 for is_answerable=False questions."""
         items = [s for s in lme_samples if s["ability"] == "abstention"]
         abstained = sum(
             1 for item in items
             if not _query_seeded_facts(item["subject"], item["question"]).strip()
         )
         rate = abstained / len(items)
-        # Was >= 0.80; measured against a test-only answer function removed on 2026-10-27.
-        assert rate >= 0.0, (
-            f"SB-2e: LME Abstention rate = {rate:.2f} < 0.0 "
+        assert rate >= 0.80, (
+            f"SB-2e: LME Abstention rate = {rate:.2f} < 0.80 "
             f"(abstained={abstained}/{len(items)})"
         )
 
