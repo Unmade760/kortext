@@ -3,6 +3,7 @@
 Test Suite for Kortext Antigravity Plugin Manifests & Schemas.
 """
 import json
+import sys
 import re
 from pathlib import Path
 
@@ -50,6 +51,14 @@ def test_hooks_json():
     for h in expected_hooks:
         assert f"kortext-{h}" in data, f"Hook {h} must be configured"
     print("✅ hooks.json definitions valid.")
+
+    sys.path.insert(0, str(KORTEXT_ROOT / "scripts"))
+    from install_plugin import build_hooks_dict
+
+    cmd = build_hooks_dict("/x/py")["kortext-dag-stop-guard"]["Stop"][0]["command"]
+    assert cmd == '"/x/py" -m kortext.hooks.runner stop', cmd
+    assert "sh " not in json.dumps(build_hooks_dict("/x/py"))
+    print("✅ runner-form hooks have no sh dependency.")
 
 
 def test_subagent_yaml():

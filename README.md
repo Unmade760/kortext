@@ -77,6 +77,15 @@ uv run kortext setup --yes --start
 uv run kortext install --all
 ```
 
+Optional on Linux: `integrations/antigravity/daemons/` also holds `kortext-watcher.service` and `kortext-dashboard.service` (user units, not installed automatically). To enable one, fill in the paths and start it:
+
+```bash
+mkdir -p ~/.config/systemd/user ~/.kortext/logs
+sed -e "s|{{PROJECT_DIR}}|$PWD|g" -e "s|{{PYTHON_BIN}}|$PWD/.venv/bin/python3|g" \
+  integrations/antigravity/daemons/kortext-watcher.service > ~/.config/systemd/user/kortext-watcher.service
+systemctl --user daemon-reload && systemctl --user enable --now kortext-watcher.service
+```
+
 ### 4. Start Substrates & Verify Health
 
 ```bash

@@ -1,0 +1,14 @@
+[Unit]
+Description=Kortext real-time filesystem watcher
+After=network.target
+
+[Service]
+WorkingDirectory={{PROJECT_DIR}}
+Environment=PYTHONPATH={{PROJECT_DIR}}
+ExecStart={{PYTHON_BIN}} -m kortext.watcher --root {{PROJECT_DIR}} --collection kortext_codebase --debounce 3.0
+Restart=always
+StandardOutput=append:%h/.kortext/logs/watcher.log
+StandardError=append:%h/.kortext/logs/watcher.log
+
+[Install]
+WantedBy=default.target

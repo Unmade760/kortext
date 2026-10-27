@@ -433,7 +433,7 @@ async def test_unicode_nfkc_zero_width_sanitizer_and_episodic_enforcement(tmp_pa
     assert filtered["episodic_history"] == ["Normal memory"]
 
 
-def test_hooks_schema_quote_aware_shell_parser_and_pre_compaction_baton(tmp_path, monkeypatch):
+def test_hooks_schema_quote_aware_shell_parser_and_pre_compaction_baton(tmp_path, monkeypatch, seeded_symbol_graph):
     """Audit Issues 4 & 5: hooks.json uses PreInvocation/PostInvocation, quote-aware shell splitting, and 75% baton."""
     from kortext.hooks.context import HookContext
     from kortext.hooks.pipelines.pre_tool import AntiRipgrepGate
@@ -845,6 +845,12 @@ async def test_complete_remediation_21_items_verified(tmp_path, monkeypatch):
     with patch("kortext.symbols.SymbolGraphManager"):
         IncrementalASTSync().process(ctx_edit)
     assert has_recent_passing_test_run() is False
+    try:
+        from kortext.symbols.graph import SymbolGraphManager
+
+        SymbolGraphManager().delete_file_ast(str(edit_file))
+    except Exception:
+        pass  # DB offline: nothing was written
 
     # 3. B4: HookContext.last_user_input & Turn 2+ /boost and /teamwork-preview grounding
     ctx_turn3 = HookContext.from_stdin(

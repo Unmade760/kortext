@@ -108,3 +108,35 @@ Other hook timings measured at the same baseline (median of 20 cold runs, Falkor
 - Change: `tests/conftest.py` creates a `tempfile.mkdtemp` directory at import, before any kortext import, sets `HOME` and `KORTEXT_HOME` (`<tmp>/.kortext`, with `qdrant/` created) and removes it at exit. `_isolate_locked_live_qdrant_session` no longer picks a second directory; it only closes pooled Qdrant clients at session end, so there is one home. The per-test `_isolated_home` fixture in `tests/test_setup_wizard.py` was removed: the file passes without it, and a single-process run of the whole suite (689 passed, 1 xfailed) shows no state leaking between setup tests and other files.
 - Files: `tests/conftest.py`, `tests/test_setup_wizard.py`, `docs/MAINTENANCE_LOG.md`.
 - Result: full suite run file by file with the real `HOME` (/home/ravi) and no database containers: 689 passed, 1 xfailed. `find /home/ravi/.kortext /home/ravi/.gemini -newer <marker>` printed nothing, and no `kortext_test_home_*` directory remained in `/tmp`.
+
+## 12. Tracked `journal/grounded_invariants.json` rewritten at runtime
+
+- Symptom: hook and test runs changed the tracked file `journal/grounded_invariants.json`, leaving `git status` dirty.
+- Root cause: `kortext.invariants.GROUNDED_FILE` pointed into the repo checkout (`<repo>/journal`), and `save_grounded_invariants` wrote there.
+- Change: `GROUNDED_FILE` now defaults to `<kortext home>/journal/grounded_invariants.json` (`JOURNAL_DIR`, when set, still wins). New `grounded_read_path()` returns it, or the repo copy while the home copy does not exist. `load_grounded_invariants`, `pre_invoke.py`, `pre_tool.py`, `retrieval/federated.py`, `symbols/seek.py` and `dashboard/routes/status.py` (both readers) use it. Writes go only to the home path.
+- Files: `kortext/invariants.py`, `kortext/hooks/pipelines/pre_invoke.py`, `kortext/hooks/pipelines/pre_tool.py`, `kortext/retrieval/federated.py`, `kortext/symbols/seek.py`, `kortext/dashboard/routes/status.py`.
+- Result: every test file and both script tests pass, and `git status` is clean afterwards.
+
+## 13. Silent `except ...: pass` blocks
+
+- Symptom: failures in hooks and in handoff and task writes vanished without a trace.
+- Root cause: 66 `except ...: pass` blocks under `kortext/`.
+- Change, by category: (a) hook pipelines and `hooks/transcript_tokens.py`, 25 blocks, still fail open but now call `logger.debug` with the exception; (b) data write paths where a swallowed error can lose data, 4 blocks (3 in `handoff.py` secondary-directory mirroring, 1 token-budget write in `tasks/tracker.py`), now `logger.warning`; (c) best-effort cleanup and reads left unchanged, 37 blocks (`close()`, temp-file `unlink`, optional imports, cache and subprocess probes, parse fallbacks in `server.py`, `invariants.py`, `ingest.py`, `retrieval/`, `embeddings.py` and others). Control flow and return values are unchanged. `ingest.py`, `episodic/`, `symbols/graph.py` and `dream.py` had no write-path `pass` blocks.
+- Files: `kortext/hooks/pipelines/{pre_invoke,pre_tool,post_tool,stop}.py`, `kortext/hooks/transcript_tokens.py`, `kortext/handoff.py`, `kortext/tasks/tracker.py`.
+- Result: all test files pass.
+
+## 14. `delete_file_ast` left stub Symbols behind
+
+- Symptom: after deleting a file, the unresolved-reference stub Symbol nodes it pointed at stayed in the graph with no relationships. `test_audit_regressions.py` and `test_hooks.py` left nodes in `kortext_symbols` on a real database.
+- Root cause: the orphan sweep only looked at symbols defined in the deleted file, not at the targets of its IMPORTS, REFERENCES and CALLS edges.
+- Change: `delete_file_ast` collects those target names before the edges are removed and passes them to the existing orphan sweep (it keeps any symbol still defined or referenced elsewhere). New test `test_delete_file_ast_removes_unresolved_reference_stubs` (fails without the change). The two audit tests now call `delete_file_ast` on the file they index.
+- Files: `kortext/symbols/graph.py`, `tests/test_ast_orphan_pruning.py`, `tests/test_audit_regressions.py`, `tests/test_hooks.py`.
+- Result: with FalkorDB up, `kortext_symbols` holds 0 nodes after both test files.
+
+## 15. Windows and Linux portability
+
+- Symptom: `hooks.json` commands run `sh run_hook.sh`, which fails on Windows. Redis lookups fell back to hardcoded Homebrew paths. No systemd units existed for the watcher and dashboard in the daemons folder.
+- Change: when the installer copies the plugin (no symlink), it writes `hooks.json` into the copy with `"<venv python>" -m kortext.hooks.runner <event>`. The symlinked dev plugin keeps the tracked `sh` form, so the repo file stays machine-independent. The command needs `kortext` importable in that venv (editable install). `run_hook.sh` lost its `$HOME/cortex` fallback. `find_redis_binary`, `install_plugin.py` and `start_kortext.sh` use `shutil.which` or `command -v` only and print "redis-server not found". Added `kortext-watcher.service` and `kortext-dashboard.service` under `integrations/antigravity/daemons/` (`{{PROJECT_DIR}}`/`{{PYTHON_BIN}}` placeholders, `%h` logs) and a README section for enabling them.
+- POSIX audit: `fcntl` (`_qdrant.py`), `AF_UNIX` probes (`setup.py`, `pre_invoke.py`, `kortext_statusline.py`, `scripts/hooks/common.py`) and the `SIGTERM`/`SIGKILL` stop path (`setup.py`, behind an `is_win` branch) are already inside `try/except` or platform branches with TCP or `taskkill` fallbacks. `binaries.py` uses nothing POSIX-only. No code change was needed.
+- Files: `scripts/install_plugin.py`, `scripts/test_plugin_manifest.py`, `scripts/start_kortext.sh`, `integrations/antigravity/run_hook.sh`, `kortext/setup.py`, `integrations/antigravity/daemons/kortext-*.service`, `README.md`.
+- Result: `test_setup_wizard.py`, `test_binaries.py` and both script tests pass. Not run on Windows.

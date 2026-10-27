@@ -477,6 +477,17 @@ class SymbolGraphManager(SymbolGraphTraversalMixin):
                 if row and row[0]:
                     candidate_syms.add(str(row[0]))
 
+        # Unresolved-reference stubs this file pointed at: check them for orphaning in step 5
+        for stub_q in (
+            "MATCH (:File {path: $path})-[:IMPORTS|REFERENCES]->(s:Symbol) RETURN DISTINCT s.name",
+            "MATCH ()-[:CALLS {file_path: $path}]->(s:Symbol) RETURN DISTINCT s.name",
+        ):
+            res_stub = self._query(stub_q, {"path": file_path})
+            if res_stub and len(res_stub) > 1 and isinstance(res_stub[1], list):
+                for row in res_stub[1]:
+                    if row and row[0]:
+                        candidate_syms.add(str(row[0]))
+
         # 2. Detach delete associated Section nodes connected to File
         self._query(
             "OPTIONAL MATCH (f:File {path: $path})-[:CONTAINS_SECTION]->(sec:Section) DETACH DELETE sec",

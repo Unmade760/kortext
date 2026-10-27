@@ -40,8 +40,24 @@ def _load_dotenv_dict(env_path: Path) -> Dict[str, str]:
     return env_vars
 
 
-def build_hooks_dict() -> dict:
-    hook_cmd_prefix = 'sh "${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh"'
+def _require_redis() -> str:
+    found = shutil.which("redis-server")
+    if not found:
+        print("⚠️ redis-server not found on PATH; the FalkorDB service will not start until it is installed.")
+    return found or "redis-server"
+
+
+def _venv_python() -> Path:
+    scripts = "Scripts/python.exe" if os.name == "nt" else "bin/python3"
+    return KORTEXT_ROOT / ".venv" / scripts
+
+
+def build_hooks_dict(runner_python: str = "") -> dict:
+    """Hook commands via run_hook.sh (symlinked dev plugin), or via the given python when copied (no sh needed)."""
+    if runner_python:
+        hook_cmd_prefix = f'"{runner_python}" -m kortext.hooks.runner'
+    else:
+        hook_cmd_prefix = 'sh "${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh"'
     return {
         "kortext-ambient-grounding": {
             "PreInvocation": [
@@ -164,6 +180,14 @@ def install_plugin():
     except OSError:
         shutil.copytree(INTEGRATIONS_DIR, canonical_plugin_dir, dirs_exist_ok=True)
         print(f"📦 Copied {plugin_name} plugin to: {canonical_plugin_dir} (symlink fallback)")
+
+    # A copied plugin cannot rely on sh or run_hook.sh: call the venv python directly (the symlink case would edit the repo copy).
+    if not canonical_plugin_dir.is_symlink():
+        venv_python = _venv_python()
+        runner_py = str(venv_python) if venv_python.is_file() else sys.executable
+        (canonical_plugin_dir / "hooks.json").write_text(
+            json.dumps(build_hooks_dict(runner_py), indent=2), encoding="utf-8"
+        )
 
     # Remove duplicate CLI plugin symlink if present (Antigravity syncs plugins across surfaces natively)
     dup_cli_plugin = home / ".gemini" / "antigravity-cli" / "plugins" / plugin_name
@@ -355,7 +379,7 @@ def install_all():
         if daemons_dir.is_dir():
             venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
             py_exec = str(venv_py) if venv_py.is_file() else sys.executable
-            redis_bin = shutil.which("redis-server") or "/opt/homebrew/bin/redis-server"
+            redis_bin = _require_redis()
             dotenv_vals = _load_dotenv_dict(KORTEXT_ROOT / ".env")
             embedded_qdrant = not bool(dotenv_vals.get("QDRANT_URL", "").strip())
             for plist in daemons_dir.glob("*.plist"):
@@ -380,7 +404,7 @@ def install_all():
         systemd_dir.mkdir(parents=True, exist_ok=True)
         venv_py = KORTEXT_ROOT / ".venv" / "bin" / "python3"
         py_exec = str(venv_py) if venv_py.is_file() else sys.executable
-        redis_bin = shutil.which("redis-server") or "/usr/bin/redis-server"
+        redis_bin = _require_redis()
         falkor_unit = systemd_dir / "kortext-falkordb.service"
         falkor_unit.write_text(
             f"[Unit]\nDescription=Kortext FalkorDB Graph Substrate\nAfter=network.target\n\n"

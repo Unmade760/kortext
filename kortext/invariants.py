@@ -29,6 +29,7 @@ except Exception:
     get_identifier = None  # type: ignore
     LANG_MAP = {}  # type: ignore
     Parser = None  # type: ignore
+from kortext._home import get_kortext_home
 from kortext.falkordb_client import (
     FALKORDB_HOST,
     FALKORDB_PASS,
@@ -39,9 +40,23 @@ from kortext.falkordb_client import (
 
 KORTEXT_ROOT = Path(__file__).resolve().parent.parent
 JOURNAL_DIR = Path(os.getenv("JOURNAL_DIR", str(KORTEXT_ROOT / "journal")))
-GROUNDED_FILE = JOURNAL_DIR / "grounded_invariants.json"
+# Runtime writes go to the Kortext home so the tracked repo copy stays clean.
+_DEFAULT_GROUNDED_FILE = (
+    Path(os.environ["JOURNAL_DIR"]) / "grounded_invariants.json"
+    if os.getenv("JOURNAL_DIR")
+    else get_kortext_home() / "journal" / "grounded_invariants.json"
+)
+GROUNDED_FILE = _DEFAULT_GROUNDED_FILE
+REPO_GROUNDED_FILE = KORTEXT_ROOT / "journal" / "grounded_invariants.json"
 QUARANTINE_DIR = JOURNAL_DIR / "quarantine"
 FALKORDB_DB = os.getenv("KORTEXT_DATABASE", os.getenv("FALKORDB_DATABASE", "kortext"))
+
+
+def grounded_read_path() -> Path:
+    """GROUNDED_FILE, or the repo copy when the default home copy does not exist yet."""
+    if GROUNDED_FILE == _DEFAULT_GROUNDED_FILE and not GROUNDED_FILE.is_file():
+        return REPO_GROUNDED_FILE
+    return GROUNDED_FILE
 
 
 def _resolve_invariant_file(file_path: str) -> Path:
@@ -425,10 +440,11 @@ class InvariantGroundingEngine:
 
     def load_grounded_invariants(self) -> List[Dict[str, Any]]:
         """Loads grounded invariant records from disk."""
-        if not GROUNDED_FILE.exists():
+        src = grounded_read_path()
+        if not src.exists():
             return []
         try:
-            with open(GROUNDED_FILE, "r", encoding="utf-8") as f:
+            with open(src, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []

@@ -111,8 +111,8 @@ class SubstrateHealthProbe:
             from kortext.tasks.tracker import write_hud_state_snapshot
 
             write_hud_state_snapshot(falkor_ok=falkor_ok, qdrant_ok=qdrant_ok, omlx_ok=omlx_ok)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_invoke:%d: %s", 114, exc)
 
         down_services: List[str] = []
         if not falkor_ok:
@@ -279,10 +279,12 @@ class BoostPromptGroundingProbe:
             )
             inv_lines: List[str] = []
             try:
-                from kortext.invariants import GROUNDED_FILE
+                from kortext.invariants import grounded_read_path
 
-                if GROUNDED_FILE.is_file():
-                    g_items = json.loads(GROUNDED_FILE.read_text(encoding="utf-8"))
+                g_file = grounded_read_path()
+
+                if g_file.is_file():
+                    g_items = json.loads(g_file.read_text(encoding="utf-8"))
                     if isinstance(g_items, list):
                         t_fnames = {Path(f).name for f in target_files}
                         for g_inv in g_items:
@@ -290,8 +292,8 @@ class BoostPromptGroundingProbe:
                                 continue
                             if g_inv.get("symbol_name") in candidates or Path(str(g_inv.get("file_path", ""))).name in t_fnames:
                                 inv_lines.append(f"[{g_inv.get('domain', 'INV')}] {g_inv.get('rule', '')}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in pre_invoke:%d: %s", 295, exc)
 
             brief_parts = [
                 "⚡ [Kortext /boost Grounding Brief]",
@@ -309,8 +311,8 @@ class BoostPromptGroundingProbe:
                     brief_file = Path(context.cwd) / ".kortext" / "briefs" / "boost_grounding.md"
                     brief_file.parent.mkdir(parents=True, exist_ok=True)
                     brief_file.write_text(brief + "\n", encoding="utf-8")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Suppressed in pre_invoke:%d: %s", 314, exc)
 
             return InterceptorResult.allow(
                 data=MappingProxyType({
@@ -602,8 +604,8 @@ class PreInvokePipeline:
             for pending_msg in consume_pending_advisories(session_id=sess_id, conversation_id=conv_id):
                 if pending_msg and pending_msg not in ephemeral_messages:
                     ephemeral_messages.append(pending_msg)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_invoke:%d: %s", 607, exc)
 
         if ephemeral_messages:
             final_steps.append({"ephemeralMessage": "\n\n".join(ephemeral_messages)})

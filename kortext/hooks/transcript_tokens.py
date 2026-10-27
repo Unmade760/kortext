@@ -83,8 +83,8 @@ def infer_context_window_size(
             parsed = int(env_override)
             if parsed > 0:
                 return parsed
-        except ValueError:
-            pass
+        except ValueError as exc:
+            logger.debug("Suppressed in transcript_tokens:%d: %s", 86, exc)
 
     if reported_window_size and reported_window_size > 0:
         return int(reported_window_size)
@@ -140,8 +140,8 @@ def extract_latest_usage_from_steps(steps: Sequence[Any]) -> Tuple[int, str]:
                 val = int(tok_cnt)
                 if val > 0:
                     return val, model_str
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as exc:
+                logger.debug("Suppressed in transcript_tokens:%d: %s", 143, exc)
 
     return 0, ""
 
@@ -192,8 +192,8 @@ def estimate_tokens_from_transcript_files(
                     if marker in raw_content:
                         raw_content = raw_content[raw_content.rfind(marker):]
                         return max(1, (len(raw_content) // 4) + BASELINE_SYSTEM_PROMPT_TOKENS)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Suppressed in transcript_tokens:%d: %s", 195, exc)
                 return max(1, (byte_size // 4) + BASELINE_SYSTEM_PROMPT_TOKENS)
         except Exception as exc:
             logger.debug("Transcript file size token estimation fallback: %s", exc)
@@ -443,8 +443,8 @@ def load_post_compaction_recovery_brief(
                     parts.append(f"Modified files before compaction: `{', '.join(str(f) for f in mod_files[-8:])}`")
                 if syms:
                     parts.append(f"Recently inspected AST symbols: `{', '.join(str(s) for s in syms[-8:])}`")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in transcript_tokens:%d: %s", 446, exc)
 
     if workspace_dir:
         ws_path = Path(workspace_dir)
@@ -454,8 +454,8 @@ def load_post_compaction_recovery_brief(
                 ledger_lines = ledger_path.read_text(encoding="utf-8").splitlines()[:10]
                 if ledger_lines:
                     parts.append("Compaction-Proof Ledger:\n" + "\n".join(ledger_lines))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in transcript_tokens:%d: %s", 457, exc)
 
         briefs_dir = ws_path / ".kortext" / "briefs"
         if briefs_dir.is_dir():
@@ -465,8 +465,8 @@ def load_post_compaction_recovery_brief(
                     latest_brief = brief_files[0].read_text(encoding="utf-8").splitlines()[:12]
                     if latest_brief:
                         parts.append(f"Active Task Brief (`{brief_files[0].name}`):\n" + "\n".join(latest_brief))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in transcript_tokens:%d: %s", 468, exc)
 
         invariants_file = ws_path / "journal" / "grounded_invariants.json"
         if invariants_file.is_file():
@@ -475,8 +475,8 @@ def load_post_compaction_recovery_brief(
                 if isinstance(inv_data, dict) and inv_data.get("invariants"):
                     inv_list = [str(i) for i in inv_data["invariants"][:5]]
                     parts.append("Grounded Invariants: " + "; ".join(inv_list))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in transcript_tokens:%d: %s", 478, exc)
 
     return " | ".join(parts) if parts else None
 

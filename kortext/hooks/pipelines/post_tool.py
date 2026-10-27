@@ -107,8 +107,8 @@ def has_recent_passing_test_run(max_age_sec: float = 1800.0, session_id: str = "
                     dirty_ts = float(d_data.get("updated_at") or 0.0)
                     if dirty_ts >= ts:
                         return False
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in post_tool:%d: %s", 110, exc)
         return True
     except Exception:
         return False
@@ -349,8 +349,8 @@ class TelemetrySpooler:
                         mods.append(context.target_file)
                     data["modified_files"] = mods[-10:]
                     fail_state_file.write_text(json.dumps(data), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in post_tool:%d: %s", 352, exc)
 
     def _renew_active_task_leases(self, context: HookContext) -> None:
         """FM3 Mitigation: Automatically renews leases for KORTEXT_TASK_ID or active workspace in_progress tasks."""
@@ -372,8 +372,8 @@ class TelemetrySpooler:
                     tid = t.get("id")
                     if tid:
                         tracker.heartbeat_task(str(tid))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in post_tool:%d: %s", 375, exc)
 
     def process(self, context: HookContext) -> InterceptorResult:
         try:
@@ -421,8 +421,8 @@ class TelemetrySpooler:
                     if context.target_file not in files:
                         files.append(context.target_file)
                     dirty_file.write_text(json.dumps({"files": files[-50:], "updated_at": time.time()}), encoding="utf-8")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Suppressed in post_tool:%d: %s", 424, exc)
             elif context.tool_name == "run_command" and context.command_line and not tool_err:
                 if any(m in context.command_line.lower() for m in _TEST_CMD_MARKERS):
                     try:
@@ -438,8 +438,8 @@ class TelemetrySpooler:
                     if isinstance(snap, dict):
                         snap["updated_at"] = time.time()
                         hud_file.write_text(json.dumps(snap, separators=(",", ":")), encoding="utf-8")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Suppressed in post_tool:%d: %s", 441, exc)
         except Exception as e:
             logger.debug("Telemetry logging failed: %s", e)
 
@@ -546,8 +546,8 @@ class ContextAndLoopAdvisor:
                     workspace_dir=Path(str(ws_candidate)),
                     project_id=proj,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in post_tool:%d: %s", 549, exc)
         return str(out_path)
 
     def _check_retry_loop(self, context: HookContext) -> Optional[str]:
@@ -574,8 +574,8 @@ class ContextAndLoopAdvisor:
                     "(2) Inspect declaration/callers via `seek_symbol` / `trace_symbol_impact`, "
                     "(3) Formulate a new root-cause hypothesis before executing another command."
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in post_tool:%d: %s", 577, exc)
         return None
 
     def process(self, context: HookContext) -> InterceptorResult:

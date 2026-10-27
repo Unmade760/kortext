@@ -682,10 +682,12 @@ class SymbolSeekEngine:
         # Attach active AST-grounded invariants (from journal/grounded_invariants.json) to matched symbols
         grounded_for_matches: List[Dict[str, Any]] = []
         try:
-            from kortext.invariants import GROUNDED_FILE
+            from kortext.invariants import grounded_read_path
 
-            if GROUNDED_FILE.is_file():
-                g_items = json.loads(GROUNDED_FILE.read_text(encoding="utf-8"))
+            g_file = grounded_read_path()
+
+            if g_file.is_file():
+                g_items = json.loads(g_file.read_text(encoding="utf-8"))
                 if isinstance(g_items, list):
                     for m in matches:
                         m_sym = str(m.get("symbol") or "")
