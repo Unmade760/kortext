@@ -120,3 +120,21 @@ def test_ast_orphan_pruning_preserves_shared_symbol(temp_graph_manager):
     defs_other = temp_graph_manager.find_definition("func_other")
     assert len(defs_other) == 1
     assert defs_other[0]["file_path"] == file_a
+
+
+def test_delete_file_ast_removes_unresolved_reference_stubs(temp_graph_manager):
+    """Deleting a file also removes stub Symbols it referenced that no other file defines or uses."""
+    file_path = "src/caller.py"
+    temp_graph_manager.save_file_ast(
+        file_path,
+        [{"name": "caller", "kind": "function", "line": 1}],
+        [],
+        [{"symbol": "external_helper", "line": 2, "caller": "caller"}],
+    )
+    res = temp_graph_manager._query("MATCH (s:Symbol {name: 'external_helper'}) RETURN s.name")
+    assert len(res) > 1 and res[1], "stub should exist before deletion"
+
+    temp_graph_manager.delete_file_ast(file_path)
+
+    res = temp_graph_manager._query("MATCH (s:Symbol) RETURN s.name")
+    assert not (len(res) > 1 and res[1])

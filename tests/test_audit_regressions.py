@@ -845,6 +845,12 @@ async def test_complete_remediation_21_items_verified(tmp_path, monkeypatch):
     with patch("kortext.symbols.SymbolGraphManager"):
         IncrementalASTSync().process(ctx_edit)
     assert has_recent_passing_test_run() is False
+    try:
+        from kortext.symbols.graph import SymbolGraphManager
+
+        SymbolGraphManager().delete_file_ast(str(edit_file))
+    except Exception:
+        pass  # DB offline: nothing was written
 
     # 3. B4: HookContext.last_user_input & Turn 2+ /boost and /teamwork-preview grounding
     ctx_turn3 = HookContext.from_stdin(

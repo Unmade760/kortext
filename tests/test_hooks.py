@@ -252,6 +252,12 @@ def test_incremental_ast_sync(tmp_path: Path):
     }))
     res = sync.process(ctx)
     assert res.decision == "allow"
+    try:
+        from kortext.symbols.graph import SymbolGraphManager
+
+        SymbolGraphManager().delete_file_ast(str(py_file))
+    except Exception:
+        pass  # DB offline: nothing was written
 
 
 def test_telemetry_spooler(tmp_path: Path):
