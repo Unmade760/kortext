@@ -140,3 +140,18 @@ Other hook timings measured at the same baseline (median of 20 cold runs, Falkor
 - POSIX audit: `fcntl` (`_qdrant.py`), `AF_UNIX` probes (`setup.py`, `pre_invoke.py`, `kortext_statusline.py`, `scripts/hooks/common.py`) and the `SIGTERM`/`SIGKILL` stop path (`setup.py`, behind an `is_win` branch) are already inside `try/except` or platform branches with TCP or `taskkill` fallbacks. `binaries.py` uses nothing POSIX-only. No code change was needed.
 - Files: `scripts/install_plugin.py`, `scripts/test_plugin_manifest.py`, `scripts/start_kortext.sh`, `integrations/antigravity/run_hook.sh`, `kortext/setup.py`, `integrations/antigravity/daemons/kortext-*.service`, `README.md`.
 - Result: `test_setup_wizard.py`, `test_binaries.py` and both script tests pass. Not run on Windows.
+
+## 16. October 2026 audit follow-ups
+
+- Scope: the full audit is in `docs/AUDIT_2026-10.md`. This section lists what changed on `fix/audit-followups`.
+- Binaries: all four pinned SHA-256 values in `kortext/binaries.py` were wrong when compared with the GitHub release assets, and five targets had none. Replaced with hashes measured on 2026-10-27 for all eight shipped assets. `download_file` refuses a file with no known hash unless `KORTEXT_ALLOW_UNVERIFIED_BINARY=1`.
+- Trust: `can_promote_to_executable` requires a listed trust level (the `or source_tier <= 2` fallback is gone). Stop-hook instincts from transcript facts are `speculative`. `CausalSanitizer.sanitize` refuses memory writes that carry a credential, and `SECRET_PATTERNS` moved there from `pre_tool.py`. The injection-filter exemption matches only this install's resolved `sanitizer.py` and `pre_tool.py`.
+- Paths: dashboard collection names are validated, task ids are sanitised before use in file names, workspace scoping uses path containment, and Windows `# File: C:\...:N` headers keep their drive letter.
+- Task DAG: a missing reviewer output fails an enforced review (the worker summary is no longer parsed as the verdict); a blocked claim clears worker and lease fields; failed dependent promotion logs a warning.
+- Data safety: dream pruning writes the archive before deleting; clustering no longer deletes non-code `File` nodes; superseding a fact sets `superseded_at`; `complete_baton` prefers an exact id and refuses ambiguous ones; instinct temp files are PID plus UUID; invariant quarantine files go to the Kortext home; runtime batons and quarantine dumps are untracked.
+- Watcher and seek: the watcher skips spool events it wrote itself; the seek dense fallback embeds the query instead of returning the first two points.
+- Hooks: `HookContext.tool_error` reads the payload-root `error` that agy sends on PostToolUse.
+- Plugin: the five agents declared `mcpServers: [- kortext]`, which `agy plugin validate` rejects ("The loader skips this agent"). Removed; the validator passes with 5 agents.
+- Benchmarks: the symbol benchmark helper no longer counts a query's own candidate words as retrieved. Measured on real FalkorDB: HotpotQA-style Recall@5 0.420, MRR 0.490; Golden Set Recall@5 0.775, MRR 0.900 (unchanged by the fix).
+- CI: the Linux substrate job runs on Python 3.11 and 3.13.
+- Tests: `tests/test_audit_followups.py`. Full suite against real FalkorDB and Qdrant: 698 passed, 1 xfailed.
