@@ -124,6 +124,10 @@ def test_ast_orphan_pruning_preserves_shared_symbol(temp_graph_manager):
 
 def test_delete_file_ast_removes_unresolved_reference_stubs(temp_graph_manager):
     """Deleting a file also removes stub Symbols it referenced that no other file defines or uses."""
+    from tests.conftest import _SEATBELT_BLOCKED
+
+    if _SEATBELT_BLOCKED:
+        pytest.skip("regex FalkorDB emulator does not implement the orphan sweep")
     file_path = "src/caller.py"
     temp_graph_manager.save_file_ast(
         file_path,
