@@ -43,7 +43,7 @@ Tasks transition through five deterministic states:
 2. **`ready`**: All dependencies are `completed`; ready for subagent execution.
 3. **`in_progress`**: Claimed and actively being executed by a subagent.
 4. **`completed`**: 100% verified with passing tests and linked to an episodic outcome.
-5. **`failed`**: Circuit breaker tripped or test failure after 5 fix rounds.
+5. **`failed`**: Circuit breaker tripped after 3 consecutive review rejections.
 
 ---
 

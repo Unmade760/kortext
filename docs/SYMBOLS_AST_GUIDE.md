@@ -15,7 +15,7 @@ Traditional AI coding assistants rely heavily on `ripgrep` (`rg`), `grep_search`
 ### The Kortext Solution
 Instead of brute-force text scans, Kortext provides **compiler-grade AST B-Tree symbol lookups** via Tree-sitter and FalkorDB:
 - **`seek_symbol(symbol_name="<symbol>")`:** Direct point lookup returning the exact file path, start/end lines, full type signature, docstring, and callers in **<2ms** and **~120 tokens** (>95% token savings).
-- **`trace_symbol_impact(symbol="<symbol>", direction="upstream"|"downstream")`:** Multi-hop graph traversal over the `kortext_symbols` graph assessing refactoring blast radius in **<5ms**.
+- **`trace_symbol_impact(symbol="<symbol>", direction="upstream"|"downstream")`:** Multi-hop graph traversal over the `kortext_symbols` graph assessing refactoring blast radius (p50 under 10 ms in `tests/test_empirical_benchmarks.py`).
 
 ---
 
@@ -121,7 +121,7 @@ flowchart LR
 To prevent deep call graphs from overflowing context, `trace_symbol_impact` applies **progressive degradation**:
 1. Depth 1 callers receive full file paths, line numbers, and signatures.
 2. Depth 2+ callers receive compact identifier paths (`module.function`).
-3. Total response size is capped at 500 tokens.
+3. Total response size is capped at 1,500 tokens by default (`token_budget`).
 
 ---
 

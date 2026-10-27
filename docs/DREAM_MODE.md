@@ -10,7 +10,7 @@ In human cognition, sleep serves two essential memory functions:
 1. **Synaptic Homeostasis:** Low-relevance memories and noise are pruned to prevent synaptic overload.
 2. **Memory Consolidation:** Specific episodic memories are integrated into high-level macro-concepts and generalized skills.
 
-Kortext implements a **Hybrid Dream Mode** that bridges fast substrate graph algorithms with high-level LLM reflection across **6 sequential phases**:
+Kortext implements a **Hybrid Dream Mode** that bridges fast substrate graph algorithms with high-level LLM reflection across **7 sequential phases** (0 to 6):
 
 ```mermaid
 flowchart TD
@@ -111,4 +111,4 @@ await trigger_dream_mode(
 
 ### Via CLI & Scheduled Sidecar
 - Run manually: `kortext dream`
-- Run automatically in background: Configure the native Antigravity sidecar `integrations/antigravity/sidecars/dream/sidecar.json`.
+- Run automatically in background: Configure the native Antigravity sidecar `integrations/antigravity/sidecars/kortext-dream/sidecar.json`.
