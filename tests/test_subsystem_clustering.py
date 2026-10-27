@@ -59,7 +59,7 @@ class TestSubsystemClustering:
         assert "Developer" not in title_sym
 
     @pytest.mark.asyncio
-    async def test_detect_subsystems_excludes_markdown_and_path_labels(self):
+    async def test_detect_subsystems_excludes_markdown_and_path_labels(self, seeded_symbol_graph):
         """Verifies live or mock detect_subsystems produces clean subsystems without markdown or path artifacts."""
         clusterer = SubsystemClusterer()
         subsystems = await clusterer.detect_subsystems(persist=False)

@@ -9,14 +9,28 @@ Benchmark reporter and sandbox test-double fixture for Kortext tests.
 """
 from __future__ import annotations
 
+import atexit
 import json
+import os
 import re
+import shutil
 import socket
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pytest
+
+# Session-wide HOME isolation. This must run before any kortext import: kortext._home and
+# kortext.retrieval.qdrant_engine compute KORTEXT_HOME / DEFAULT_QDRANT_PATH at import time.
+# Without it, tests create ~/.kortext and `kortext setup` writes into ~/.gemini.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="kortext_test_home_"))
+_TEST_KORTEXT_HOME = _TEST_HOME / ".kortext"
+(_TEST_KORTEXT_HOME / "qdrant").mkdir(parents=True)
+os.environ["HOME"] = str(_TEST_HOME)
+os.environ["KORTEXT_HOME"] = str(_TEST_KORTEXT_HOME)
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _BENCHMARK_STASH_KEY = pytest.StashKey[Dict[str, Any]]()
@@ -1510,36 +1524,57 @@ _install_seatbelt_falkordb_patch()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _isolate_locked_live_qdrant_session(tmp_path_factory):
+def _isolate_locked_live_qdrant_session():
     """
-    When the live `kortext-server` daemon holds ~/.kortext/qdrant/.lock, redirects the default
-    pytest session KORTEXT_HOME and DEFAULT_QDRANT_PATH to an isolated session temporary directory
-    so tests never collide with the running production daemon.
+    The session HOME and KORTEXT_HOME are already redirected at import time (top of this file),
+    so tests never collide with a live `kortext-server` holding ~/.kortext/qdrant/.lock.
+    This fixture only closes pooled Qdrant clients at session end.
     """
-    import os
-    from kortext._qdrant import close_qdrant_clients, is_embedded_qdrant_locked
+    from kortext._qdrant import close_qdrant_clients
 
-    default_home = Path.home() / ".kortext"
-    if is_embedded_qdrant_locked(default_home / "qdrant") or _SEATBELT_BLOCKED:
-        isolated_home = tmp_path_factory.mktemp("kortext_test_home")
-        (isolated_home / "qdrant").mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("KORTEXT_HOME", str(isolated_home))
-        try:
-            import kortext._home as _home_mod
-            import kortext.retrieval.qdrant_engine as _qe_mod
-            import kortext.watcher as _watcher_mod
-
-            _home_mod.KORTEXT_HOME = isolated_home
-            _qe_mod.KORTEXT_HOME = isolated_home
-            _qe_mod.DEFAULT_QDRANT_PATH = isolated_home / "qdrant"
-            _watcher_mod.KORTEXT_HOME = isolated_home
-        except Exception:
-            pass
     yield
     try:
         close_qdrant_clients()
     except Exception:
         pass
+
+
+@pytest.fixture
+def seeded_symbol_graph():
+    """
+    Ensures the default seed symbols exist in the kortext_symbols graph, written through the
+    production SymbolGraphManager.save_file_ast. A no-op when the symbols are already there
+    (the Seatbelt emulator pre-seeds them), so it works against a real, empty FalkorDB too.
+    Only the files it wrote are removed afterwards.
+    """
+    from kortext.symbols.graph import SymbolGraphManager
+
+    mgr = SymbolGraphManager()
+    if mgr.find_definition(_SEED_SYMBOLS_DATA[0]["name"]):
+        yield
+        return
+    by_file: Dict[str, List[Dict[str, Any]]] = {}
+    for item in _SEED_SYMBOLS_DATA:
+        by_file.setdefault(item["file_path"], []).append(item)
+    for fp, items in by_file.items():
+        refs = [
+            {"symbol": callee, "caller": it["name"], "line": it["line"] + 2, "kind": "call"}
+            for it in items
+            for callee in it.get("callees", [])
+        ]
+        mgr.save_file_ast(fp, items, [], refs)
+    try:
+        yield
+    finally:
+        for fp in by_file:
+            mgr.delete_file_ast(fp)
+        # delete_file_ast leaves the unresolved callee stubs that save_file_ast created.
+        paths = list(by_file)
+        mgr._query(
+            "MATCH (s:Symbol) WHERE any(p IN $paths WHERE s.qualified_name STARTS WITH p "
+            "OR s.qualified_name STARTS WITH ('unresolved::' + p)) DETACH DELETE s",
+            {"paths": paths},
+        )
 
 
 @pytest.fixture(autouse=True)

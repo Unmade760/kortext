@@ -680,6 +680,7 @@ class TestBiTemporalFactRetention:
 # Test Suite: TestHippoRAGAssociativeRetention (MR-5)
 # ============================================================================
 
+@pytest.mark.usefixtures("seeded_symbol_graph")
 class TestHippoRAGAssociativeRetention:
     """Validates HippoRAG Personalized PageRank associative retrieval over kortext_symbols."""
 
@@ -785,7 +786,7 @@ class TestE2ETokenBudget:
             f"({orig_token_count} -> {trimmed_token_count} tokens)"
         )
 
-    def test_seek_symbol_token_budget_under_150(self):
+    def test_seek_symbol_token_budget_under_150(self, seeded_symbol_graph):
         """MR-6: SymbolSeekEngine().seek_symbol('RetrievalEngine') tokens < 150."""
         # Arrange
         engine = SymbolSeekEngine()

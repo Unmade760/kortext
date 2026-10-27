@@ -54,7 +54,8 @@ class EmbeddedQdrantEngine:
             except OSError:
                 effective_storage = DEFAULT_QDRANT_PATH
         self.client = get_qdrant_client(url=url, storage_path=effective_storage)
-        if effective_storage == DEFAULT_QDRANT_PATH and url is None:
+        if storage_path is None and url is None:
+            # Default engine: provision the default collection on the embedded store or a local server.
             try:
                 if not self.client.collection_exists("Antigravity_Docs"):
                     from kortext._env import get_embed_dimension
