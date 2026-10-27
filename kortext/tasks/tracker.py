@@ -539,8 +539,8 @@ class TaskDAGTracker(TaskOrchestrationMixin):
                     "MATCH (t:Task {id: $id}) SET t.token_budget_spent = $tok",
                     {"id": task_id, "tok": int(token_budget_spent)},
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Suppressed in tracker:%d: %s", 542, exc)
         if episode_name:
             self.link_task_to_outcome(task_id, episode_name)
 

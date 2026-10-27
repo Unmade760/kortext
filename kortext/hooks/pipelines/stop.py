@@ -322,8 +322,8 @@ class OutcomePersistenceGuard:
                     "SET r.superseded = true, r.dormant = true",
                     {"sub": project_id, "sess": session_id},
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Suppressed in stop:%d: %s", 325, exc)
 
             driver.record_fact(
                 subject=project_id,

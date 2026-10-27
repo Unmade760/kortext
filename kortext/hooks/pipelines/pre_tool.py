@@ -121,8 +121,8 @@ def _extract_symbol_from_pattern(pattern: str) -> Optional[str]:
         cands = extract_symbol_candidates(cleaned)
         if cands:
             return cands[0]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Suppressed in pre_tool:%d: %s", 124, exc)
     return None
 
 
@@ -140,8 +140,8 @@ def _is_symbol_graph_empty() -> bool:
         res = client.query(get_falkordb_symbols_graph(), "MATCH (s:Symbol) RETURN count(s) LIMIT 1", read_only=True)
         if res and len(res) > 1 and res[1] and res[1][0]:
             return int(res[1][0][0] or 0) == 0
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Suppressed in pre_tool:%d: %s", 143, exc)
     return False
 
 
@@ -575,8 +575,8 @@ class BlastRadiusGuard:
             )
             if res and len(res) > 1 and res[1] and res[1][0]:
                 return int(res[1][0][0] or 0) >= 5
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_tool:%d: %s", 578, exc)
         return False
 
     @staticmethod
@@ -654,8 +654,8 @@ class BlastRadiusGuard:
                 c_items = [f"{r[0]} ({Path(str(r[1] or '')).name})" for r in c_res[1] if r and r[0]]
                 if c_items:
                     caller_detail = f" Upstream callers: {', '.join(c_items)}."
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_tool:%d: %s", 657, exc)
 
         inv_detail = ""
         try:
@@ -675,8 +675,8 @@ class BlastRadiusGuard:
                     ]
                     if matched_invs:
                         inv_detail = f" Grounded invariants: {'; '.join(matched_invs[:2])}."
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_tool:%d: %s", 678, exc)
 
         msg = (
             f"[BlastRadiusGuard] ℹ️ Modifying core architectural file '{file_name}' without prior "
@@ -690,8 +690,8 @@ class BlastRadiusGuard:
             conv_id = getattr(context, "conversation_id", "") or ""
             sess_id = context.session_id or ""
             queue_pending_advisory(msg, session_id=sess_id, conversation_id=conv_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Suppressed in pre_tool:%d: %s", 693, exc)
 
         if self.enforce_first_touch:
             conv_id = getattr(context, "conversation_id", "") or context.session_id or ""

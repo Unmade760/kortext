@@ -117,8 +117,8 @@ class HandoffManager:
         if self._secondary_dir is not None:
             try:
                 self._secondary_dir.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Suppressed in handoff:%d: %s", 120, exc)
 
     def _collect_handoff_files(self) -> List[Path]:
         """Collects handoff JSON files across primary (and optional secondary) handoff directories."""
@@ -179,8 +179,8 @@ class HandoffManager:
             try:
                 sec_path = self._secondary_dir / f"{bid}.json"
                 _atomic_write_json(sec_path, data)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Suppressed in handoff:%d: %s", 182, exc)
 
         return (
             f"✅ Created cross-agent handoff baton: {bid}\n"
@@ -280,8 +280,8 @@ class HandoffManager:
                 sec_file = self._secondary_dir / target_path.name
                 if sec_file.is_file():
                     _atomic_write_json(sec_file, data)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Suppressed in handoff:%d: %s", 283, exc)
         return f"✅ Handoff baton '{data['baton_id']}' marked as completed."
 
     def execute(
