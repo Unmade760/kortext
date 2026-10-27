@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional
@@ -370,7 +371,12 @@ class TaskDAGTracker(TaskOrchestrationMixin):
         has_collision = bool(overlap_info.get("overlapping_tasks") or overlap_info.get("coupled_tasks"))
         if has_collision and (enforce_overlap_block or os.getenv("KORTEXT_ENFORCE_WORKTREE_ISOLATION") == "1"):
             if workspace_mode not in ("worktree", "branch"):
-                self.update_task_status(claimed_id, status="ready")
+                self.client.query(
+                    self.graph,
+                    "MATCH (t:Task {id: $id}) SET t.status = 'ready', t.assigned_to = null, "
+                    "t.claimed_at = null, t.lease_expires_at = null",
+                    {"id": claimed_id},
+                )
                 raise ValueError(
                     f"Task claim blocked (FM2 File Overwrite & Merge Hell Guard): task '{claimed_id}' overlaps "
                     f"with active tasks {overlap_info.get('overlapping_tasks') or overlap_info.get('coupled_tasks')}. "
@@ -486,7 +492,7 @@ class TaskDAGTracker(TaskOrchestrationMixin):
                 pass
 
         if reviewer_output is not None or enforce_review:
-            review_verdict_info = self.validate_reviewer_verdict(reviewer_output or summary)
+            review_verdict_info = self.validate_reviewer_verdict(reviewer_output or "")
             if not review_verdict_info.get("passed", False):
                 rejections = 1
                 try:
@@ -556,12 +562,13 @@ class TaskDAGTracker(TaskOrchestrationMixin):
 
         kortext_handoffs_dir = get_kortext_home() / "handoffs"
         kortext_handoffs_dir.mkdir(parents=True, exist_ok=True)
-        canonical_handoff_path = kortext_handoffs_dir / f"{task_id}.json"
-        report_md_path = kortext_handoffs_dir / f"task_{task_id}_report.md"
+        safe_task_id = re.sub(r"[^A-Za-z0-9_-]", "_", str(task_id))
+        canonical_handoff_path = kortext_handoffs_dir / f"{safe_task_id}.json"
+        report_md_path = kortext_handoffs_dir / f"task_{safe_task_id}_report.md"
 
         target_dir = handoffs_dir or kortext_handoffs_dir
         target_dir.mkdir(parents=True, exist_ok=True)
-        artifact_path = target_dir / f"task_handoff_{task_id}.json"
+        artifact_path = target_dir / f"task_handoff_{safe_task_id}.json"
         artifact_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
         try:
@@ -645,7 +652,7 @@ class TaskDAGTracker(TaskOrchestrationMixin):
                 """
                 self.client.query(self.graph, promote_cypher, {"id": task_id})
             except Exception as exc:
-                logger.debug("Dependent task promotion skipped: %s", exc)
+                logger.warning("Dependent task promotion failed, downstream tasks stay pending: %s", exc)
         elif status == "failed":
             cypher = """
             MATCH (t:Task {id: $id})

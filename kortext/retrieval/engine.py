@@ -1028,6 +1028,9 @@ class RetrievalEngine:
         if self._client:
             await self._client.close()
             self._client = None
+        reranker = getattr(self, "reranker", None)
+        if reranker is not None:
+            await reranker.close()
 
 
 _DEFAULT_RETRIEVAL_ENGINE: Optional[RetrievalEngine] = None

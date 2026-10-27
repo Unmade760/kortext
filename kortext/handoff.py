@@ -207,10 +207,8 @@ class HandoffManager:
             safe_id = _sanitize_lookup_id(baton_id)
             if not safe_id:
                 return f"⚠️ Invalid baton_id={baton_id!r}."
-            for f in files:
-                if f.stem == safe_id or f.stem == f"task_handoff_{safe_id}" or safe_id in f.stem:
-                    target_file = f
-                    break
+            exact = [f for f in files if f.stem in (safe_id, f"task_handoff_{safe_id}")]
+            target_file = (exact or [f for f in files if safe_id in f.stem] or [None])[0]
         else:
             for f in files:
                 try:
@@ -268,7 +266,10 @@ class HandoffManager:
         if not matched:
             return f"⚠️ Baton '{baton_id}' not found."
 
-        target_path = matched[0]
+        exact = [m for m in matched if m.stem in (safe_id, f"task_handoff_{safe_id}")]
+        if not exact and len(matched) > 1:
+            return f"⚠️ Baton '{baton_id}' is ambiguous: {sorted(m.stem for m in matched)}."
+        target_path = (exact or matched)[0]
         with open(target_path, "r", encoding="utf-8") as jf:
             data = _normalize_handoff_payload(json.load(jf), target_path)
         now = datetime.now(timezone.utc).isoformat()

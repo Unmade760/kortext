@@ -287,8 +287,10 @@ class SubsystemClusterer:
                 if row:
                     path_str = str(row[0]).replace("\\", "/")
                     p_obj = Path(path_str)
-                    if not is_code_file(path_str) or "/cortex/" in path_str.lower() or (p_obj.is_absolute() and not p_obj.exists()):
+                    if "/cortex/" in path_str.lower() or (p_obj.is_absolute() and not p_obj.exists()):
                         stale_graph_files.append(str(row[0]))
+                        continue
+                    if not is_code_file(path_str):
                         continue
                     G.add_node(path_str)
 

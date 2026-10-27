@@ -41,8 +41,14 @@ def _is_trusted_code_definition_chunk(raw_chunk: str) -> bool:
     ext = Path(fp).suffix.lower()
     if ext not in (".py", ".rs", ".ts", ".js", ".go"):
         return False
-    # Only exempt legitimate security pattern table modules in kortext/trust or kortext/hooks
-    return any(mod in fp for mod in ("kortext/trust/sanitizer.py", "kortext/hooks/pipelines/pre_tool.py"))
+    # Only exempt this installation's own security pattern table modules, resolved, not by substring.
+    pkg = Path(__file__).resolve().parent
+    trusted = {pkg / "trust" / "sanitizer.py", pkg / "hooks" / "pipelines" / "pre_tool.py"}
+    p = Path(fp)
+    try:
+        return (p if p.is_absolute() else pkg.parent / p).resolve() in trusted
+    except (OSError, ValueError):
+        return False
 
 
 def _filter_untrusted_injection_chunks(res: Dict[str, Any]) -> Dict[str, Any]:

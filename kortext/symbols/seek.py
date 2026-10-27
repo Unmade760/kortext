@@ -203,15 +203,18 @@ def extract_symbol_candidates(
                 except Exception:
                     logger.debug("Suppressed non-fatal exception")
 
+            from kortext.embeddings import get_dense_embedder
+
+            q_vec = get_dense_embedder().embed_query(query)
             resp = None
             query_fn = getattr(client, "query_points", None) or getattr(qdrant_engine, "query_points", None)
             if callable(query_fn):
                 try:
-                    resp = query_fn(collection_name=target_collection, limit=2)
+                    resp = query_fn(collection_name=target_collection, query=q_vec, using="text-dense", limit=2)
                 except Exception as q_err:
                     if target_collection == "kortext_codebase":
                         try:
-                            resp = query_fn(collection_name="codebase", limit=2)
+                            resp = query_fn(collection_name="codebase", query=q_vec, using="text-dense", limit=2)
                         except Exception:
                             logger.debug(f"Dense vector fallback query failed: {q_err}")
                     else:

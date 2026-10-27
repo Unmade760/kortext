@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 import asyncio
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -135,6 +136,8 @@ async def create_collection(request: Request):
         name = body.get("name", "").strip()
         if not name:
             return {"status": "error", "message": "Collection name is required"}
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name):
+            return {"status": "error", "message": "Collection name may only use letters, digits, '_' and '-'"}
 
         raw_dim = body.get("dimension") or os.getenv("EMBED_DIMENSION")
         if raw_dim:

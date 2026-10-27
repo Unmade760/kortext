@@ -460,7 +460,7 @@ class MINJAFactSanitizer:
                     obj = str(sf.get("target") or sf.get("object") or rel)
                     fact_text = str(sf.get("fact") or str(sf))
                     tier = int(sf.get("source_tier", 2))
-                    inst_trust = "tool_confirmed" if tier <= 2 else "speculative"
+                    inst_trust = "speculative"  # extracted from transcript text, never tool-confirmed
                     try:
                         active_driver.record_fact(
                             subject=sub,

@@ -4,7 +4,7 @@ Unit tests for SymbolSeekEngine deterministic AST lookup.
 
 import json
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 from kortext.symbols.seek import SymbolSeekEngine
 
 
@@ -183,7 +183,7 @@ class TestExtractSymbolCandidates:
         cands = extract_symbol_candidates("what does it do", qdrant_engine=mock_engine)
         assert "CustomInjectedSymbol" in cands
         mock_engine.client.query_points.assert_called_once_with(
-            collection_name="kortext_codebase", limit=2
+            collection_name="kortext_codebase", query=ANY, using="text-dense", limit=2
         )
 
     def test_sole_custodian_fallback_to_codebase_alias_when_default_absent(self):
@@ -200,7 +200,7 @@ class TestExtractSymbolCandidates:
         cands = extract_symbol_candidates("what does it do", qdrant_engine=mock_engine)
         assert "LegacyAliasSymbol" in cands
         mock_engine.client.query_points.assert_called_once_with(
-            collection_name="codebase", limit=2
+            collection_name="codebase", query=ANY, using="text-dense", limit=2
         )
 
     def test_symbol_seek_engine_accepts_and_passes_qdrant_engine(self):

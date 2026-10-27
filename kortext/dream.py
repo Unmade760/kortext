@@ -197,6 +197,7 @@ class DreamEngine:
                     )
 
         # 1. Collect superseded (:Episodic) nodes
+        stale_node_names: List[str] = []
         superseded_nodes = self._query(
             self.episodic_db,
             "MATCH (e:Episodic) WHERE e.superseded = true "
@@ -223,11 +224,7 @@ class DreamEngine:
                             f"**Reason:** {s_reason}\n\n"
                             f"{s_content}\n"
                         )
-                        self._query(
-                            self.episodic_db,
-                            "MATCH (e:Episodic {name: $name}) DETACH DELETE e",
-                            {"name": s_name},
-                        )
+                        stale_node_names.append(s_name)
 
         # 2. Collect and purge superseded [r:RELATES_TO] edges
         superseded_edges = self._query(
@@ -259,17 +256,25 @@ class DreamEngine:
                             f"{f_text}\n"
                         )
 
+        # Archive first: if the write fails, nothing is deleted.
+        if archived_entries and not dry_run:
+            ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+            archive_file = ARCHIVE_DIR / f"{today_str}-archived.md"
+            with open(archive_file, "a", encoding="utf-8") as f:
+                f.write("\n\n" + "\n".join(archived_entries))
+
+        for s_name in stale_node_names:
+            self._query(
+                self.episodic_db,
+                "MATCH (e:Episodic {name: $name}) DETACH DELETE e",
+                {"name": s_name},
+            )
         if edge_internal_ids and purge_stale and not dry_run:
             self._query(
                 self.episodic_db,
                 "UNWIND $ids AS rel_id MATCH ()-[r:RELATES_TO]->() WHERE id(r) = rel_id DELETE r",
                 {"ids": edge_internal_ids},
             )
-
-        if archived_entries and not dry_run:
-            archive_file = ARCHIVE_DIR / f"{today_str}-archived.md"
-            with open(archive_file, "a", encoding="utf-8") as f:
-                f.write("\n\n" + "\n".join(archived_entries))
 
         active_count = 0
         active_rows = self._query(

@@ -537,7 +537,7 @@ class AgentNativeEpisodicDriver:
         """
         cypher = """
         MATCH ()-[r_old:RELATES_TO {id: $old_id}]->(obj)
-        SET r_old.valid_to = $now, r_old.dormant = true, r_old.superseded = true, r_old.superseded_by = $new_id
+        SET r_old.valid_to = $now, r_old.superseded_at = $now, r_old.dormant = true, r_old.superseded = true, r_old.superseded_by = $new_id
         WITH DISTINCT obj
         OPTIONAL MATCH (obj)-[r_dep:RELATES_TO]->()
         WHERE r_dep.id <> $new_id AND r_dep.id <> $old_id

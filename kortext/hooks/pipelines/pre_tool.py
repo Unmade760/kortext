@@ -16,6 +16,7 @@ from typing import Any, List, Optional, Sequence, Tuple
 
 from kortext.hooks.context import HookContext
 from kortext.hooks.types import InterceptorResult
+from kortext.trust.sanitizer import SECRET_PATTERNS
 
 logger = logging.getLogger("kortext.hooks.pipelines.pre_tool")
 
@@ -58,15 +59,6 @@ DANGEROUS_PATTERNS = [
     re.compile(r"\b(?:bash|sh|zsh)\s+-c\s+['\"].*\brm\s+-[a-zA-Z]*r[a-zA-Z]*f\b", re.IGNORECASE),
     re.compile(r"\$\([^)]*\brm\s+-[a-zA-Z]*r[a-zA-Z]*f\b", re.IGNORECASE),
     re.compile(r"\bpython3?\s+-c\s+['\"].*\b(?:shutil\.rmtree|os\.remove|os\.unlink|os\.system|Path\([^)]*\)\.unlink)\b.*(?:\.kortext|kortext/data|rm\s+-rf)", re.IGNORECASE),
-]
-
-SECRET_PATTERNS = [
-    re.compile(r"\bsk-[a-zA-Z0-9_\-]{20,}\b"),
-    re.compile(r"\bghp_[a-zA-Z0-9]{36,}\b"),
-    re.compile(r"\bgithub_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"-----BEGIN (?:RSA|EC|DSA|OPENSSH|PGP) PRIVATE KEY-----"),
-    re.compile(r"\bxox[baprs]-[0-9a-zA-Z]{10,48}\b"),
 ]
 
 
