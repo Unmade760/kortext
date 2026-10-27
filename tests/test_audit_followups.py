@@ -60,3 +60,10 @@ def test_complete_baton_prefers_exact_id(tmp_path):
     HandoffManager(handoffs_dir=tmp_path).complete_baton("task_1")
     assert json.loads((tmp_path / "task_10.json").read_text())["status"] == "pending"
     assert json.loads((tmp_path / "task_1.json").read_text())["status"] == "completed"
+
+
+def test_post_tool_error_read_from_payload_root():
+    from kortext.hooks.context import HookContext
+
+    ctx = HookContext.from_stdin('{"toolCall": {"name": "run_command", "args": {}}, "error": "exit status 1"}', event="post_tool")
+    assert ctx.tool_error == "exit status 1"
