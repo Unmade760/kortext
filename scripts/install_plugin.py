@@ -60,6 +60,7 @@ def build_hooks_dict(runner_python: str = "") -> dict:
         hook_cmd_prefix = 'sh "${KORTEXT_PLUGIN_DIR:-$HOME/.gemini/config/plugins/kortext}/run_hook.sh"'
     return {
         "kortext-ambient-grounding": {
+            "enabled": True,
             "PreInvocation": [
                 {
                     "type": "command",
@@ -69,6 +70,7 @@ def build_hooks_dict(runner_python: str = "") -> dict:
             ],
         },
         "kortext-runaway-guard": {
+            "enabled": True,
             "PostInvocation": [
                 {
                     "type": "command",
@@ -78,6 +80,7 @@ def build_hooks_dict(runner_python: str = "") -> dict:
             ],
         },
         "kortext-safety-gate": {
+            "enabled": True,
             "PreToolUse": [
                 {
                     "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|grep_search|find_by_name|view_file|replace_file_content|multi_replace_file_content|write_to_file)",
@@ -92,6 +95,7 @@ def build_hooks_dict(runner_python: str = "") -> dict:
             ]
         },
         "kortext-cache-invalidation": {
+            "enabled": True,
             "PostToolUse": [
                 {
                     "matcher": "(client:|mcp[:_]+kortext[:_]+|kortext:)?(run_command|write_to_file|replace_file_content|multi_replace_file_content|seek_symbol|trace_symbol_impact|manage_tasks|record_system_outcome)",
@@ -106,6 +110,7 @@ def build_hooks_dict(runner_python: str = "") -> dict:
             ]
         },
         "kortext-dag-stop-guard": {
+            "enabled": True,
             "Stop": [
                 {
                     "type": "command",
