@@ -280,20 +280,14 @@ class RetrievalEngine:
         if not self._client or not dense_vec:
             return []
         col_dim = await self._get_collection_dense_dim(col_name)
-        if isinstance(col_dim, int) and len(dense_vec) in (384, 768, 1024, 1536, 4096) and col_dim != len(dense_vec):
-            if os.getenv("KORTEXT_ADAPT_EMBED_DIM", "0") == "1" and col_dim > 0:
-                if len(dense_vec) < col_dim:
-                    dense_vec = list(dense_vec) + [0.0] * (col_dim - len(dense_vec))
-                else:
-                    dense_vec = list(dense_vec[:col_dim])
-            else:
-                logger.warning(
-                    "Collection '%s' dense vector dim (%d) != query vector dim (%d); skipping dense leg and relying on sparse/AST/HippoRAG.",
-                    col_name,
-                    col_dim,
-                    len(dense_vec),
-                )
-                return []
+        if isinstance(col_dim, int) and col_dim != len(dense_vec):
+            # Vectors from different models are not comparable; padding or truncating them gives noise.
+            logger.error(
+                "Collection '%s' holds %d-d vectors but the active embedder (%s) makes %d-d ones; dense search is off "
+                "for it. Re-index the collection, or restore the EMBED_BASE_URL/EMBED_MODEL_NAME it was built with.",
+                col_name, col_dim, get_embed_model_name(), len(dense_vec),
+            )
+            return []
         target_meta = candidate_metadata if candidate_metadata is not None else self._candidate_metadata
         try:
             response = await self._client.query_points(

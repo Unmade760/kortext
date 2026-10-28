@@ -167,3 +167,20 @@ def test_failed_reindex_is_retried_then_dead_lettered(tmp_path, monkeypatch):
     assert advisories and "a.py" in advisories[0]
     status = reindex_spool_status()
     assert status["failed"] == 1 and status["recent_failures"][0]["attempts"] == server.SPOOL_MAX_ATTEMPTS
+
+
+def test_cache_purges_files_that_left_the_index_root(tmp_path):
+    from kortext.cache import IngestCache
+
+    root = tmp_path / "repo"
+    (root / "vendor").mkdir(parents=True)
+    kept, excluded = root / "a.py", root / "vendor" / "b.py"
+    other = tmp_path / "other_repo" / "c.py"
+    other.parent.mkdir()
+    for f in (kept, excluded, other):
+        f.write_text("x = 1\n")
+    cache = IngestCache(db_path=tmp_path / "cache.db")
+    for f in (kept, excluded, other):
+        cache.record_file(str(f.resolve()), "col", 0.0, "sha", ["p"])
+    purged = {p for p, _ in cache.purge_missing_files("col", {str(kept)}, root=str(root))}
+    assert purged == {str(excluded.resolve())}

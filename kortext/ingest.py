@@ -825,7 +825,7 @@ async def ingest(
         }
 
         # Purge deleted files
-        purged = cache.purge_missing_files(collection, current_files)
+        purged = cache.purge_missing_files(collection, current_files, root=root)
         if purged:
             logger.info(f"[Kortext Ingest] 🗑️  Purging {len(purged)} deleted file(s) from collection '{collection}'...")
             from kortext.symbols import SymbolGraphManager
