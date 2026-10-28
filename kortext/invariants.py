@@ -48,7 +48,10 @@ _DEFAULT_GROUNDED_FILE = (
 )
 GROUNDED_FILE = _DEFAULT_GROUNDED_FILE
 REPO_GROUNDED_FILE = KORTEXT_ROOT / "journal" / "grounded_invariants.json"
-QUARANTINE_DIR = JOURNAL_DIR / "quarantine"
+# Same directory the sanitizer writes and the dashboard reads.
+QUARANTINE_DIR = (
+    Path(os.environ["JOURNAL_DIR"]) / "quarantine" if os.getenv("JOURNAL_DIR") else get_kortext_home() / "quarantine"
+)
 FALKORDB_DB = os.getenv("KORTEXT_DATABASE", os.getenv("FALKORDB_DATABASE", "kortext"))
 
 

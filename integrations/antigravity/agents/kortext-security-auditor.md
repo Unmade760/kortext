@@ -4,8 +4,6 @@ description: Red Team security auditor, vulnerability challenger, and injection 
 model: pro
 subagent: true
 mainAgent: false
-mcpServers:
-  - kortext
 tools:
   - view_file
   - list_dir

@@ -147,12 +147,7 @@ def _retrieve_symbol_names(
                                 names.append(child)
                                 seen.add(child)
             except Exception:
-                if sym not in seen and _is_valid_symbol(sym):
-                    names.append(sym)
-                    seen.add(sym)
-        elif sym and sym not in seen and _is_valid_symbol(sym):
-            names.append(sym)
-            seen.add(sym)
+                pass  # a malformed seek result retrieves nothing; never echo the query back as an answer
 
     ppr = HippoRAGPPR()
     if candidates:

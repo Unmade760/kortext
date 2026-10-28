@@ -60,6 +60,9 @@ class HookContext:
     @property
     def tool_error(self) -> Optional[str]:
         """Extracts error details from tool_result if the tool execution failed."""
+        root_err = self.raw_payload.get("error")  # agy PostToolUse puts the error at the payload root
+        if root_err:
+            return str(root_err)
         if not self.tool_result:
             return None
         err = self.tool_result.get("error") or self.tool_result.get("errorMessage")

@@ -32,11 +32,17 @@ DEFAULT_FALKORDB_VERSION = os.getenv("KORTEXT_FALKORDB_VERSION", "v4.22.0")
 # Only verified upstream release digests are pinned by default; additional platform
 # targets can be supplied via KORTEXT_<BINARY>_<OS>_<ARCH>_SHA256 environment variables
 # or verified automatically via upstream .sha256 sidecar files during download.
+# Measured with sha256sum on the GitHub release assets, 2026-10-27 (FalkorDB matches GitHub's asset digest).
+# FalkorDB v4.22.0 ships no macOS x86_64 asset.
 _DEFAULT_VERIFIED_SHA256: Dict[Tuple[str, str, str, str], str] = {
-    ("qdrant", "v1.13.4", "darwin", "arm64"): "967ce05dac592ede582072f0c335f3c2d095dfe4dd21ab370b89d7d9158d6cc4",
-    ("qdrant", "v1.13.4", "darwin", "x86_64"): "c894218a92b0e48901d63218a974258b72a534d2c7800d5c838a57600a737126",
-    ("qdrant", "v1.13.4", "linux", "arm64"): "b78d6e109f426488321b5c0a8172645a8014796e217c42d90927846234829104",
-    ("falkordb", "v4.22.0", "darwin", "arm64"): "d9aac2d48b455a7efcc35f2421b13dbf9e96c23e5cc2a99f66e9973be61a1d18",
+    ("qdrant", "v1.13.4", "darwin", "arm64"): "726bfd05af031207054745b501746c4b0a8de4da74a49dd2347da33399d3ccdd",
+    ("qdrant", "v1.13.4", "darwin", "x86_64"): "76c30f3a457f94f0cedaefa0f5791f25c721381b557b4ade87daef4f4e32aafb",
+    ("qdrant", "v1.13.4", "linux", "arm64"): "a9557f598bfccdcf5a3c4991071a709ae9ddc668d480b3477a473545d729f6eb",
+    ("qdrant", "v1.13.4", "linux", "x86_64"): "520665624999339a600f8c0f7869582b4408952d4f03173b4c65d2422c85e4ae",
+    ("qdrant", "v1.13.4", "windows", "x86_64"): "973ba6a16331831c220924ff9afaa7a4e1465a39b3b8873628de134810e9c8e2",
+    ("falkordb", "v4.22.0", "darwin", "arm64"): "877ad3e6dc32b721af518d1c1e9a5eb708b074dbb6eb110e7477d162e3ad9b97",
+    ("falkordb", "v4.22.0", "linux", "arm64"): "9aea5a9d2b613a2ab8f1b1e25207e9acf5cbf5419f9534c314e76c0cd73b329c",
+    ("falkordb", "v4.22.0", "linux", "x86_64"): "e013b40c41a978050253e6192dc246e90c138b1242d3a7c5ae7d126a7c2b3444",
 }
 
 _ENV_SHA256_KEYS: Dict[Tuple[str, str, str, str], str] = {
@@ -278,6 +284,11 @@ def download_file(
                 out_file.write(chunk)
         actual_sha = hasher.hexdigest().lower()
         resolved_expected = expected_sha256 or _fetch_remote_sha256_sidecar(url, timeout=min(timeout, 10.0))
+        if not resolved_expected and os.getenv("KORTEXT_ALLOW_UNVERIFIED_BINARY") != "1":
+            temp_file.unlink(missing_ok=True)
+            raise ValueError(
+                f"No SHA-256 known for {url}; set KORTEXT_ALLOW_UNVERIFIED_BINARY=1 to install it unverified"
+            )
         if resolved_expected:
             norm_expected = resolved_expected.strip().lower()
             if actual_sha != norm_expected:

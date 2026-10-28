@@ -280,7 +280,7 @@ async def fetch_tier1_chunks(
             if ws_root:
                 first_line = c_str.split("\n", 1)[0]
                 if first_line.startswith(("# File:", "File:", "// File:")):
-                    f_path = first_line.split(":", 1)[1].strip().split(":")[0].strip()
+                    f_path = re.sub(r":\d+(?:-\d+)?$", "", first_line.split(":", 1)[1].strip())
                     if f_path and not is_file_in_workspace(f_path, ws_root):
                         continue
             if dl == "compact":

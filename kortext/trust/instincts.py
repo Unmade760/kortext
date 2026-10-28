@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import uuid
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -91,7 +92,7 @@ class InstinctStore:
     def _save(self, data: Dict[str, Dict[str, Any]]) -> None:
         try:
             self.store_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = self.store_path.with_suffix(f".tmp.{os.getpid()}")
+            tmp_path = self.store_path.with_suffix(f".tmp.{os.getpid()}.{uuid.uuid4().hex}")
             tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             tmp_path.replace(self.store_path)
             st = self.store_path.stat()

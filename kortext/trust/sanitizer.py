@@ -22,6 +22,15 @@ _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\u00
 _BIDI_OVERRIDE_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069]")
 _WHITESPACE_RE = re.compile(r"\s+")
 
+SECRET_PATTERNS = [
+    re.compile(r"\bsk-[a-zA-Z0-9_\-]{20,}\b"),
+    re.compile(r"\bghp_[a-zA-Z0-9]{36,}\b"),
+    re.compile(r"\bgithub_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"-----BEGIN (?:RSA|EC|DSA|OPENSSH|PGP) PRIVATE KEY-----"),
+    re.compile(r"\bxox[baprs]-[0-9a-zA-Z]{10,48}\b"),
+]
+
 EXECUTABLE_PROMOTION_TRUST_LEVELS = frozenset({"tool_confirmed", "verified", "user_approved", "system"})
 
 
@@ -110,7 +119,7 @@ def can_promote_to_executable(trust_level: str = "speculative", source_tier: int
         return False
     if source_tier >= 3 and norm not in ("user_approved", "system"):
         return False
-    return norm in EXECUTABLE_PROMOTION_TRUST_LEVELS or source_tier <= 2
+    return norm in EXECUTABLE_PROMOTION_TRUST_LEVELS
 
 
 def fence_memory_by_provenance(text: str, trust_level: str = "speculative", source_tier: int = 2) -> str:
@@ -150,6 +159,10 @@ class CausalSanitizer:
         norm_relation = normalize_for_security_scan(relation)
         norm_fact = normalize_for_security_scan(fact)
         combined = f"{norm_subject} {norm_relation} {norm_fact}".strip()
+
+        # Credentials never enter memory; not quarantined either, so the secret is not copied to disk.
+        if any(p.search(combined) for p in SECRET_PATTERNS):
+            raise SecurityViolation("Credential-like token detected; refusing to store it in memory.")
 
         effective_tier = source_tier
         if trust_level and trust_level.strip().lower() in ("untrusted", "speculative", "inferred"):

@@ -52,7 +52,7 @@ flowchart TD
 | Tier | Substrate | Role | Query Latency | Invariant / Precedence |
 |:---|:---|:---|:---|:---|
 | **Tier 0: AST B-Tree** | FalkorDB `kortext_symbols` | Exact symbol declarations, type signatures, file boundaries, and direct callers/callees extracted via Tree-sitter. | <2 ms | **Absolute Ground Truth.** Overrides all model speculations. |
-| **Tier 1: Vectors** | Qdrant (HTTP/IPC) | Dense code chunk embeddings (FastEmbed 384d ONNX / BAAI/bge-small-en-v1.5) paired with BM25 sparse keyword indices. | <10 ms | Semantic concept discovery and associative document retrieval. |
+| **Tier 1: Vectors** | Qdrant (embedded or HTTP) | Dense code chunk embeddings (FastEmbed 384d ONNX / BAAI/bge-small-en-v1.5) paired with BM25 sparse keyword indices. | <10 ms | Semantic concept discovery and associative document retrieval. |
 | **Tier 2: Episodic** | FalkorDB `kortext` | Bi-temporal episodic decisions, configuration changes, bug fixes, and architectural invariants recorded across coding sessions. | <3 ms | Temporal persistence. Old facts are superseded via `[:SUPERSEDES]`, never deleted. |
 | **Tier 3: Federated** | Python Engine | Cross-tier Reciprocal Rank Fusion (RRF) and HippoRAG Personalized PageRank (PPR) power iterations linking episodic intent to AST code paths. | <15 ms | Multi-hop associative reasoning. |
 | **Tier 4: Dream Mode** | Background Worker | Offline memory consolidation: Weibull synaptic decay, Louvain community subsystem detection, MEX pattern AST drift auditing, fact consolidation, and skill distillation. | Batch | Autonomous memory optimization and hygiene. |
@@ -79,7 +79,7 @@ graph TD
 
     subgraph Substrates["Local Substrates"]
         FalkorDB["FalkorDB Daemon\n(Redis Protocol)"]
-        QdrantEngine["Qdrant Vector Daemon\n(REST :6333 / IPC)"]
+        QdrantEngine["Qdrant Vector Daemon\n(REST :6333 / gRPC :6334)"]
     end
 
     Agent -->|FastMCP stdio| MCP
@@ -124,5 +124,5 @@ To prevent Memory Injection Attacks (MINJA) where adversarial third-party web sc
    - `trust_level="system"`: Immutable agent operating rules.
    - `trust_level="verified"`: Deterministic Tree-sitter AST extractions.
    - `trust_level="tool_confirmed"`: Verified test execution outputs.
-   - `trust_level="untrusted"`: Dynamic external documents and raw user prompts.
+   - `trust_level="speculative"` (`untrusted` is mapped to it): Dynamic external documents and raw user prompts.
 3. **Quarantine Vault:** Any payload attempting prompt injection, directive override, or unauthorized privilege escalation is blocked with `SecurityViolation` and sequestered in `~/.kortext/quarantine/*.json`.

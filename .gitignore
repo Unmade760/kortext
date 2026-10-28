@@ -45,3 +45,4 @@ journal/implementations/
 .DS_Store
 Thumbs.db
 *.tar.gz
+journal/quarantine/

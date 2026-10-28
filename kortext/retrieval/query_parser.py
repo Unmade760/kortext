@@ -98,8 +98,6 @@ def is_file_in_workspace(file_path: Optional[str], ws_root: str) -> bool:
         return False
     fp_str = str(file_path)
     ws_str = str(ws_root)
-    if fp_str.startswith(ws_str):
-        return True
     try:
         p_file = Path(fp_str)
         p_ws = Path(ws_str).resolve()

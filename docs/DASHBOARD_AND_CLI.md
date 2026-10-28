@@ -11,7 +11,7 @@ The Kortext Dashboard is an operational command center providing real-time visua
 Access the dashboard locally at:
 ```bash
 kortext dashboard
-# Opens http://localhost:8000 in your browser
+# Opens http://127.0.0.1:8004 in your browser
 ```
 
 ```
@@ -26,7 +26,7 @@ kortext dashboard
 │   │ [Architecture] [Zoom] [Freeze] │    │ System Telemetry          │  │
 │   │                                │    │ Substrate RAM: 48.2 MB    │  │
 │   │   🧩 Subsystems Architecture   │    │ FalkorDB Latency: 0.8 ms  │  │
-│   │   67 Louvain Community Clusters│    ├───────────────────────────┤  │
+│   │   Louvain community clusters (count depends on the graph)│    ├───────────────────────────┤  │
 │   │   Zero-Hairball Topology       │    │ Relationship Palette      │  │
 │   │                                │    │ [x] CALLS  [x] DEFINED_IN │  │
 │   └────────────────────────────────┘    └───────────────────────────┘  │
@@ -38,23 +38,23 @@ kortext dashboard
 
 ## 2. Modular ES Modules Frontend Architecture
 
-The frontend is constructed using pure modern ECMAScript modules (no heavy Webpack or Vite build steps needed), strictly adhering to the 200–400 line typical file maintainability ceiling:
+The frontend is constructed using pure modern ECMAScript modules (no heavy Webpack or Vite build steps needed), as ES modules:
 
 ```
 kortext/dashboard/static/js/
-├── main.js                  # Application entry point & backward-compatible window bindings (<100 lines)
+├── main.js                  # Application entry point & backward-compatible window bindings
 └── modules/
-    ├── state.js             # Centralized reactive application state store (<100 lines)
-    ├── api.js               # Async fetch client with error envelopes and toasts (<120 lines)
-    ├── ui.js                # Toast notifications, modals, and WCAG AA contrast helpers (<180 lines)
-    ├── health.js            # Substrate health, 5-tier memory grid, and hooks status (<280 lines)
-    ├── graph.js             # Knowledge Graph explorer & Vis.js network manager (<500 lines)
-    ├── graph_inspector.js   # Relationship palette, exact link inspector, side drawer (<250 lines)
-    ├── tasks.js             # Interactive 5-column Drag-and-Drop Task DAG Kanban board (<380 lines)
-    ├── journal.js           # Decision journal & 8-category outcome taxonomy explorer (<150 lines)
-    ├── retrieval.js         # Multi-tier RRF retrieval sandbox & score breakdown (<200 lines)
-    ├── blast.js             # Blast radius analyzer & hierarchical caller/callee tree (<280 lines)
-    └── dream.js             # Cognitive Dream Mode trigger modal (<120 lines)
+    ├── state.js             # Centralized reactive application state store
+    ├── api.js               # Async fetch client with error envelopes and toasts
+    ├── ui.js                # Toast notifications, modals, and WCAG AA contrast helpers
+    ├── health.js            # Substrate health, 5-tier memory grid, and hooks status
+    ├── graph.js             # Knowledge Graph explorer & Vis.js network manager
+    ├── graph_inspector.js   # Relationship palette, exact link inspector, side drawer
+    ├── tasks.js             # Interactive 5-column Drag-and-Drop Task DAG Kanban board
+    ├── journal.js           # Decision journal & 8-category outcome taxonomy explorer
+    ├── retrieval.js         # Multi-tier RRF retrieval sandbox & score breakdown
+    ├── blast.js             # Blast radius analyzer & hierarchical caller/callee tree
+    └── dream.js             # Cognitive Dream Mode trigger modal
 ```
 
 ---
@@ -79,7 +79,7 @@ Rendering thousands of symbols and files in canvas force-directed graphs typical
 5. **Ego-Network Isolation (1-Hop / 2-Hop):**
    Click any node and select **Isolate Neighborhood** to dim the rest of the universe and focus strictly on that node's immediate callers and callees.
 6. **Hard-Freeze Physics:**
-   Barnes-Hut physics automatically stabilizes and freezes within 1.5 seconds, guaranteeing 60 FPS scrolling and zero CPU/GPU battery drain.
+   Barnes-Hut physics stabilizes, then physics is switched off, guaranteeing 60 FPS scrolling and zero CPU/GPU battery drain.
 
 ---
 
@@ -110,9 +110,8 @@ Manage agent tasks visually with the 5-column drag-and-drop board:
 The `kortext` CLI provides cross-platform management across macOS, Linux, and Windows:
 
 ```bash
-# Display help and version
+# Display help
 kortext --help
-kortext version
 ```
 
 ### `kortext setup` (Guided Setup Wizard)
@@ -122,9 +121,9 @@ Runs the interactive onboarding wizard:
 kortext setup
 
 # Non-interactive automated CI setup
-kortext setup --non-interactive
+kortext setup --yes
 ```
-- Validates Python 3.11+ and local ports (6379, 6333, 8000).
+- Validates Python 3.11+ and local ports (6379, 6333).
 - Downloads native FalkorDB binary / verifies Docker availability.
 - Initializes data directories (`~/.kortext/data`, `~/.kortext/run`).
 - Writes production `.env` configuration.
@@ -139,7 +138,7 @@ kortext start
 kortext stop
 ```
 
-### `kortext status` / `kortext health`
+### `kortext status`
 Audits system health and substrate connectivity:
 ```bash
 kortext status
@@ -160,5 +159,5 @@ kortext dream --project kortext
 ### `kortext dashboard`
 Starts the local dashboard server:
 ```bash
-kortext dashboard --port 8000
+DASHBOARD_PORT=8004 kortext dashboard
 ```

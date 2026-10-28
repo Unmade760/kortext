@@ -18,7 +18,7 @@
 
 - **Compiler-Grade AST Intelligence:** Deterministic Tree-sitter symbol indexing (`seek_symbol`) and multi-hop knapsack-budgeted call hierarchies (`trace_symbol_impact`) across 11 languages, plus SCIP Protobuf ingestion.
 - **5-Signal Hybrid RRF + Cross-Encoder Reranking + TAA-k Trimming:** Graph memory (FalkorDB) + hybrid dense/BM25 sparse vectors (Qdrant) + HippoRAG Personalized PageRank (PPR) + Bi-Temporal validity filtering, reranked by ONNX cross-encoder before Truncation-Aware Adaptive Knee (TAA-k) trimming.
-- **Graph-Backed Task DAG & 4-Pattern Orchestration Router:** Atomic single-query task claiming, automatic expired-lease self-healing, Context-Rich Task Briefs (`.kortext/briefs/task_<id>_brief.md`), compaction-proof progress ledgers (`.kortext/ledger.md`), and deterministic 4-pattern routing (`single_agent`, `subagents`, `parallel_specialist`, `builder_validator`, `agent_team`).
+- **Graph-Backed Task DAG & 4-Pattern Orchestration Router:** Atomic single-query task claiming, automatic expired-lease self-healing, Context-Rich Task Briefs (`.kortext/briefs/task_<id>_brief.md`), compaction-proof progress ledgers (`.kortext/ledger.md`), and deterministic 5-pattern routing (`single_agent`, `subagents`, `parallel_specialist`, `builder_validator`, `agent_team`).
 - **Agent-Native Cognitive Dream Mode & Continuous Learning v2:** Stretched Weibull synaptic decay, Louvain community subsystem detection, MEX-style AST body-hash + 64-permutation MinHash invariant drift auditing, and cross-project instinct promotion (`~/.kortext/instincts.json`).
 - **5-Pipeline Lifecycle Hooks & MINJA Defense:** Configurable runtime profiles (`KORTEXT_HOOK_PROFILE=minimal|standard|strict|disabled`) enforcing Anti-Ripgrep auto-seek, GateGuard first-touch blast-radius checks, subagent write confinement, 25%-compaction-ceiling pre-compaction batons, and MINJA causal prompt-injection quarantine.
 - **Interactive Anti-Hairball Web Dashboard:** Modular ES modules dashboard on `:8004` with Sole-Custodian-safe federated retrieval, 1-click Subsystems Architecture view, Blast Radius visualizer, and a 5-column Drag-and-Drop Task DAG Kanban board.
@@ -104,10 +104,10 @@ uv run kortext dashboard
 
 ## 🛠️ FastMCP Tools Reference
 
-Kortext exposes 12 standardized FastMCP tools over `stdio`—keeping the 5 high-frequency core tools `alwaysLoad: True` and the 7 administrative/on-demand tools `alwaysLoad: False` to save ~1,200 tokens of prompt schema overhead per turn:
+Kortext exposes 12 standardized FastMCP tools over `stdio`—keeping the 5 high-frequency core tools `alwaysLoad: True` and the 7 administrative/on-demand tools `alwaysLoad: False` to cut prompt schema overhead per turn (not measured):
 
 ### Core High-Frequency Tools (`alwaysLoad: True`)
-1. **`seek_symbol(symbol_name, detail_level='interface')`**: Deterministic AST point lookup returning exact file path, line span, signature, and 1-hop callers/callees in `<2ms` warm / `<12ms` uncached.
+1. **`seek_symbol(symbol_name, detail_level='skeleton')`**: Deterministic AST point lookup returning exact file path, line span, signature, and 1-hop callers/callees in `<2ms` warm / `<15ms` uncached.
 2. **`trace_symbol_impact(symbol, direction='upstream'|'downstream', max_depth=3, token_budget=1500)`**: Multi-hop recursive call-graph traversal with progressive Level-of-Detail (Hop 1 signatures, Hop 2 files, Hop 3+ summary counts).
 3. **`search_knowledge_and_memory(query, collection=None, token_budget=1500, detail_level='balanced', project=None)`**: Federated 4-tier hybrid retrieval across AST symbols, Qdrant dense+BM25 code chunks, FalkorDB bi-temporal episodic facts, and Louvain subsystem overviews.
 4. **`record_system_outcome(episode_name, content, category='implementation', trust_level='speculative', ...)`**: Persists verified architectural decisions and outcomes to FalkorDB and dated Markdown journals (`journal/<category>/`), guarded by MINJA `CausalSanitizer`.
@@ -115,7 +115,7 @@ Kortext exposes 12 standardized FastMCP tools over `stdio`—keeping the 5 high-
 
 ### On-Demand & Administrative Tools (`alwaysLoad: False`)
 6. **`boost_prompt_context(prompt, workspace_root=None, token_budget=600)`**: Pre-execution prompt enhancer (`/kortext-boost`) resolving `@file` mentions, `<file>:<line>` `/codesearch` & `/diff` comments, AST skeletons, grounded invariants, and recommended execution patterns.
-7. **`memory_session_handoff(action='create'|'resume', ...)`**: Creates and resumes structured JSON handoff batons (`~/.kortext/handoffs/`) across sessions and milestone rotations.
+7. **`memory_session_handoff(action='create'|'read'|'list'|'complete', ...)`**: Creates and resumes structured JSON handoff batons (`~/.kortext/handoffs/`) across sessions and milestone rotations.
 8. **`trigger_dream_mode(project='kortext', purge_stale=False, ...)`**: Runs offline Weibull decay, Louvain subsystem clustering, invariant drift auditing, and skill distillation.
 9. **`index_directory(path, collection=None, ...)`**: Incremental content-hash and batch `git log` codebase ingestion into Qdrant and FalkorDB.
 10. **`delete_or_supersede_fact(fact_id, reason, ...)`**: Soft-supersedes outdated facts by canonical UUID or session-scoped integer alias (`[F1]`, `F1`).

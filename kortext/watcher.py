@@ -490,7 +490,10 @@ class DebouncedChangeHandler(FileSystemEventHandler):
         if not spool_dir.is_dir():
             return
         now = time.time()
+        own_suffix = f"_{os.getpid()}.json"
         for f in sorted(spool_dir.glob("event_*.json")):
+            if f.name.endswith(own_suffix):
+                continue
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
                 target_path = data.get("path")

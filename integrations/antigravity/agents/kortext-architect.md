@@ -4,8 +4,6 @@ description: System architect specialist that plans large refactors, audits arch
 subagent: true
 mainAgent: false
 model: pro
-mcpServers:
-  - kortext
 tools:
   - view_file
   - list_dir

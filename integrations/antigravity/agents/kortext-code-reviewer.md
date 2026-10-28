@@ -4,8 +4,6 @@ description: Strict security, invariant enforcement, and architectural QA review
 subagent: true
 mainAgent: false
 model: pro
-mcpServers:
-  - kortext
 tools:
   - view_file
   - list_dir
