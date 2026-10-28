@@ -20,6 +20,16 @@ from kortext._home import get_kortext_home
 logger = logging.getLogger("kortext.tasks")
 
 
+def _as_list(value: Any) -> List[str]:
+    """FalkorDB returns list properties either as lists or as '[a, b]' strings."""
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    if isinstance(value, str) and value.strip():
+        cleaned = value.strip().strip("[]").replace("'", "").replace('"', "")
+        return [x.strip() for x in cleaned.split(",") if x.strip()]
+    return []
+
+
 def _same_path(a: str, b: str) -> bool:
     """Path equality that tolerates one side being relative: 'src/x.py' matches '/repo/src/x.py', not 'test_x.py'."""
     a, b = os.path.normpath(a), os.path.normpath(b)
@@ -522,14 +532,7 @@ class TaskOrchestrationMixin:
                 tid = str(row[0])
                 if exclude_task_id and tid == exclude_task_id:
                     continue
-                raw_files = row[2]
-                if isinstance(raw_files, list):
-                    other_files = [os.path.normpath(str(x).strip()) for x in raw_files if str(x).strip()]
-                elif isinstance(raw_files, str) and raw_files.strip():
-                    cleaned = raw_files.strip().strip("[]").replace("'", "").replace('"', "")
-                    other_files = [os.path.normpath(x.strip()) for x in cleaned.split(",") if x.strip()]
-                else:
-                    other_files = []
+                other_files = [os.path.normpath(x) for x in _as_list(row[2])]
                 shared = sorted(clean_targets.intersection(set(other_files)))
                 if shared:
                     overlaps.append({"task_id": tid, "title": str(row[1]), "overlapping_files": shared})
@@ -664,6 +667,30 @@ class TaskOrchestrationMixin:
         tasks = self.get_all_tasks(project_id=project_id)  # type: ignore[attr-defined]
         return format_visjs_graph_data(tasks)
 
+    def claim_exclusive_files(
+        self, task_id: str, target_files: List[str], project_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Adds files to an in_progress task's ownership set unless another in_progress task owns them.
+        While a worker runs with KORTEXT_TASK_ID set, the PreToolUse hook denies its edits to files
+        another task owns.
+        """
+        rows = self.client.query(
+            self.graph,
+            "MATCH (t:Task {id: $id}) RETURN t.status, coalesce(t.target_files, [])",
+            {"id": task_id},
+        )
+        if not rows or len(rows) < 2 or not rows[1]:
+            return {"status": "error", "error": f"Task '{task_id}' not found"}
+        if rows[1][0][0] != "in_progress":
+            return {"status": "error", "error": f"Task '{task_id}' is {rows[1][0][0]}; claim it first"}
+        conflicts = self.detect_file_overlaps(target_files, project_id=project_id, exclude_task_id=task_id)["overlapping_tasks"]
+        if conflicts:
+            return {"status": "conflict", "conflicts": conflicts}
+        owned = sorted({os.path.normpath(f) for f in _as_list(rows[1][0][1]) + _as_list(list(target_files))})
+        self.client.query(self.graph, "MATCH (t:Task {id: $id}) SET t.target_files = $files", {"id": task_id, "files": owned})
+        return {"status": "claimed", "task_id": task_id, "files": owned}
+
     def execute_action(
         self,
         action: str = "get_ready",
@@ -739,6 +766,10 @@ class TaskOrchestrationMixin:
                 self.detect_file_overlaps(target_files or [], project_id=project_id, exclude_task_id=task_id),
                 separators=(",", ":"),
             )
+        if act == "claim_files":
+            if not task_id or not target_files:
+                return json.dumps({"error": "claim_files needs 'task_id' and 'target_files'"}, separators=(",", ":"))
+            return json.dumps(self.claim_exclusive_files(task_id, target_files, project_id=project_id), separators=(",", ":"))
         if act == "heartbeat":
             if not task_id:
                 return json.dumps({"error": "Missing 'task_id' for heartbeat"}, separators=(",", ":"))

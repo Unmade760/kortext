@@ -184,3 +184,31 @@ def test_cache_purges_files_that_left_the_index_root(tmp_path):
         cache.record_file(str(f.resolve()), "col", 0.0, "sha", ["p"])
     purged = {p for p, _ in cache.purge_missing_files("col", {str(kept)}, root=str(root))}
     assert purged == {str(excluded.resolve())}
+
+
+def test_exclusive_file_claims_and_ownership_guard(monkeypatch):
+    import uuid
+
+    from kortext.hooks.context import HookContext
+    from kortext.hooks.pipelines.pre_tool import FileOwnershipGuard
+    from kortext.tasks.tracker import TaskDAGTracker
+
+    tr = TaskDAGTracker()
+    proj = f"own_{uuid.uuid4().hex[:6]}"
+    a = tr.create_task("a", "a", project_id=proj)
+    b = tr.create_task("b", "b", project_id=proj)
+    try:
+        tr.update_task_status(a, "in_progress")
+        tr.update_task_status(b, "in_progress")
+        assert tr.claim_exclusive_files(a, ["src/x.py"], project_id=proj)["status"] == "claimed"
+        assert tr.claim_exclusive_files(b, ["./src/x.py"], project_id=proj)["status"] == "conflict"
+
+        ctx = HookContext.from_stdin(json.dumps({"toolCall": {"name": "write_to_file", "args": {"TargetFile": "/repo/src/x.py"}}}))
+        monkeypatch.setenv("KORTEXT_TASK_ID", b)
+        assert FileOwnershipGuard().check(ctx).decision == "deny"
+        monkeypatch.setenv("KORTEXT_TASK_ID", a)
+        assert FileOwnershipGuard().check(ctx).decision == "allow"
+        monkeypatch.delenv("KORTEXT_TASK_ID")
+        assert FileOwnershipGuard().check(ctx).decision == "allow"
+    finally:
+        tr.client.query(tr.graph, "MATCH (t:Task) WHERE t.id IN [$a, $b] DETACH DELETE t", {"a": a, "b": b})

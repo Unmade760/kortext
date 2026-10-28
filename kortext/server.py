@@ -847,9 +847,11 @@ async def manage_tasks(
     tests_passed: Optional[bool] = None,
     base_commit: Optional[str] = None,
     milestone_name: Optional[str] = None,
+    reviewer_output: Optional[str] = None,
+    token_budget_spent: Optional[int] = None,
     ctx: Optional[Context] = None,
 ) -> str:
-    """Manage Task DAG: create (single or batch `tasks`), get_ready, claim, complete_task, milestone_handoff, update_status, list_all."""
+    """Manage Task DAG: create (single or batch `tasks`), get_ready, claim, claim_files (exclusive file ownership for an in_progress task), heartbeat, complete_task, milestone_handoff, update_status, list_all."""
     resolved_target_files = target_files if target_files is not None else files_to_modify
 
     def _do_manage() -> str:
@@ -861,7 +863,8 @@ async def manage_tasks(
             episode_name=episode_name, tasks=tasks, target_files=resolved_target_files,
             modified_files=modified_files, test_command=test_command,
             tests_passed=tests_passed, base_commit=base_commit,
-            milestone_name=milestone_name,
+            milestone_name=milestone_name, reviewer_output=reviewer_output,
+            token_budget_spent=token_budget_spent,
         )
 
     return await asyncio.to_thread(_do_manage)
