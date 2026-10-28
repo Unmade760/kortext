@@ -86,18 +86,21 @@ def test_task_dag_cypher_quotes_leases_and_handoffs(tmp_path, monkeypatch):
     )
 
     try:
-        # 1. detect_file_overlaps works on live FalkorDB
+        # 1. A pending task is not active, so it never counts as an overlap
         ov = tracker.detect_file_overlaps(["kortext/retrieval/engine.py"], project_id=proj, exclude_task_id=t1)
-        assert ov["recommended_workspace_mode"] == "branch"
-        assert any(item["task_id"] == t2 for item in ov["overlapping_tasks"])
+        assert ov["recommended_workspace_mode"] == "shared"
 
         # 2. claim_next_ready_task sets claimed_at & lease_expires_at, and get_in_progress_tasks returns it
         claimed = tracker.claim_next_ready_task(worker_id="runner-audit", project_id=proj, lease_seconds=600)
+        ov = tracker.detect_file_overlaps(["./kortext/retrieval/engine.py"], project_id=proj, exclude_task_id=t2)
+        assert ov["recommended_workspace_mode"] == "branch"
+        assert any(item["task_id"] == t1 for item in ov["overlapping_tasks"])
+        assert tracker.detect_file_overlaps(["test_engine.py"], project_id=proj)["recommended_workspace_mode"] == "shared"
         assert claimed is not None
         assert claimed["id"] == t1
         assert claimed["status"] == "in_progress"
         assert "claimed_at" in claimed and "lease_expires_at" in claimed
-        assert claimed.get("recommended_workspace_mode") == "branch"
+        assert claimed.get("recommended_workspace_mode") == "shared"  # the only other task is pending
 
         in_prog = tracker.get_in_progress_tasks(project_id=proj)
         assert any(t["id"] == t1 for t in in_prog)

@@ -100,11 +100,16 @@ class DreamEngine:
         purge_stale: bool = True,
         dry_run: bool = False,
         stale_fact_names: Optional[List[str]] = None,
+        projects: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Audits both (:Episodic) nodes and (:Entity)-[r:RELATES_TO]->(:Entity) edges
-        for superseded state, archives them to markdown, and purges them atomically.
+        for superseded state, archives them to markdown, and purges them.
+        Only facts of `projects` are touched; None means every project.
         """
+        scope = {"projects": list(projects)} if projects else {}
+        node_scope = "AND coalesce(e.project, 'kortext') IN $projects " if projects else ""
+        edge_scope = "AND coalesce(r.project, 'kortext') IN $projects " if projects else ""
         now = datetime.now(timezone.utc).isoformat()
         today_str = datetime.now().strftime("%Y-%m-%d")
         superseded_details: List[Dict[str, str]] = []
@@ -120,26 +125,27 @@ class DreamEngine:
                 if not dry_run:
                     self._query(
                         self.episodic_db,
-                        "MATCH (e:Episodic) WHERE e.name = $name "
+                        "MATCH (e:Episodic) WHERE e.name = $name " + node_scope +
                         "SET e.superseded = true, e.superseded_by = 'Agent Reflection', "
                         "    e.superseded_at = $now, e.superseded_reason = 'Superseded during cognitive consolidation'",
-                        {"name": s_name, "now": now},
+                        {"name": s_name, "now": now, **scope},
                     )
                     self._query(
                         self.episodic_db,
                         "MATCH ()-[r:RELATES_TO]->() "
-                        "WHERE r.episode_name = $name OR r.id = $name OR r.fact_id = $name "
+                        "WHERE (r.episode_name = $name OR r.id = $name OR r.fact_id = $name) " + edge_scope +
                         "SET r.superseded = true, r.dormant = true, r.superseded_by = 'Agent Reflection', "
                         "    r.superseded_at = $now, r.superseded_reason = 'Superseded during cognitive consolidation'",
-                        {"name": s_name, "now": now},
+                        {"name": s_name, "now": now, **scope},
                     )
 
         # 1. Collect superseded (:Episodic) nodes
         stale_node_names: List[str] = []
         superseded_nodes = self._query(
             self.episodic_db,
-            "MATCH (e:Episodic) WHERE e.superseded = true "
+            "MATCH (e:Episodic) WHERE e.superseded = true " + node_scope +
             "RETURN e.name, e.content, e.created_at, e.superseded_by, e.superseded_reason",
+            scope,
         )
         if superseded_nodes and len(superseded_nodes) > 1 and isinstance(superseded_nodes[1], list):
             for r in superseded_nodes[1]:
@@ -167,8 +173,9 @@ class DreamEngine:
         # 2. Collect and purge superseded [r:RELATES_TO] edges
         superseded_edges = self._query(
             self.episodic_db,
-            "MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity) WHERE r.superseded = true "
+            "MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity) WHERE r.superseded = true " + edge_scope +
             "RETURN coalesce(r.id, r.fact_id, toString(id(r))), r.fact, r.created_at, r.superseded_by, r.superseded_reason, id(r)",
+            scope,
         )
         edge_internal_ids: List[int] = []
         if superseded_edges and len(superseded_edges) > 1 and isinstance(superseded_edges[1], list):
@@ -217,7 +224,8 @@ class DreamEngine:
         active_count = 0
         active_rows = self._query(
             self.episodic_db,
-            "MATCH (e:Episodic) WHERE (e.superseded IS NULL OR e.superseded = false) RETURN count(e)",
+            "MATCH (e:Episodic) WHERE (e.superseded IS NULL OR e.superseded = false) " + node_scope + "RETURN count(e)",
+            scope,
         )
         if active_rows and len(active_rows) > 1 and isinstance(active_rows[1], list) and active_rows[1]:
             try:
@@ -641,41 +649,61 @@ class DreamEngine:
         macro_fact: str,
         superseded_fact_ids: List[str],
         project: str = "kortext",
+        subject: Optional[str] = None,
+        object_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Consolidates fine-grained or redundant episodic facts into a single authoritative macro-truth.
         Creates a new macro-truth fact relationship in FalkorDB with r.is_macro = true, r.project = $project.
         Marks candidate facts in superseded_fact_ids with SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id.
+        The macro fact links `subject` to `object_name`; when they are omitted, every superseded fact
+        must share one (subject, object) pair, otherwise nothing is written.
         """
         macro_fact_id = f"fact_macro_{uuid.uuid4().hex[:10]}"
         now = datetime.now(timezone.utc).isoformat()
 
         updated_count = 0
-        cand_sub = None
-        cand_obj = None
+        skipped = {
+            "status": "skipped",
+            "macro_fact_id": None,
+            "macro_fact": macro_fact,
+            "project": project,
+            "superseded_count": 0,
+            "superseded_fact_ids": list(superseded_fact_ids),
+        }
 
         if superseded_fact_ids:
-            find_cypher = """
-            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
-            WHERE r.id IN $ids OR r.fact_id IN $ids OR toString(id(r)) IN $ids
-            RETURN s.name, t.name LIMIT 1
-            """
-            find_rows = self._query(self.episodic_db, find_cypher, {"ids": list(superseded_fact_ids)})
-            if find_rows and len(find_rows) > 1 and find_rows[1] and len(find_rows[1][0]) >= 2:
-                cand_sub = str(find_rows[1][0][0])
-                cand_obj = str(find_rows[1][0][1])
+            if not (subject and object_name):
+                pairs = self._query(
+                    self.episodic_db,
+                    "MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity) "
+                    "WHERE (r.id IN $ids OR r.fact_id IN $ids OR toString(id(r)) IN $ids) "
+                    "AND coalesce(r.project, 'kortext') = $project "
+                    "RETURN DISTINCT s.name, t.name",
+                    {"ids": list(superseded_fact_ids), "project": project},
+                )
+                rows = pairs[1] if pairs and len(pairs) > 1 and pairs[1] else []
+                if len(rows) != 1:
+                    logger.warning(
+                        "[DreamEngine] Macro fact for '%s' needs subject and object: the %d facts span %d entity pairs.",
+                        project, len(superseded_fact_ids), len(rows),
+                    )
+                    return {**skipped, "reason": f"facts span {len(rows)} entity pairs; pass subject and object"}
+                subject, object_name = str(rows[0][0]), str(rows[0][1])
 
             update_cypher = """
             UNWIND $ids AS target_id
             MATCH ()-[r:RELATES_TO]->()
-            WHERE r.id = target_id OR r.fact_id = target_id OR toString(id(r)) = toString(target_id)
-            SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id
+            WHERE (r.id = target_id OR r.fact_id = target_id OR toString(id(r)) = toString(target_id))
+              AND coalesce(r.project, 'kortext') = $project
+            SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id,
+                r.superseded_at = $now, r.valid_to = coalesce(r.valid_to, $now)
             RETURN count(r)
             """
             res = self._query(
                 self.episodic_db,
                 update_cypher,
-                {"ids": list(superseded_fact_ids), "macro_fact_id": macro_fact_id},
+                {"ids": list(superseded_fact_ids), "macro_fact_id": macro_fact_id, "project": project, "now": now},
             )
             if res and len(res) > 1 and res[1] and res[1][0]:
                 try:
@@ -691,17 +719,10 @@ class DreamEngine:
                     project,
                     len(superseded_fact_ids),
                 )
-                return {
-                    "status": "skipped",
-                    "macro_fact_id": None,
-                    "macro_fact": macro_fact,
-                    "project": project,
-                    "superseded_count": 0,
-                    "superseded_fact_ids": list(superseded_fact_ids),
-                }
+                return skipped
 
-        sub_name = cand_sub or project
-        obj_name = cand_obj or "MacroTruth"
+        sub_name = subject or project
+        obj_name = object_name or "MacroTruth"
 
         create_cypher = """
         MERGE (s:Entity {name: $sub})
@@ -847,6 +868,7 @@ class DreamEngine:
             purge_stale=purge_stale,
             dry_run=dry_run,
             stale_fact_names=stale_fact_names,
+            projects=target_projects,
         )
         dedup_count = sum(self.deduplicate_near_identical_facts(project=p, dry_run=dry_run) for p in target_projects)
         prune_res["deduplicated_facts_count"] = dedup_count
@@ -884,6 +906,8 @@ class DreamEngine:
                             macro_fact=macro_fact,
                             superseded_fact_ids=superseded_ids,
                             project=item_project,
+                            subject=item.get("subject"),
+                            object_name=item.get("object"),
                         )
                         consolidation_results.append(res)
                     else:

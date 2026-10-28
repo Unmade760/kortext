@@ -133,8 +133,7 @@ def test_benchmark_task_dag_continuity():
     try:
         # Verify detect_file_overlaps against live FalkorDB
         overlap = tracker.detect_file_overlaps(["kortext/a.py"], project_id=proj, exclude_task_id=t1)
-        assert overlap["recommended_workspace_mode"] == "branch"
-        assert any(o["task_id"] == t2 for o in overlap["overlapping_tasks"])
+        assert overlap["recommended_workspace_mode"] == "shared"  # t2 is pending, not active
 
         # Initial: only t1 should be ready
         ready_ids = [t["id"] for t in tracker.get_ready_tasks(project_id=proj)]

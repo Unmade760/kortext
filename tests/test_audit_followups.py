@@ -67,3 +67,62 @@ def test_post_tool_error_read_from_payload_root():
 
     ctx = HookContext.from_stdin('{"toolCall": {"name": "run_command", "args": {}}, "error": "exit status 1"}', event="post_tool")
     assert ctx.tool_error == "exit status 1"
+
+
+def test_dream_prune_and_macro_fact_stay_in_their_project():
+    import asyncio
+    import uuid
+
+    from kortext.dream import DreamEngine
+
+    eng = DreamEngine()
+    eng.episodic_db = f"test_scope_{uuid.uuid4().hex[:6]}"
+    try:
+        eng._query(
+            eng.episodic_db,
+            "MERGE (a:Entity {name: 'A'}) MERGE (b:Entity {name: 'B'}) MERGE (c:Entity {name: 'C'}) "
+            "CREATE (a)-[:RELATES_TO {id: 'p1_old', fact: 'old', project: 'p1', superseded: true}]->(b) "
+            "CREATE (a)-[:RELATES_TO {id: 'p2_old', fact: 'old', project: 'p2', superseded: true}]->(b) "
+            "CREATE (a)-[:RELATES_TO {id: 'x1', fact: 'x', project: 'p1'}]->(b) "
+            "CREATE (a)-[:RELATES_TO {id: 'x2', fact: 'y', project: 'p1'}]->(c)",
+        )
+        asyncio.run(eng.prune_stale_facts(projects=["p1"]))
+        left = eng._query(eng.episodic_db, "MATCH ()-[r:RELATES_TO]->() RETURN r.id ORDER BY r.id")[1]
+        assert ["p2_old"] in left and ["p1_old"] not in left
+
+        skipped = eng.consolidate_facts("merged", ["x1", "x2"], project="p1")
+        assert skipped["status"] == "skipped"
+        ok = eng.consolidate_facts("merged", ["x1", "x2"], project="p1", subject="A", object_name="B")
+        assert ok["status"] == "ok" and ok["superseded_count"] == 2
+        assert eng.consolidate_facts("merged", ["p2_old"], project="p1")["status"] == "skipped"
+    finally:
+        eng._query(eng.episodic_db, "MATCH (n) DETACH DELETE n")
+
+
+def test_task_ids_are_unique_per_project_and_cycles_fail_closed():
+    import uuid
+    from unittest.mock import patch
+
+    from kortext.tasks.tracker import TaskDAGTracker
+
+    tr = TaskDAGTracker()
+    tid = f"task_scope_{uuid.uuid4().hex[:6]}"
+    try:
+        tr.create_task("a", "a", project_id="proj_a", task_id=tid)
+        with pytest.raises(ValueError, match="already belongs to project"):
+            tr.create_task("b", "b", project_id="proj_b", task_id=tid)
+        with patch.object(tr, "get_all_tasks", side_effect=RuntimeError("graph down")):
+            assert tr._has_dependency_cycle("x", ["y"], project_id="proj_a") is True
+    finally:
+        tr.client.query(tr.graph, "MATCH (t:Task {id: $id}) DETACH DELETE t", {"id": tid})
+
+
+def test_test_proof_is_bound_to_command_and_consumed(tmp_path, monkeypatch):
+    from kortext.hooks.pipelines import post_tool
+
+    monkeypatch.setattr(post_tool, "get_kortext_home", lambda: tmp_path)
+    post_tool.record_test_execution_proof("pytest  -q tests/a.py", passed=True)
+    assert post_tool.has_recent_passing_test_run(command="pytest -q tests/a.py")
+    assert not post_tool.has_recent_passing_test_run(command="pytest -q tests/b.py")
+    post_tool.consume_test_execution_proof("task_1")
+    assert not post_tool.has_recent_passing_test_run(command="pytest -q tests/a.py")

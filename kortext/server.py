@@ -442,7 +442,7 @@ async def trigger_dream_mode(
         purge_stale:      If True, physically removes superseded facts after archiving. Default False (soft-prune).
         invariants:       Optional list of newly induced architectural invariants: [{'domain': '...', 'rule': '...', 'rationale': '...'}].
         stale_fact_names: Optional list of older fact names to supersede during pruning.
-        consolidations:   Optional list of macro-truth facts to consolidate [{'macro_fact': '...', 'superseded_fact_ids': [...]}]
+        consolidations:   Optional list of macro-truth facts to consolidate [{'macro_fact': '...', 'superseded_fact_ids': [...], 'subject': '...', 'object': '...'}]; subject and object are required when the facts span more than one entity pair
         distilled_skills: Optional list of skills to distill into SKILL.md [{'name': '...', 'description': '...', 'content': '...'}]
         global_skills:    Whether to persist distilled skills globally to ~/.gemini/config/plugins/kortext/skills/ instead of .agents/skills/
     Returns:

@@ -64,7 +64,7 @@ Coding sessions frequently record dozens of micro-facts:
 
 In Phase 4, the agent or dream engine merges these micro-facts into a single **Macro-Truth**:
 - **Macro-Truth:** *"FalkorDB operates on UDS socket ~/.kortext/run/falkordb.sock with loopback TCP 6379 fallback."*
-- **Supersession:** Granular micro-facts are updated in FalkorDB with `SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id`.
+- **Supersession:** Granular micro-facts are updated in FalkorDB with `SET r.superseded = true, r.dormant = true, r.superseded_by = $macro_fact_id`. When the superseded facts span more than one (subject, object) pair, the item must name `subject` and `object`; otherwise it is skipped.
 - Granular facts remain in historical audit logs without cluttering daily retrieval.
 
 ---

@@ -552,9 +552,9 @@ class TestDreamConsolidation:
             dream_engine._query(
                 test_db,
                 "MERGE (s:Entity {name: 'AuthService'}) MERGE (t:Entity {name: 'TokenService'}) "
-                "CREATE (s)-[:RELATES_TO {id: 'm_fact_1', fact: 'JWT validation in gateway'}]->(t) "
-                "CREATE (s)-[:RELATES_TO {id: 'm_fact_2', fact: 'Token refresh on 401'}]->(t) "
-                "CREATE (s)-[:RELATES_TO {id: 'm_fact_3', fact: 'Session blacklisting via Redis'}]->(t)",
+                "CREATE (s)-[:RELATES_TO {id: 'm_fact_1', project: 'security_subsystem', fact: 'JWT validation in gateway'}]->(t) "
+                "CREATE (s)-[:RELATES_TO {id: 'm_fact_2', project: 'security_subsystem', fact: 'Token refresh on 401'}]->(t) "
+                "CREATE (s)-[:RELATES_TO {id: 'm_fact_3', project: 'security_subsystem', fact: 'Session blacklisting via Redis'}]->(t)",
             )
 
             res = dream_engine.consolidate_facts(

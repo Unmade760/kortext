@@ -85,8 +85,15 @@ def invalidate_test_execution_proof(modified_file: str = "", session_id: str = "
                 pass
 
 
-def has_recent_passing_test_run(max_age_sec: float = 1800.0, session_id: str = "") -> bool:
-    """Returns True if PostToolUse observed a passing test run within max_age_sec with no subsequent file edits."""
+def _norm_cmd(cmd: str) -> str:
+    return " ".join(str(cmd or "").split())
+
+
+def has_recent_passing_test_run(max_age_sec: float = 1800.0, session_id: str = "", command: Optional[str] = None) -> bool:
+    """
+    Returns True if PostToolUse observed a passing test run within max_age_sec with no subsequent file edits.
+    With `command`, the observed run must be that exact command (whitespace-normalised).
+    """
     run_dir = get_kortext_home() / "run"
     sfx = _safe_session_suffix(session_id)
     proof_file = (run_dir / f"last_test_run_{sfx}.json") if (sfx and (run_dir / f"last_test_run_{sfx}.json").is_file()) else (run_dir / "last_test_run.json")
@@ -95,6 +102,8 @@ def has_recent_passing_test_run(max_age_sec: float = 1800.0, session_id: str = "
     try:
         data = json.loads(proof_file.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or not data.get("passed"):
+            return False
+        if command is not None and _norm_cmd(data.get("command", "")) != _norm_cmd(command):
             return False
         ts = float(data.get("timestamp") or 0.0)
         if (time.time() - ts) > max_age_sec:
@@ -112,6 +121,18 @@ def has_recent_passing_test_run(max_age_sec: float = 1800.0, session_id: str = "
         return True
     except Exception:
         return False
+
+
+def consume_test_execution_proof(task_id: str) -> None:
+    """Marks the current passing proof as used, so one test run completes one task."""
+    for proof_file in (get_kortext_home() / "run").glob("last_test_run*.json"):
+        try:
+            data = json.loads(proof_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("passed"):
+                data.update(passed=False, consumed_by=task_id, consumed_at=time.time())
+                proof_file.write_text(json.dumps(data), encoding="utf-8")
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not consume test proof %s: %s", proof_file, exc)
 
 
 def queue_pending_advisory(message: str, session_id: str = "", conversation_id: str = "") -> None:

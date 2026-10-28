@@ -20,6 +20,12 @@ from kortext._home import get_kortext_home
 logger = logging.getLogger("kortext.tasks")
 
 
+def _same_path(a: str, b: str) -> bool:
+    """Path equality that tolerates one side being relative: 'src/x.py' matches '/repo/src/x.py', not 'test_x.py'."""
+    a, b = os.path.normpath(a), os.path.normpath(b)
+    return a == b or a.endswith(os.sep + b) or b.endswith(os.sep + a)
+
+
 def write_hud_state_snapshot(
     ready_tasks: Optional[int] = None,
     in_progress_tasks: Optional[int] = None,
@@ -470,7 +476,7 @@ class TaskOrchestrationMixin:
         exclude_task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Detects overlapping target_files across active tasks and recommends git worktree isolation (branch) when collisions exist."""
-        clean_targets = {str(f).strip() for f in (target_files or []) if str(f).strip()}
+        clean_targets = {os.path.normpath(str(f).strip()) for f in (target_files or []) if str(f).strip()}
         if not clean_targets:
             return {"overlapping_tasks": [], "recommended_workspace_mode": "shared"}
 
@@ -482,7 +488,7 @@ class TaskOrchestrationMixin:
 
         cypher = f"""
         MATCH (t:Task)
-        WHERE t.status IN ['pending', 'ready', 'in_progress']
+        WHERE t.status = 'in_progress'
         {filter_clause}RETURN t.id, t.title, coalesce(t.target_files, [])
         """
         raw = self.client.query(self.graph, cypher, params if params else None)
@@ -503,7 +509,9 @@ class TaskOrchestrationMixin:
                 c_res = self.client.query(sym_graph, coupling_q, {"files": target_list}, read_only=True)
                 if c_res and len(c_res) >= 2 and isinstance(c_res[1], list):
                     for crow in c_res[1]:
-                        if crow and len(crow) >= 2:
+                        if crow and len(crow) >= 2 and any(
+                            _same_path(str(crow[0]), t) or _same_path(str(crow[1]), t) for t in target_list
+                        ):
                             coupled_target_files.add(str(crow[0]))
                             coupled_target_files.add(str(crow[1]))
             except Exception as exc:
@@ -516,10 +524,10 @@ class TaskOrchestrationMixin:
                     continue
                 raw_files = row[2]
                 if isinstance(raw_files, list):
-                    other_files = [str(x).strip() for x in raw_files if str(x).strip()]
+                    other_files = [os.path.normpath(str(x).strip()) for x in raw_files if str(x).strip()]
                 elif isinstance(raw_files, str) and raw_files.strip():
                     cleaned = raw_files.strip().strip("[]").replace("'", "").replace('"', "")
-                    other_files = [x.strip() for x in cleaned.split(",") if x.strip()]
+                    other_files = [os.path.normpath(x.strip()) for x in cleaned.split(",") if x.strip()]
                 else:
                     other_files = []
                 shared = sorted(clean_targets.intersection(set(other_files)))
@@ -528,7 +536,7 @@ class TaskOrchestrationMixin:
                 elif coupled_target_files:
                     coupled_shared = sorted(
                         f for f in other_files
-                        if any(cf.endswith(f) or f.endswith(cf) for cf in coupled_target_files)
+                        if any(_same_path(cf, f) for cf in coupled_target_files)
                     )
                     if coupled_shared:
                         coupled_overlaps.append({"task_id": tid, "title": str(row[1]), "coupled_files": coupled_shared})
