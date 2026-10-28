@@ -245,3 +245,19 @@ def test_unqualified_call_does_not_fan_out_to_homonyms(tmp_path):
         assert len(rows) == 1 and rows[0][0].startswith("unresolved::")
     finally:
         mgr._query("MATCH (n) DETACH DELETE n")
+
+
+def test_dashboard_requires_token_off_loopback(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from kortext import daemon
+    from kortext.dashboard import app as dash
+
+    monkeypatch.setenv("KORTEXT_HOME", str(tmp_path))
+    monkeypatch.setattr(dash, "DASHBOARD_HOST", "0.0.0.0")
+    remote = TestClient(dash.app, client=("192.168.1.50", 5000))
+    assert remote.get("/api/graphs").status_code == 401
+    ok = remote.get(f"/?token={daemon.token()}")
+    assert ok.status_code == 200 and "kortext_token" in ok.cookies
+    assert remote.get("/api/graphs").status_code != 401  # cookie carried
+    assert TestClient(dash.app, client=("127.0.0.1", 5000)).get("/api/graphs").status_code != 401  # loopback client needs none

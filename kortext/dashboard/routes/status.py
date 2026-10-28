@@ -380,8 +380,9 @@ async def get_telemetry():
                     active_inv_count += len(g_data)
             except Exception:
                 logger.debug("Suppressed non-fatal exception")
-    except Exception:
-        active_inv_count = 14
+    except Exception as exc:
+        logger.warning("Invariant count unavailable: %s", exc)
+        active_inv_count = None
 
     # Version
     version_str = "2.0.0"
@@ -401,6 +402,10 @@ async def get_telemetry():
     except Exception:
         logger.debug("Context telemetry resolution skipped")
 
+    from kortext.health import reindex_spool_status
+
+    reindex = reindex_spool_status()
+
     return {
         "status": "ok",
         "telemetry": {
@@ -409,6 +414,7 @@ async def get_telemetry():
             "falkordb_latency_ms": lat_ms,
             "falkordb_healthy": falkor_ok,
             "quarantine_count": q_count,
+            "reindex": reindex,
             "context_window": context_telemetry,
             "active_invariants": active_inv_count,
             "memory_tiers": {
