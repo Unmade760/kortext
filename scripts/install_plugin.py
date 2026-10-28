@@ -246,7 +246,6 @@ def install_plugin():
     embed_base = dotenv_vals.get("EMBED_BASE_URL", "").strip()
     synced_env = {
         "WORKSPACE_ROOTS": dotenv_vals.get("WORKSPACE_ROOTS", str(KORTEXT_ROOT)),
-        "LOCAL_LLM_BASE_URL": dotenv_vals.get("LOCAL_LLM_BASE_URL", "http://127.0.0.1:8000/v1"),
         "EMBED_MODEL_NAME": dotenv_vals.get(
             "EMBED_MODEL_NAME",
             "mlx-community--Qwen3-Embedding-8B-4bit-DWQ" if embed_base else "BAAI/bge-small-en-v1.5",

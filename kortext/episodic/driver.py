@@ -7,7 +7,6 @@ available) and abstains when nothing clears the threshold.
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
 import os
@@ -20,7 +19,7 @@ import numpy as np
 import redis
 
 from kortext.falkordb_client import FalkorDBClient, FALKORDB_HOST, FALKORDB_PORT, FALKORDB_PASS
-from kortext.trust.sanitizer import CausalSanitizer, SecurityViolation, fence_memory_by_provenance
+from kortext.trust.sanitizer import CausalSanitizer, fence_memory_by_provenance
 
 logger = logging.getLogger(__name__)
 

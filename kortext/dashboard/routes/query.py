@@ -4,7 +4,7 @@ Retrieval sandbox, graph visualizer queries, and symbol impact/lookup routes.
 
 import asyncio
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse

@@ -6,20 +6,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 import asyncio
-import json
 import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Request
 
 router = APIRouter(tags=["actions"])
 
-from kortext._home import get_kortext_home
 
 KORTEXT_ROOT = Path(__file__).resolve().parents[3]
 

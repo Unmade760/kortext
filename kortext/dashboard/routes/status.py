@@ -11,7 +11,6 @@ import os
 import re
 import socket
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -34,15 +33,6 @@ def _check_tcp(host: str, port: int, timeout: float = 1.0) -> bool:
         with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:
-        return False
-
-
-def _check_falkor_socket(sock_path: Path) -> bool:
-    try:
-        import redis
-        r = redis.Redis(unix_socket_path=str(sock_path), socket_timeout=1.0)
-        return bool(r.ping())
-    except Exception:
         return False
 
 
