@@ -126,3 +126,44 @@ def test_test_proof_is_bound_to_command_and_consumed(tmp_path, monkeypatch):
     assert not post_tool.has_recent_passing_test_run(command="pytest -q tests/b.py")
     post_tool.consume_test_execution_proof("task_1")
     assert not post_tool.has_recent_passing_test_run(command="pytest -q tests/a.py")
+
+
+def test_failed_reindex_is_retried_then_dead_lettered(tmp_path, monkeypatch):
+    import asyncio
+    import time
+
+    from kortext import server
+    from kortext.health import reindex_spool_status
+
+    monkeypatch.setattr(server, "get_kortext_home", lambda: tmp_path)
+    monkeypatch.setattr("kortext.health.get_kortext_home", lambda: tmp_path, raising=False)
+    monkeypatch.setattr("kortext._home.get_kortext_home", lambda: tmp_path)
+    advisories = []
+    monkeypatch.setattr("kortext.hooks.pipelines.post_tool.queue_pending_advisory", advisories.append)
+
+    async def boom(**kwargs):
+        raise RuntimeError("qdrant down")
+
+    monkeypatch.setattr("kortext.ingest.index_single_file", boom)
+    src = tmp_path / "a.py"
+    src.write_text("x = 1\n")
+    spool = tmp_path / "spool" / "invalidation"
+    spool.mkdir(parents=True)
+    ev = spool / "event_1_1.json"
+    ev.write_text(json.dumps({"path": str(src)}))
+
+    asyncio.run(server._process_spool_event(ev))
+    data = json.loads(ev.read_text())
+    assert data["attempts"] == 1 and "qdrant down" in data["last_error"] and data["next_attempt_at"] > time.time()
+
+    for _ in range(server.SPOOL_MAX_ATTEMPTS):
+        if ev.exists():
+            d = json.loads(ev.read_text())
+            d["next_attempt_at"] = 0
+            ev.write_text(json.dumps(d))
+            asyncio.run(server._process_spool_event(ev))
+    assert not ev.exists()
+    assert (tmp_path / "spool" / "failed" / "event_1_1.json").is_file()
+    assert advisories and "a.py" in advisories[0]
+    status = reindex_spool_status()
+    assert status["failed"] == 1 and status["recent_failures"][0]["attempts"] == server.SPOOL_MAX_ATTEMPTS

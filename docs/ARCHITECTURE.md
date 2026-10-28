@@ -82,16 +82,17 @@ graph TD
         QdrantEngine["Qdrant Vector Daemon\n(REST :6333 / gRPC :6334)"]
     end
 
-    Agent -->|FastMCP stdio| MCP
+    Agent -->|stdio proxy, then HTTP 127.0.0.1:8767| MCP
     Hooks -->|UDS / Loopback TCP| FalkorDB
-    Subagents -->|FastMCP stdio| MCP
+    Subagents -->|stdio proxy, then HTTP 127.0.0.1:8767| MCP
     MCP -->|Direct Embed / HTTP| QdrantEngine
     MCP -->|Unix Socket ~/.kortext/run/falkordb.sock| FalkorDB
 ```
 
 ### The FastMCP Sole Custodian Invariant
 - **Advisory Lock Collisions:** Embedded Qdrant utilizes SQLite and RocksDB metadata stores that acquire exclusive OS file locks (`LOCK_EX`). If subagents or lifecycle hooks were to instantiate `QdrantClient(path=...)` directly in embedded mode while the server is active, the operating system raises `sqlite3.OperationalError: database is locked`, corrupting vector segments.
-- **Sole Custodianship:** The FastMCP daemon (`kortext.server`) is the single, exclusive owner of vector stores. All vector queries, upserts, payload filtering, and indexing flow strictly through FastMCP tools (`search_knowledge_and_memory`, `record_system_outcome`).
+- **Sole Custodianship:** One daemon per machine (`kortext-server --daemon`, HTTP on `127.0.0.1:$KORTEXT_DAEMON_PORT`, default 8767) owns the vector store. Every agy window runs `kortext-server`, a stdio proxy that starts the daemon on first use and forwards to it, so a second window shares the daemon instead of failing on the embedded-storage lock. No Qdrant container is needed. Requests need the bearer token in `~/.kortext/run/daemon.token` (mode 0600). `kortext ingest` hands the work to the daemon when the daemon holds the lock, and the file watcher spools invalidation events for it. `KORTEXT_SERVER_MODE=inprocess` serves a window directly, without the daemon; that is also the fallback when the daemon fails to start (log: `~/.kortext/logs/daemon.log`).
+- **Re-index failures:** a spooled invalidation event is deleted only after its file re-indexes. A failure is retried with backoff (10 s, 20 s, 40 s, 80 s); after 5 attempts the event moves to `~/.kortext/spool/failed/`, the agent gets an advisory on its next turn, and `check_kortext_health` reports the failures. Move an event back to `spool/invalidation/` to retry it.
 
 ### Dual-Socket FalkorDB Transport
 - **Primary Transport:** Unix Domain Socket (UDS) at `~/.kortext/run/falkordb.sock` for ultra-low latency (<1ms IPC roundtrip).
