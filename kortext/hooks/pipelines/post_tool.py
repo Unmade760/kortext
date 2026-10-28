@@ -1,6 +1,6 @@
 """
 Post-tool interceptor pipeline: Incremental AST synchronization, bounded telemetry spooling,
-continuous learning Error->Fix instinct observation, Task DAG lease heartbeats (FM3),
+Task DAG lease heartbeats (FM3),
 compaction-proof .kortext/ledger.md updates, HUD state snapshot refresh,
 and 3-stage 25%-compaction-ceiling context awareness.
 """
@@ -268,7 +268,6 @@ class IncrementalASTSync:
 class TelemetrySpooler:
     """
     Spools non-blocking tool execution metrics, records passing test proofs,
-    observes error->fix transitions into InstinctStore for continuous learning,
     renews active Task DAG leases (FM3), and refreshes ~/.kortext/run/hud_state.json.
     """
 
@@ -277,80 +276,6 @@ class TelemetrySpooler:
             self.telemetry_dir = telemetry_dir
         else:
             self.telemetry_dir = get_kortext_home() / "telemetry"
-
-    def _observe_error_fix_instinct(
-        self,
-        context: HookContext,
-        passed_test_cmd: str,
-    ) -> bool:
-        """
-        Continuous Learning v2 Observer:
-        When a test command fails on a prior turn, files are edited, and the test command subsequently passes,
-        records a project-scoped tool_confirmed instinct in InstinctStore (~/.kortext/instincts.json).
-        Returns True if an error->fix transition occurred (logical phase transition).
-        """
-        run_dir = get_kortext_home() / "run"
-        fail_state_file = run_dir / "last_failed_test.json"
-        if not fail_state_file.is_file():
-            return False
-        try:
-            fail_data = json.loads(fail_state_file.read_text(encoding="utf-8"))
-            fail_file_list = fail_data.get("modified_files") or []
-            err_snippet = str(fail_data.get("error_snippet") or "").strip()
-            fail_cmd = str(fail_data.get("command") or passed_test_cmd).strip()
-            fail_state_file.unlink(missing_ok=True)
-            if not err_snippet and not fail_file_list:
-                return False
-
-            from kortext.trust.instincts import InstinctStore
-
-            proj = context.workspace_project or "kortext"
-            files_label = ", ".join(Path(f).name for f in fail_file_list[-3:]) if fail_file_list else "workspace files"
-            pattern_text = (
-                f"When test `{fail_cmd[:80]}` fails with `{err_snippet[:120]}`"
-                if err_snippet
-                else f"When resolving test failure in `{files_label}` for `{fail_cmd[:80]}`"
-            )
-            action_text = f"Verify and update `{files_label}`, then re-run `{passed_test_cmd[:80]}` before completion."
-            InstinctStore().observe(
-                pattern=pattern_text,
-                action=action_text,
-                domain="testing",
-                project=proj,
-                trust_level="tool_confirmed",
-            )
-            return True
-        except Exception as exc:
-            logger.debug("Error-fix instinct observation skipped: %s", exc)
-            return False
-
-    def _record_failed_test_or_edit_state(self, context: HookContext, tool_err: Optional[str]) -> None:
-        """Tracks failed test commands and subsequent file edits for Error->Fix instinct pairing."""
-        run_dir = get_kortext_home() / "run"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        fail_state_file = run_dir / "last_failed_test.json"
-        try:
-            if context.tool_name == "run_command" and context.command_line and tool_err:
-                cmd_lower = context.command_line.lower()
-                if any(m in cmd_lower for m in _TEST_CMD_MARKERS):
-                    lines = [ln.strip() for ln in str(tool_err).splitlines() if ln.strip()]
-                    payload = {
-                        "command": context.command_line,
-                        "error_snippet": lines[-1][:160] if lines else str(tool_err)[:160],
-                        "modified_files": [],
-                        "timestamp": time.time(),
-                    }
-                    fail_state_file.write_text(json.dumps(payload), encoding="utf-8")
-            elif context.tool_name in FILE_MODIFYING_TOOLS and context.target_file and fail_state_file.is_file():
-                data = json.loads(fail_state_file.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    mods = list(data.get("modified_files") or [])
-                    if context.target_file not in mods:
-                        mods.append(context.target_file)
-                    data["modified_files"] = mods[-10:]
-                    fail_state_file.write_text(json.dumps(data), encoding="utf-8")
-        except Exception as exc:
-            logger.debug("Suppressed in post_tool:%d: %s", 352, exc)
 
     def _renew_active_task_leases(self, context: HookContext) -> None:
         """FM3 Mitigation: Automatically renews leases for KORTEXT_TASK_ID or active workspace in_progress tasks."""
@@ -395,8 +320,6 @@ class TelemetrySpooler:
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
 
-            self._record_failed_test_or_edit_state(context, tool_err)
-
             if context.tool_name == "run_command" and context.command_line:
                 cmd_lower = context.command_line.lower()
                 if any(m in cmd_lower for m in _TEST_CMD_MARKERS):
@@ -406,8 +329,6 @@ class TelemetrySpooler:
                         passed=passed,
                         session_id=context.session_id or "",
                     )
-                    if passed:
-                        self._observe_error_fix_instinct(context, context.command_line)
 
             self._renew_active_task_leases(context)
 

@@ -28,8 +28,8 @@ flowchart TD
         T0["Tier 0: Tree-sitter AST B-Tree\n(Deterministic Declarations, Signatures, Callers)"]
         T1["Tier 1: Qdrant Vector Store\n(384d Dense Embeddings + BM25 Lexical)"]
         T2["Tier 2: FalkorDB Episodic & Causal Graph\n(Temporal Decisions, Milestones, Invariants)"]
-        T3["Tier 3: Federated Hybrid Engine\n(Reciprocal Rank Fusion + HippoRAG PPR)"]
-        T4["Tier 4: Cognitive Dream Mode\n(Weibull Decay, Louvain Subsystems, Distillation)"]
+        T3["Tier 3: Federated Hybrid Engine\n(Weighted Reciprocal Rank Fusion)"]
+        T4["Tier 4: Cognitive Dream Mode\n(Pruning, Louvain Subsystems, Distillation)"]
     end
 
     Router --> T0
@@ -54,8 +54,8 @@ flowchart TD
 | **Tier 0: AST B-Tree** | FalkorDB `kortext_symbols` | Exact symbol declarations, type signatures, file boundaries, and direct callers/callees extracted via Tree-sitter. | <2 ms | **Absolute Ground Truth.** Overrides all model speculations. |
 | **Tier 1: Vectors** | Qdrant (embedded or HTTP) | Dense code chunk embeddings (FastEmbed 384d ONNX / BAAI/bge-small-en-v1.5) paired with BM25 sparse keyword indices. | <10 ms | Semantic concept discovery and associative document retrieval. |
 | **Tier 2: Episodic** | FalkorDB `kortext` | Bi-temporal episodic decisions, configuration changes, bug fixes, and architectural invariants recorded across coding sessions. | <3 ms | Temporal persistence. Old facts are superseded via `[:SUPERSEDES]`, never deleted. |
-| **Tier 3: Federated** | Python Engine | Cross-tier Reciprocal Rank Fusion (RRF) and HippoRAG Personalized PageRank (PPR) power iterations linking episodic intent to AST code paths. | <15 ms | Multi-hop associative reasoning. |
-| **Tier 4: Dream Mode** | Background Worker | Offline memory consolidation: Weibull synaptic decay, Louvain community subsystem detection, MEX pattern AST drift auditing, fact consolidation, and skill distillation. | Batch | Autonomous memory optimization and hygiene. |
+| **Tier 3: Federated** | Python Engine | Weighted Reciprocal Rank Fusion (RRF) over AST symbol hits, BM25, dense vectors and current episodic facts paths. | <15 ms | Multi-hop associative reasoning. |
+| **Tier 4: Dream Mode** | Background Worker | Offline memory consolidation: pruning of superseded facts, Louvain community subsystem detection, MEX pattern AST drift auditing, fact consolidation, and skill distillation. | Batch | Autonomous memory optimization and hygiene. |
 
 ---
 

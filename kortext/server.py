@@ -648,7 +648,7 @@ async def list_vector_collections() -> Dict[str, Any]:
 @mcp.tool(
     description=(
         "Check the health of all Kortext backend services. Returns a JSON status "
-        "report for Qdrant, FalkorDB, the inference server (embeddings/reranker), and the dashboard. "
+        "report for Qdrant, FalkorDB, the embedding server, and the dashboard. "
         "Call this if other Kortext tools return errors or time out."
     ),
     meta={"antigravity/alwaysLoad": False},
@@ -994,17 +994,6 @@ async def boost_prompt_context(
         except Exception:
             pass
 
-        instincts_summary: List[str] = []
-        try:
-            from kortext.trust.instincts import InstinctStore
-
-            for inst in InstinctStore().get_active_instincts(min_confidence=0.65, project=resolved_proj)[:3]:
-                instincts_summary.append(
-                    f"[{inst.get('domain', 'general')}] {inst.get('pattern', '')} -> {inst.get('action', '')}"
-                )
-        except Exception:
-            pass
-
         ws_path = Path(effective_ws) if effective_ws else KORTEXT_ROOT
         if (ws_path / "Cargo.toml").is_file():
             verify_cmd = "cargo test"
@@ -1031,10 +1020,6 @@ async def boost_prompt_context(
             md_lines.append("\n## Active Grounded Invariants")
             for inv_s in invariants_summary[:3]:
                 md_lines.append(f"- {inv_s}")
-        if instincts_summary:
-            md_lines.append("\n## Learned Project Instincts")
-            for inst_s in instincts_summary[:3]:
-                md_lines.append(f"- {inst_s}")
         md_lines.append(
             f"\n## Execution & Verification\n"
             f"- Recommended Pattern: `{routing['recommended_pattern']}` (workspace: `{routing['recommended_workspace_mode']}`)\n"
@@ -1050,7 +1035,6 @@ async def boost_prompt_context(
             "blast_radius_callers": callers_summary,
             "execution_routing": routing,
             "active_invariants": invariants_summary,
-            "active_instincts": instincts_summary,
             "verification_command": verify_cmd,
         }
         return json.dumps(brief, separators=(",", ":"))
