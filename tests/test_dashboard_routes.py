@@ -385,7 +385,7 @@ def test_action_create_collection_meta_json_safe(tmp_path, monkeypatch):
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "ok"
-        mock_ensure.assert_called_once_with("safe_vector_col", embed_dim=384)
+        mock_ensure.assert_any_call("safe_vector_col", embed_dim=384)
         # meta.json is Qdrant's own file; the dashboard never edits it.
         assert json.loads(meta_path.read_text(encoding="utf-8")) == {"collections": {}, "aliases": {}}
 

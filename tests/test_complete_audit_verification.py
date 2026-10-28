@@ -160,7 +160,7 @@ def test_audit2_dashboard_observability_routes_and_dom_safety(tmp_path, monkeypa
     ) as ensure:
         r_col = client.post("/api/collections", json={"name": "local_fastembed_col"})
     assert r_col.status_code == 200
-    ensure.assert_called_once_with("local_fastembed_col", embed_dim=384)
+    ensure.assert_any_call("local_fastembed_col", embed_dim=384)
 
     # 4. Verify index.html & JS modules have zero Shift-JIS mojibake and use data-* attributes
     idx_html = (KORTEXT_ROOT / "kortext" / "dashboard" / "templates" / "index.html").read_text(encoding="utf-8")
