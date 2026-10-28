@@ -69,6 +69,7 @@ def test_post_tool_error_read_from_payload_root():
     assert ctx.tool_error == "exit status 1"
 
 
+@pytest.mark.usefixtures("real_falkordb")
 def test_dream_prune_and_macro_fact_stay_in_their_project():
     import asyncio
     import uuid
@@ -99,6 +100,7 @@ def test_dream_prune_and_macro_fact_stay_in_their_project():
         eng._query(eng.episodic_db, "MATCH (n) DETACH DELETE n")
 
 
+@pytest.mark.usefixtures("real_falkordb")
 def test_task_ids_are_unique_per_project_and_cycles_fail_closed():
     import uuid
     from unittest.mock import patch
@@ -186,6 +188,7 @@ def test_cache_purges_files_that_left_the_index_root(tmp_path):
     assert purged == {str(excluded.resolve())}
 
 
+@pytest.mark.usefixtures("real_falkordb")
 def test_exclusive_file_claims_and_ownership_guard(monkeypatch):
     import uuid
 
@@ -212,3 +215,33 @@ def test_exclusive_file_claims_and_ownership_guard(monkeypatch):
         assert FileOwnershipGuard().check(ctx).decision == "allow"
     finally:
         tr.client.query(tr.graph, "MATCH (t:Task) WHERE t.id IN [$a, $b] DETACH DELETE t", {"a": a, "b": b})
+
+
+def test_unparsed_config_is_windowed_with_true_offsets():
+    from kortext.chunking.config_splitter import ConfigSectionSplitter
+
+    text = "".join(f"key_{i} = value with some padding {i}\n" for i in range(400))
+    chunks = ConfigSectionSplitter().split_config(text, "settings.ini")
+    assert len(chunks) > 1
+    assert chunks[0]["start_char"] == 0 and chunks[-1]["end_char"] == len(text)
+    for a, b in zip(chunks, chunks[1:]):
+        assert a["end_char"] == b["start_char"]
+    assert all(text[c["start_char"]:c["end_char"]] in c["text"] for c in chunks)
+
+
+@pytest.mark.usefixtures("real_falkordb")
+def test_unqualified_call_does_not_fan_out_to_homonyms(tmp_path):
+    import uuid
+
+    from kortext.symbols.graph import SymbolGraphManager
+
+    mgr = SymbolGraphManager(graph_name=f"test_homonym_{uuid.uuid4().hex[:6]}")
+    try:
+        for fp in ("/r/a.py", "/r/b.py"):
+            mgr.save_file_ast(fp, [{"name": "get", "kind": "function", "line": 1, "end_line": 2, "signature": "def get()"}], [], [])
+        mgr.save_file_ast("/r/c.py", [{"name": "run", "kind": "function", "line": 1, "end_line": 3, "signature": "def run()"}], [],
+                          [{"symbol": "get", "caller": "run", "line": 2, "kind": "call"}])
+        rows = mgr._query("MATCH (:Symbol {name: 'run'})-[:CALLS]->(t:Symbol) RETURN t.qualified_name")[1]
+        assert len(rows) == 1 and rows[0][0].startswith("unresolved::")
+    finally:
+        mgr._query("MATCH (n) DETACH DELETE n")

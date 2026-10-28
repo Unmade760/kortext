@@ -97,6 +97,7 @@ class TestDreamConsolidation:
         text = expected_file.read_text(encoding="utf-8")
         assert f"name: {skill_name}" in text
 
+    @pytest.mark.usefixtures("real_falkordb")
     def test_consolidate_facts_creates_macro_and_supersedes_candidates(self, dream_engine):
         """Verifies consolidate_facts creates macro-truth fact and marks candidates as superseded/dormant."""
         import uuid
@@ -299,6 +300,7 @@ class TestDreamConsolidation:
         assert not (tmp_path / "journal").exists()
         assert not (tmp_path / ".agents").exists()
 
+    @pytest.mark.usefixtures("real_falkordb")
     @pytest.mark.asyncio
     async def test_run_dream_cycle_all_five_phases_populated(self, dream_engine, monkeypatch, tmp_path):
         """
@@ -542,6 +544,7 @@ class TestDreamConsolidation:
         assert res["dream_report_path"] == str(dream_files[0])
         assert res["reports_path"] == str(report_files[0])
 
+    @pytest.mark.usefixtures("real_falkordb")
     def test_fact_consolidation_flags_all_superseded_micro_facts(self, dream_engine):
         """Verifies that every candidate micro-fact receives r.superseded = true and r.dormant = true upon consolidation."""
         test_db = f"test_micro_flags_{uuid.uuid4().hex[:6]}"

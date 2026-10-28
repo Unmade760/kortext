@@ -62,6 +62,7 @@ def test_ast_oversized_top_level_function_split_no_name_error():
     assert all(c.get("parent_id") == "kortext/sample_oversized.py::oversized_top_level_fn" for c in node_chunks)
 
 
+@pytest.mark.usefixtures("real_falkordb")
 def test_task_dag_cypher_quotes_leases_and_handoffs(tmp_path, monkeypatch):
     """Audit Bug #1 & Failure Modes #3/#4: quoted Cypher literals, lease timeouts, heartbeats, and artifact handoffs."""
     from kortext.tasks.tracker import TaskDAGTracker

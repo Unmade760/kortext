@@ -122,6 +122,7 @@ def test_benchmark_minja_defense():
     assert blocked == len(payloads)
 
 
+@pytest.mark.usefixtures("real_falkordb")
 def test_benchmark_task_dag_continuity():
     """Benchmark 6: Task DAG Continuity, In-Progress Tracking, Overlap Detection & Lease Recovery."""
     tracker = TaskDAGTracker()
